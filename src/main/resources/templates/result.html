@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/main}">
+<body>
+<div layout:fragment="content">
+    <h1>LDAP 등록 결과</h1>
+    <h3>총 인증서 수: <span th:text="${certs.size()}"></span></h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>국가</th>
+                <th>Subject DN</th>
+                <th>Issuer DN</th>
+                <th>Serial Number</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="cert : ${certs}">
+                <td th:text="${cert.countryCode}">KR</td>
+                <td th:text="${cert.subjectDn}">CN=CSCA Korea, C=KR</td>
+                <td th:text="${cert.issuerDn}">CN=CSCA Korea, C=KR</td>
+                <td th:text="${cert.serialNumber}">12345678</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>등록 결과</h3>
+    <ul>
+        <li th:each="cert : ${certs}" th:text="${cert.result}"></li>
+    </ul>
+    <a th:href="@{/icao/csca}">다시 업로드</a>
+</div>
+<th:block layout:fragment="script-content">
+    <!-- Add additional scripts there that are only needed for this page (Application wide scripts should be added in layout/main.html) -->
+</th:block>
+</body>
+</html>
