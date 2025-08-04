@@ -2,123 +2,77 @@ package com.smartcoreinc.localpkd.icao.service;
 
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
-import java.text.SimpleDateFormat;
 import java.util.HexFormat;
+import java.util.List;
 
+import javax.naming.InvalidNameException;
+import javax.naming.Name;
+import javax.naming.ldap.LdapName;
+
+import org.springframework.ldap.core.DirContextAdapter;
+import org.springframework.ldap.core.LdapTemplate;
+import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.stereotype.Service;
 
-import com.unboundid.ldap.sdk.Entry;
-import com.unboundid.ldap.sdk.LDAPConnectionPool;
-import com.unboundid.ldap.sdk.LDAPException;
-import com.unboundid.ldap.sdk.ResultCode;
+import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
+import com.smartcoreinc.localpkd.icao.repository.CscaCertificateRepository;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 public class CscaLdapAddService {
-    private static final String BASE_DN = "dc=ldap,dc=smartcoreinc,dc=com";
-    
-    private final LDAPConnectionPool writePool;
-    // private final CscaCertificateValidator cscaCertificateValidator;
 
-    public CscaLdapAddService(LDAPConnectionPool writePool) {
-        this.writePool = writePool;
-        // this.cscaCertificateValidator = cscaCertificateValidator;
+    private final LdapTemplate ldapTemplate;
+
+    public CscaLdapAddService(LdapTemplate ldapTemplate) {
+        this.ldapTemplate = ldapTemplate;
     }
 
-    /**
-     * 국가별 CSCA 인증서를 국가 코드 OU로 구분하여 저장
-     */
-    public String saveCscaCertificate(X509Certificate x509Cert) {
-        String result = "";
-        ensureCSCAOrganizationalUnitsExist();
+    public CscaCertificate save(X509Certificate certificate) {
+        CscaCertificate cscaCertificate = new CscaCertificate();
         try {
-            // X.509 인증서 내의 Subjec 필드에서 국가 코드 추출 
-            String countryCode = x509Cert.getSubjectX500Principal().getName("RFC2253")
-                .replaceAll(".*C=([a-zA-Z]{2}).*", "$1");
-            log.debug("X.509 인증서 내의 Subject에서 추출한 국가 코드: {}", countryCode);
-            
-            // 국가 코드별 하위 OU 없으면 추가
-            ensureCountryOrganizationalUnitsExist(countryCode);
-            
-            String cscaDn = "ou=CSCA," + BASE_DN;
-            String countryOu = "ou=" + countryCode + "," + cscaDn;
-            String fingerprint = getCertificateFingerprint(x509Cert);
+            createParentIfNotFound("ou=CSCA");
+            String subject = certificate.getSubjectX500Principal().getName();
+            String countryCode = extractCountryCode(subject);
+            // String cscaDn = "ou=CSCA,dc=ldap,dc=smartcoreinc,dc=com";
+            // String countryOu = "ou=" + countryCode + "," + cscaDn;
+            String fingerprint = getCertificateFingerprint(certificate);
             String cnValue = String.format("CSCA-%s-%s", countryCode, fingerprint);
-            String dn = String.format("cn=%s,%s", cnValue, countryOu);
+            // String dn = String.format("cn=%s,%s", cnValue, cscaDn);
             
-            String serialNumber = x509Cert.getSerialNumber().toString();
-            String notBefore = new SimpleDateFormat("yyyy/MM/dd").format(x509Cert.getNotBefore());
-            String notAfter = new SimpleDateFormat("yyyy/MM/dd").format(x509Cert.getNotAfter());
+            // 1. DN을 직접 구성합니다.
+            Name dn = LdapNameBuilder.newInstance("ou=CSCA")
+                                     .add("cn", cnValue)
+                                     .build();
 
+            // 2. DirContextAdapter를 사용하여 항목의 속성을 설정합니다.
+            DirContextAdapter context = new DirContextAdapter(dn);
+            context.setAttributeValues("objectClass", new String[]{"top", "person", "organizationalPerson", "inetOrgPerson", "pkiCA"});
+            context.setAttributeValue("l", countryCode);
+            context.setAttributeValue("sn", certificate.getSerialNumber().toString());
+            context.setAttributeValue("cACertificate;binary", certificate.getEncoded());
 
-            Entry entry = new Entry(dn);
-            // 필수 objectClass
-            entry.addAttribute("objectClass", "top", "inetOrgPerson", "pkiCA");
-            // 필수 objectClass
-            entry.addAttribute("cn", cnValue);
-            entry.addAttribute("sn", serialNumber);
-            entry.addAttribute("cACertificate;binary", x509Cert.getEncoded());
+            // 3. LdapTemplate의 bind() 메서드로 항목을 생성합니다.
+            ldapTemplate.bind(dn, context, null);
 
-            // 추가 메타 정보
-            // entry.addAttribute("x509Subject", x509Cert.getSubjectX500Principal().getName());
-            // entry.addAttribute("x509Issuer", x509Cert.getIssuerX500Principal().getName());
-            // entry.addAttribute("x509ValidityNotBefore", x509Cert.getNotBefore().toString());
-            // entry.addAttribute("x509ValidityNotAfter", x509Cert.getNotAfter().toString());
-            entry.addAttribute("description", "valid from " + notBefore + " to " + notAfter);
-
-            writePool.add(entry);
-            log.debug("[{}] CSCA 인증서 저장 성공", dn);
-
-        } catch (LDAPException e) {
-            log.error("CSCA Certificate LDAP 저장 오류: {}, {}, {}", e, x509Cert.getSubjectX500Principal().getName(), x509Cert.getSerialNumber());
+            // 4. 새로 생성된 항목을 다시 조회하여 반환합니다.
+            cscaCertificate = ldapTemplate.findByDn(dn, CscaCertificate.class);
         } catch (Exception e) {
-            log.error("CSCA 인증서 저장 실패", e);
+            e.printStackTrace();
         }
-        return result;
+
+        return cscaCertificate;
     }
 
-    private void ensureCSCAOrganizationalUnitsExist() {
-        try {
-            // 최상위 OU: CSCA
-            String cscaDn = "ou=CSCA," + BASE_DN;
-
-            if (writePool.getEntry(cscaDn) == null) {
-                Entry cscaEntry = new Entry(cscaDn);
-                cscaEntry.addAttribute("objectClass", "top", "organizationalUnit");
-                cscaEntry.addAttribute("ou", "CSCA");
-                writePool.add(cscaEntry);
-                log.info("CSCA OU 생성: {}", cscaDn);
-            }
-        } catch (LDAPException e) {
-            if (e.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
-                log.warn("이미 존재하는 항목: {}", e.getMessage());
-            } else {
-                log.error("ADD CSCA OU 오류: {}", e.getResultString());
+    private String extractCountryCode(String dn) {
+        for (String part : dn.split(",")) {
+            part = part.trim();
+            if (part.startsWith("C=")) {
+                return part.substring(2).toUpperCase();
             }
         }
-    }
-
-    private void ensureCountryOrganizationalUnitsExist(String countryCode) {
-        try {
-            // 최상위 OU: CSCA
-            String countryDn = "ou=" + countryCode + ",ou=CSCA," + BASE_DN;
-
-            if (writePool.getEntry(countryDn) == null) {
-                Entry cscaEntry = new Entry(countryDn);
-                cscaEntry.addAttribute("objectClass", "top", "organizationalUnit");
-                cscaEntry.addAttribute("ou", countryCode);
-                writePool.add(cscaEntry);
-                log.info("Country OU 생성: {}", countryDn);
-            }
-        } catch (LDAPException e) {
-            if (e.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
-                log.warn("이미 존재하는 항목: {}", e.getMessage());
-            } else {
-                log.error("ADD Country OU 저장 오류 {}, {}", countryCode, e.getResultString());
-            }
-        }
+        return "UNKNOWN";
     }
 
     private String getCertificateFingerprint(X509Certificate cert) throws Exception {
@@ -127,5 +81,46 @@ public class CscaLdapAddService {
         byte[] fingerprint = digest.digest(encoded);
 
         return HexFormat.of().formatHex(fingerprint);
+    }
+
+    /**
+     * LdapTemplate의 base DN을 기준으로 상위 항목을 확인하고 없으면 생성합니다.
+     *
+     * @param relativeDn 생성하려는 항목의 상대 DN (예: "ou=CSCA")
+     */
+    public void createParentIfNotFound(String releativeDN) {
+        LdapName dn = LdapNameBuilder.newInstance(releativeDN).build();
+        LdapName parentDN = (LdapName) dn.clone();
+
+        // 최상위 항목까지 올라 가면서 상위 DN들을 생성
+        while (!parentDN.isEmpty()) {
+            try {
+                // 상대 경로로 lookup 시도
+                ldapTemplate.lookup(parentDN);
+                log.debug("Parent DN {} already exits.");
+                break;  // 상위 DN이 존재하면 반복문 탈출
+            } catch (Exception e) {
+                // 상위 DN이 존재하지 않으면 생성
+                log.debug("Parent DN {} not found. Creating...", parentDN.toString());
+
+                DirContextAdapter context = new DirContextAdapter(parentDN);
+                context.setAttributeValues("objectClass", new String[]{"top", "organizationalUnit"});
+
+                try {
+                    ldapTemplate.bind(context);
+                    log.debug("Successfully created parent DN: {}", parentDN.toString());
+                } catch (Exception creationException) {
+                    log.error("Failed to create parent DN: {}", parentDN.toString());
+                    return; // 생성 실패 시 중단
+                }
+            }
+
+            // 마지막 RDN 제거하여 상위 DN으로 만듦
+            try {
+                parentDN.remove(parentDN.size() - 1);
+            } catch (InvalidNameException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

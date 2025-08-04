@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
-public class CscaCertificateValidator {
+public class X509CertificateValidator {
 
     public boolean isCertificateValid(X509Certificate x509Cert) {
         try {
