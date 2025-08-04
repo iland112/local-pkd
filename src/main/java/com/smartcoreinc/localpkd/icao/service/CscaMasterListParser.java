@@ -43,15 +43,18 @@ public class CscaMasterListParser {
     }
 
     private final Set<ProgressListener> progressListeners = new HashSet<>();
-    private final CscaLdapAddService ldapService;
-    private final CscaCertificateService cscaCertificateService;
+
+    // Dependencies
+    private final X509CertificateValidator certificateValidator;
+    private final CscaLdapAddService cscaCertificateService;
 
     private int numberOfCertsTotal;
     private int numberOfCertsParsered;
     private Map<String, Integer> cscaCountByCountry = new HashMap<>();
 
-    public CscaMasterListParser(CscaLdapAddService ldapService, CscaCertificateService cscaCertificateService) {
-        this.ldapService = ldapService;
+    public CscaMasterListParser(X509CertificateValidator cscaCertificateValidator,
+                                CscaLdapAddService cscaCertificateService) {
+        this.certificateValidator = cscaCertificateValidator;
         this.cscaCertificateService = cscaCertificateService;
     }
 
@@ -77,13 +80,19 @@ public class CscaMasterListParser {
         ASN1Set certSet = (ASN1Set) masterListSeq.getObjectAt(1);
         numberOfCertsTotal = certSet.size();
 
-        List<X509Certificate> x509Certs = new ArrayList<>();
+        List<X509Certificate> validCerts = new ArrayList<>();
+        List<X509Certificate> invalidCerts = new ArrayList<>();
+
         for (ASN1Encodable encodable : certSet) {
             Certificate bcCert = Certificate.getInstance(encodable);
             X509CertificateHolder holder = new X509CertificateHolder(bcCert);
 
             X509Certificate x509Cert = converter.getCertificate(holder);
-            x509Certs.add(x509Cert);
+            if (certificateValidator.isCertificateValid(x509Cert)) {
+                validCerts.add(x509Cert);
+            } else {
+                invalidCerts.add(x509Cert);
+            }
 
             String subject = x509Cert.getSubjectX500Principal().toString();
             String country = extractCountryCode(subject);
@@ -94,18 +103,21 @@ public class CscaMasterListParser {
             }
             // cscaCountByCountry.forEach((key, value) -> log.debug("key: {}, value: {}", key, value));
             
-            String resultOfAddLdap = null;
             if (isAddLdap) {
-                resultOfAddLdap = ldapService.saveCscaCertificate(x509Cert);
-                // CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert);
+                CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert);
+                log.debug("Added DN: {}", cscaCertificate.getDn().toString());
             }
 
             sleepQuietly(10);
             numberOfCertsParsered += 1;
             notifyProgressListeners(subject);
         }
+
+        log.debug("the count of valid certs: ", validCerts.size());
+        log.debug("the count of invalid certs", invalidCerts.size());
+
         asn1In.close();
-        return x509Certs;
+        return validCerts;
     }
 
     /**
