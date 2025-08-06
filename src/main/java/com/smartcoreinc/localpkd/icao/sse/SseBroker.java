@@ -2,7 +2,6 @@ package com.smartcoreinc.localpkd.icao.sse;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
@@ -29,8 +28,8 @@ public class SseBroker {
 
     @PostConstruct
     void init() {
-        progressListener = (progress, counts, message) -> 
-            eventPublisher.tryEmitNext(new ProgressEvent(progress, counts, message));
+        progressListener = (progress, message) -> 
+            eventPublisher.tryEmitNext(new ProgressEvent(progress, message));
         masterListParser.addProgressListener(progressListener);
     }
 
@@ -50,7 +49,7 @@ public class SseBroker {
             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
     }
 
-    public record ProgressEvent(Progress progress, Map<String, Integer> counts, String message) {
+    public record ProgressEvent(Progress progress, String message) {
 
     }
 }

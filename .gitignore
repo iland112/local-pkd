@@ -36,4 +36,6 @@ build/
 node_modules
 node
 
+# Exclude for applicaiton log files
 *.log
+*.gz

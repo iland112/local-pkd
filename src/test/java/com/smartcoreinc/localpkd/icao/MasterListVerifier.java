@@ -33,6 +33,7 @@ public class MasterListVerifier {
             // 서명자 식별자
             SignerId signerId = signer.getSID();
             // 해당 SID와 일치하는 인증서 찾기.
+            @SuppressWarnings("unchecked")
             Collection<X509CertificateHolder> certCollection = certStore.getMatches(signerId);
             if (certCollection.isEmpty()) {
                 System.out.println("⚠️ 서명자 인증서를 찾을 수 없습니다.");

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html
+  lang="en"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-3xl font-bold text-gray-900 flex items-center">
+                <i class="fas fa-chart-line mr-3"></i> LDIF 분석 결과
+              </h1>
+              <p class="text-gray-600 mt-1">
+                파일: <span th:text="${fileName}" class="font-medium"></span>
+              </p>
+            </div>
+            <a
+              href="/ldif/"
+              class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            >
+              <i class="fas fa-arrow-left mr-2"></i> 돌아가기
+            </a>
+          </div>
+        </div>
+
+        <!-- Alert Messages -->
+        <div
+          th:if="${error}"
+          class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+          role="alert"
+        >
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
+            <span th:text="${error}" class="text-red-800"></span>
+            <button
+              type="button"
+              class="ml-auto text-red-400 hover:text-red-600"
+              onclick="this.parentElement.parentElement.remove()"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div
+          th:if="${success}"
+          class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6"
+          role="alert"
+        >
+          <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 mr-2"></i>
+            <span th:text="${success}" class="text-green-800"></span>
+            <button
+              type="button"
+              class="ml-auto text-green-400 hover:text-green-600"
+              onclick="this.parentElement.parentElement.remove()"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div
+          th:if="${warning}"
+          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6"
+          role="alert"
+        >
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+            <span th:text="${warning}" class="text-yellow-800"></span>
+            <button
+              type="button"
+              class="ml-auto text-yellow-400 hover:text-yellow-600"
+              onclick="this.parentElement.parentElement.remove()"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div class="bg-blue-600 text-white rounded-lg p-6 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4
+                  class="text-2xl font-bold"
+                  th:text="${analysisResult.totalEntries}"
+                >
+                  0
+                </h4>
+                <p class="text-blue-100">총 엔트리</p>
+              </div>
+              <div class="text-blue-200">
+                <i class="fas fa-list text-3xl"></i>
+              </div>
+            </div>
+          </div>
+          <div class="bg-green-600 text-white rounded-lg p-6 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4
+                  class="text-2xl font-bold"
+                  th:text="${analysisResult.addEntries}"
+                >
+                  0
+                </h4>
+                <p class="text-green-100">추가 엔트리</p>
+              </div>
+              <div class="text-green-200">
+                <i class="fas fa-plus text-3xl"></i>
+              </div>
+            </div>
+          </div>
+          <div class="bg-cyan-600 text-white rounded-lg p-6 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4
+                  class="text-2xl font-bold"
+                  th:text="${analysisResult.modifyEntries}"
+                >
+                  0
+                </h4>
+                <p class="text-cyan-100">수정 엔트리</p>
+              </div>
+              <div class="text-cyan-200">
+                <i class="fas fa-edit text-3xl"></i>
+              </div>
+            </div>
+          </div>
+          <div class="bg-red-600 text-white rounded-lg p-6 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4
+                  class="text-2xl font-bold"
+                  th:text="${#lists.size(analysisResult.errors)}"
+                >
+                  0
+                </h4>
+                <p class="text-red-100">오류</p>
+              </div>
+              <div class="text-red-200">
+                <i class="fas fa-exclamation-triangle text-3xl"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Errors Section -->
+        <div
+          th:if="${analysisResult.hasValidationErrors}"
+          class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
+        >
+          <div class="bg-red-600 text-white px-6 py-4">
+            <h5 class="text-xl font-semibold flex items-center">
+              <i class="fas fa-exclamation-triangle mr-2"></i> 발견된 오류
+            </h5>
+          </div>
+          <div class="p-6">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+              <ul class="list-disc pl-5 space-y-1 text-red-800">
+                <li
+                  th:each="error : ${analysisResult.errors}"
+                  th:text="${error}"
+                ></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ObjectClass Statistics -->
+        <div
+          th:if="${!#maps.isEmpty(analysisResult.objectClassCount)}"
+          class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
+        >
+          <div class="border-b border-gray-200 px-6 py-4">
+            <h5 class="text-xl font-semibold text-gray-900 flex items-center">
+              <i class="fas fa-chart-pie mr-2"></i> ObjectClass 통계
+            </h5>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                th:each="entry : ${analysisResult.objectClassCount}"
+                class="space-y-2"
+              >
+                <div class="flex items-center justify-between">
+                  <span th:text="${entry.key}" class="text-gray-700 font-medium"
+                    >objectClass</span
+                  >
+                  <span
+                    class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm font-medium"
+                    th:text="${entry.value}"
+                    >0</span
+                  >
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    th:style="'width: ' + ${entry.value * 100 / analysisResult.totalEntries} + '%'"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save to LDAP Button -->
+        <div
+          th:if="${!analysisResult.hasValidationErrors and analysisResult.totalEntries > 0}"
+          class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
+        >
+          <div class="bg-green-600 text-white px-6 py-4">
+            <h5 class="text-xl font-semibold flex items-center">
+              <i class="fas fa-database mr-2"></i> LDAP 저장
+            </h5>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700 mb-4">
+              분석된 데이터를 OpenLDAP 서버에 저장하시겠습니까?
+            </p>
+            <button
+              id="saveToLdapBtn"
+              class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-lg shadow-md"
+            >
+              <i class="fas fa-save mr-2"></i> LDAP에 저장하기
+            </button>
+            <div id="saveResult" class="mt-4"></div>
+          </div>
+        </div>
+
+        <!-- Entries Table -->
+        <div class="bg-base-100 rounded-box shadow-md overflow-x-auto">
+          <div class="border-b border-base-300 px-6 py-4">
+            <h5
+              class="text-xl font-semibold text-base-content flex items-center"
+            >
+              <i class="fas fa-table mr-2"></i> 엔트리 목록
+            </h5>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full text-sm">
+              <thead class="bg-base-200 text-base-content">
+                <tr>
+                  <th class="px-4 py-3">#</th>
+                  <th class="px-4 py-3">DN</th>
+                  <th class="px-4 py-3">타입</th>
+                  <th class="px-4 py-3">속성 수</th>
+                  <th class="px-4 py-3">ObjectClass</th>
+                  <th class="px-4 py-3">액션</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr th:each="entry, iterStat : ${analysisResult.entries}">
+                  <td class="px-4 py-2" th:text="${iterStat.count}">1</td>
+                  <td class="px-4 py-2 break-all">
+                    <code
+                      class="bg-base-200 px-2 py-1 rounded text-xs font-mono"
+                      th:text="${entry.dn}"
+                    >
+                      cn=user,ou=people,dc=example,dc=com
+                    </code>
+                  </td>
+                  <td class="px-4 py-2">
+                    <span
+                      class="badge badge-success text-xs"
+                      th:text="${entry.entryType}"
+                      >ADD</span
+                    >
+                  </td>
+                  <td
+                    class="px-4 py-2"
+                    th:text="${#maps.size(entry.attributes)}"
+                  >
+                    5
+                  </td>
+                  <td class="px-4 py-2">
+                    <span
+                      th:if="${entry.attributes.containsKey('objectClass')}"
+                      th:text="${#strings.listJoin(entry.attributes['objectClass'], ', ')}"
+                    >
+                      inetOrgPerson
+                    </span>
+                  </td>
+                  <td class="px-4 py-2">
+                    <button
+                      class="btn btn-sm btn-info text-white"
+                      th:onclick="'showEntryDetails(' + ${iterStat.index} + ')'"
+                    >
+                      <i class="fas fa-eye mr-1"></i> 상세보기
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry Details Modal -->
+      <div class="fixed inset-0 z-50 hidden" id="entryDetailsModal">
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        ></div>
+        <div class="fixed inset-0 z-10 overflow-y-auto">
+          <div
+            class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0"
+          >
+            <div
+              class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl"
+            >
+              <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-lg font-semibold text-gray-900">
+                    엔트리 상세 정보
+                  </h3>
+                  <button
+                    type="button"
+                    class="text-gray-400 hover:text-gray-600"
+                    onclick="closeModal()"
+                  >
+                    <i class="fas fa-times text-xl"></i>
+                  </button>
+                </div>
+                <div id="entryDetailsBody" class="mt-4">
+                  <!-- Entry details will be loaded here -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <th:block layout:fragment="script-content">
+      <script>
+        const analysisData = /*[[${analysisResult}]]*/ {};
+
+        function showEntryDetails(index) {
+          const entry = analysisData.entries[index];
+          let html =
+            '<h6 class="text-lg font-semibold mb-2">DN: <code class="bg-gray-100 px-2 py-1 rounded text-sm">' +
+            entry.dn +
+            "</code></h6>";
+          html += '<h6 class="text-lg font-semibold mt-4 mb-2">속성:</h6>';
+          html +=
+            '<div class="overflow-x-auto"><table class="w-full border border-gray-200 rounded-lg">';
+          html +=
+            '<thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left border-b">속성</th><th class="px-4 py-2 text-left border-b">값</th></tr></thead><tbody>';
+
+          for (const [key, values] of Object.entries(entry.attributes)) {
+            html +=
+              '<tr class="border-b"><td class="px-4 py-2 font-semibold bg-gray-50">' +
+              key +
+              '</td><td class="px-4 py-2">';
+            if (Array.isArray(values)) {
+              html += values.join("<br>");
+            } else {
+              html += values;
+            }
+            html += "</td></tr>";
+          }
+          html += "</tbody></table></div>";
+
+          html += '<h6 class="text-lg font-semibold mt-4 mb-2">원본 LDIF:</h6>';
+          html +=
+            '<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code class="text-sm">' +
+            entry.originalLdif +
+            "</code></pre>";
+
+          document.getElementById("entryDetailsBody").innerHTML = html;
+          document
+            .getElementById("entryDetailsModal")
+            .classList.remove("hidden");
+        }
+
+        function closeModal() {
+          document.getElementById("entryDetailsModal").classList.add("hidden");
+        }
+
+        // Close modal when clicking outside
+        document
+          .getElementById("entryDetailsModal")
+          .addEventListener("click", function (e) {
+            if (e.target === this) {
+              closeModal();
+            }
+          });
+
+        document
+          .getElementById("saveToLdapBtn")
+          ?.addEventListener("click", function () {
+            const btn = this;
+            const resultDiv = document.getElementById("saveResult");
+
+            btn.disabled = true;
+            btn.innerHTML =
+              '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
+            btn.classList.add("opacity-75", "cursor-not-allowed");
+
+            fetch("/ldif/save-to-ldap", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(analysisData),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.success) {
+                  resultDiv.innerHTML =
+                    '<div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center"><i class="fas fa-check text-green-500 mr-2"></i><span class="text-green-800">' +
+                    data.message +
+                    "</span></div>";
+                } else {
+                  resultDiv.innerHTML =
+                    '<div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center"><i class="fas fa-times text-red-500 mr-2"></i><span class="text-red-800">' +
+                    data.message +
+                    "</span></div>";
+                }
+              })
+              .catch((error) => {
+                resultDiv.innerHTML =
+                  '<div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center"><i class="fas fa-times text-red-500 mr-2"></i><span class="text-red-800">저장 중 오류가 발생했습니다.</span></div>';
+              })
+              .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML =
+                  '<i class="fas fa-save mr-2"></i> LDAP에 저장하기';
+                btn.classList.remove("opacity-75", "cursor-not-allowed");
+              });
+          });
+      </script>
+    </th:block>
+  </body>
+</html>

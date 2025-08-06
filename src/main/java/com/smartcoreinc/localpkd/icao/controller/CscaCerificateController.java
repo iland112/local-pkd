@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
-import com.smartcoreinc.localpkd.icao.service.CscaLdapAddService;
 import com.smartcoreinc.localpkd.icao.service.CscaLdapSearchService;
 
 import lombok.extern.slf4j.Slf4j;
