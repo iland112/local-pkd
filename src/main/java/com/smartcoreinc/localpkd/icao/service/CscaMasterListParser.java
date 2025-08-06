@@ -9,10 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.naming.InvalidNameException;
-import javax.naming.ldap.LdapName;
-import javax.naming.ldap.Rdn;
-
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -132,6 +128,7 @@ public class CscaMasterListParser {
         SignerInformationStore signers = signedData.getSignerInfos();
         Store<X509CertificateHolder> certStore = signedData.getCertificates();
         for (SignerInformation signer : signers.getSigners()) {
+            @SuppressWarnings("unchecked")
             X509CertificateHolder signerCert = (X509CertificateHolder) certStore.getMatches(signer.getSID()).iterator().next();
             boolean valid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().build(signerCert));
             if (!valid) {
@@ -149,16 +146,6 @@ public class CscaMasterListParser {
             }
         }
         return "UNKNOWN";
-    }
-
-    private void extractFieldFromDN(String dn) {
-        try {
-            LdapName ldapName = new LdapName(dn);
-            List<Rdn> rnds = ldapName.getRdns();
-            rnds.forEach(rdn -> log.debug("type: {}, value: {}, class: {}", rdn.getType(), rdn.getValue().toString(), rdn.getClass().getName()));
-        } catch (InvalidNameException e) {
-            log.error("유효하지 않은 DN 형식압니다: ", e.getMessage());
-        }
     }
 
     public void addProgressListener(ProgressListener progressListener) {
@@ -181,7 +168,18 @@ public class CscaMasterListParser {
         for (ProgressListener progressListener : progressListeners) {
             Progress progress = new Progress(numberOfCertsParsered / (double) numberOfCertsTotal);
             log.debug("current progress: {}%", (int) (progress.value() * 100));
-            progressListener.onProgress(progress, cscaCountByCountry, "Processing Subject: " + subject);
+            // String html = """
+            //     <div class="indicator">
+            //         <span class="indicator-item badge badge-secondary">%d</span>
+            //         <img class="h-6 w-12 object-cover" src="%s" />
+            //     </div>
+            //     """;
+            // StringBuilder stringBuilder = new StringBuilder();
+            // getCscaCountByCountry().forEach(
+            //     (key, value) -> stringBuilder.append(
+            //         html.formatted(value, String.format("https://flagcdn.com/%s.svg", key.toLowerCase())))
+            // );
+            progressListener.onProgress(progress, "Processing Subject: " + subject);
         }
     }
 }

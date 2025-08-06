@@ -8,7 +8,7 @@
   <body>
     <div layout:fragment="content">
       <h1 class="mt-4 text-base font-semibold leading-6 text-gray-900">
-        ICAO CSCA Master List 업로드
+        ICAO DS Certificates LDIF 파일 업로드
       </h1>
 
       <div
@@ -21,7 +21,7 @@
         <form
           class="flex gap-x-2 items-center mt-4"
           hx-encoding="multipart/form-data"
-          hx:post="@{/icao/csca/upload}"
+          hx:post="@{/icao/dsc/upload}"
           hx-disabled-elt=".disable-during-request"
           hx-swap="none"
         >
@@ -38,7 +38,7 @@
         
         <div class="mt-4 card bg-base-100 card-lg shadow-sm">
           <div class="card-body">
-            <h2 class="card-title">Master List 등록 진행 상태</h2>
+            <h2 class="card-title">ICAO DS Certificates 등록 진행 상태</h2>
             <div sse-swap="progress-event"></div>
           </div>
         </div>

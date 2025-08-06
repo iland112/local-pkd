@@ -3,7 +3,6 @@ package com.smartcoreinc.localpkd.icao.service;
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
 import java.util.HexFormat;
-import java.util.List;
 
 import javax.naming.InvalidNameException;
 import javax.naming.Name;
@@ -15,7 +14,6 @@ import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.stereotype.Service;
 
 import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
-import com.smartcoreinc.localpkd.icao.repository.CscaCertificateRepository;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -119,6 +117,7 @@ public class CscaLdapAddService {
             try {
                 parentDN.remove(parentDN.size() - 1);
             } catch (InvalidNameException e) {
+                log.error("유효하지 않은 DN 형식압니다: ", e.getMessage());
                 e.printStackTrace();
             }
         }

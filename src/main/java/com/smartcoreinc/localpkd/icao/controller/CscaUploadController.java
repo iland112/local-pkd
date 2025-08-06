@@ -58,7 +58,7 @@ public class CscaUploadController {
         
         cscaCountByCountry.forEach((key, value) -> {
             count = count + value;
-            log.debug("key: {}, value: {}, count: {}", key, value);
+            log.debug("key: {}, value: {}, count: {}", key, value, count);
         });
         log.debug("CSCA 국가 수: {}, {}", cscaCountByCountry.size(), count);
     }
@@ -74,8 +74,7 @@ public class CscaUploadController {
             .flatMap(events -> {
                         return Flux.just(
                                     createLogEvent(events),
-                                    createProgressEvent(events),
-                                    createCountEvent(events)
+                                    createProgressEvent(events)
                                 )
                                 .filter(Objects::nonNull);
                     }
@@ -85,31 +84,6 @@ public class CscaUploadController {
             .doOnError(throwable -> log.debug(throwable.getMessage(), throwable))
             .doFinally(signalType -> log.debug("finally: {}", signalType))
         );
-    }
-
-    private ServerSentEvent<String> createLogEvent(List<ProgressEvent> events) {
-        return ServerSentEvent.<String>builder()
-            .event("log-event")
-            .data(events.stream()
-                .map(progressEvent -> "<div>%s</div>".formatted(replaceNewLines(progressEvent.message())))
-                .collect(Collectors.joining()))
-            .build();
-    }
-
-     private ServerSentEvent<String> createCountEvent(List<ProgressEvent> events) {
-        String html = """
-                <div class="indicator">
-                    <span class="indicator-item badge badge-secondary">%d</span>
-                    <img class="h-6 w-12 object-cover" src="%s" />
-                </div>
-                """;
-        StringBuilder stringBuilder = new StringBuilder();
-        parser.getCscaCountByCountry().forEach((key, value) -> stringBuilder.append(html.formatted(value, String.format("https://flagcdn.com/%s.svg", key.toLowerCase()))));
-
-        return ServerSentEvent.<String>builder()
-            .event("count-event")
-            .data(stringBuilder.toString())
-            .build();
     }
 
     private static ServerSentEvent<String> createProgressEvent(List<ProgressEvent> events) {
@@ -129,7 +103,33 @@ public class CscaUploadController {
             .build();
     }
 
+    private ServerSentEvent<String> createLogEvent(List<ProgressEvent> events) {
+        return ServerSentEvent.<String>builder()
+            .event("log-event")
+            .data(events.stream()
+                .map(progressEvent -> "<div>%s</div>".formatted(replaceNewLines(progressEvent.message())))
+                .collect(Collectors.joining()))
+            .build();
+    }
+
     private String replaceNewLines(String message) {
         return message.replace("\n", "<br>");
     }
+
+    // 국가별 CSCA 인증서 개 수 리턴
+    // private ServerSentEvent<String> createCountEvent(List<ProgressEvent> events) {
+    //     String html = """
+    //         <div class="indicator">
+    //             <span class="indicator-item badge badge-secondary">%d</span>
+    //             <img class="h-6 w-12 object-cover" src="%s" />
+    //         </div>
+    //     """;
+    //     StringBuilder stringBuilder = new StringBuilder();
+    //     parser.getCscaCountByCountry().forEach((key, value) -> stringBuilder.append(html.formatted(value, String.format("https://flagcdn.com/%s.svg", key.toLowerCase()))));
+    //     return ServerSentEvent.<String>builder()
+    //         .event("count-event")
+    //         .data(stringBuilder.toString())
+    //         .build();
+    // }
+
 }
