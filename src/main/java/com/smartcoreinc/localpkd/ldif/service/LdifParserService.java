@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class LdifParserService {
 
-    public LdifAnalysisResult parseLdif(MultipartFile file) throws IOException {
+    public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
         LdifAnalysisResult result = new LdifAnalysisResult();
         List<LdifEntryDto> entries = new ArrayList<>();
         List<String> errors = new ArrayList<>();

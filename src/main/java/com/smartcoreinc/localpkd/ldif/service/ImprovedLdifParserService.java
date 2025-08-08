@@ -44,7 +44,7 @@ public class ImprovedLdifParserService {
      * - 메모리 효율적인 스트리밍 처리
      * - 상세한 오류 보고
      */
-    public LdifAnalysisResult paredLdifFile(MultipartFile file) throws IOException {
+    public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
         log.info("Starting LDIF parsing for file: {}", file.getOriginalFilename());
 
         LdifAnalysisResult result = new LdifAnalysisResult();
@@ -75,14 +75,14 @@ public class ImprovedLdifParserService {
             try {
                 // Entry 및 Change Record 모두 처리
                 while (true) {
-                    LDIFRecord record = ldifReader.readLDIFRecord();
-                    if (record == null) {
+                    Entry entry = ldifReader.readEntry();
+                    if (entry == null) {
                         break;
                     }
                     recordCount++;
 
                     try {
-                        LdifEntryDto entryDto = processLdifRecord(record);
+                        LdifEntryDto entryDto = processLdifRecord(entry);
                         if (entryDto != null) {
                             entries.add(entryDto);
 
@@ -243,8 +243,8 @@ public class ImprovedLdifParserService {
      * @return
      */
     public boolean validateLdifContent(String content) {
-        try (StringReader stringReader = new StringReader(content)) {
-            LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader));
+        try (StringReader stringReader = new StringReader(content);
+            LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader))) {
 
             // 엄격한 검증 옵션 설정
             ldifReader.setDuplicateValueBehavior(DuplicateValueBehavior.REJECT);
