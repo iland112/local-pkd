@@ -9,17 +9,15 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
-import com.smartcoreinc.localpkd.ldif.service.LdifParserService;
+import com.smartcoreinc.localpkd.ldif.service.LineTrackingLdifParser;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,10 +26,12 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/ldif")
 public class LdifController {
 
-    private final LdifParserService ldifParserService;
+    private final LineTrackingLdifParser ldifParserService;
     private final LdapService ldapService;
 
-    public LdifController(LdifParserService ldifParserService, LdapService ldapService) {
+    private LdifAnalysisResult analysisResult = null;
+
+    public LdifController(LineTrackingLdifParser ldifParserService, LdapService ldapService) {
         this.ldifParserService = ldifParserService;
         this.ldapService = ldapService;
     }
@@ -47,18 +47,20 @@ public class LdifController {
                                  Model model) {
         if (file.isEmpty()) {
             redirectAttributes.addFlashAttribute("error", "파일을 선택해주세요.");
-            return "redirect:/ldif/";
+            return "redirect:/ldif";
         }
 
         if (!file.getOriginalFilename().toLowerCase().endsWith(".ldif")) {
             redirectAttributes.addFlashAttribute("error", "LDIF 파일만 업로드 가능합니다.");
-            return "redirect:/ldif/";
+            return "redirect:/ldif";
         }
+        
 
         try {
             log.info("Processing LDIF file: {}", file.getOriginalFilename());
 
-            LdifAnalysisResult analysisResult = ldifParserService.parseLdif(file);
+            analysisResult = null;
+            analysisResult = ldifParserService.parseLdifFile(file);
 
             model.addAttribute("analysisResult", analysisResult);
             model.addAttribute("fileName", file.getOriginalFilename());
@@ -73,13 +75,15 @@ public class LdifController {
         } catch (Exception e) {
             log.error("Error processing LDIF file: {}", e.getMessage());
             redirectAttributes.addFlashAttribute("error", "파일 처리 중 오류가 발생했습니다: " + e.getMessage());
-            return "redirect:/ldif/";
+            return "redirect:/ldif";
         }
     }
 
     @PostMapping("/save-to-ldap")
-    public ResponseEntity<Map<String, Object>> saveToLdap(@RequestBody LdifAnalysisResult analysisResult) {
+    public ResponseEntity<Map<String, Object>> saveToLdap() {
         Map<String, Object> response = new HashMap<>();
+
+        log.debug("the number of entry: {}", analysisResult.getEntries().size());
 
         try {
             // Test LDAP connection first

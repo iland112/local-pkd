@@ -39,3 +39,4 @@ node
 # Exclude for applicaiton log files
 *.log
 *.gz
+*.tmp

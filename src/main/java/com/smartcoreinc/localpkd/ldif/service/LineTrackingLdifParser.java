@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +28,14 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class LineTrackingLdifParser {
 
-    public LdifAnalysisResult parseLdifFileWithLineTracking(MultipartFile file) throws IOException {
-        log.info("Starting line-tracking LDIF parsing for file: {}", file.getOriginalFilename());
+    private static final List<String> BINARY_ATTRIBUTES = Arrays.asList(
+        "userCertificate", "caCertificate", "crossCertificatePair", 
+        "certificateRevocationList", "authorityRevocationList"
+    );
 
+    public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
+        log.info("Starting line-tracking LDIF parsing for file: {}", file.getOriginalFilename());
+        
         LdifAnalysisResult result = new LdifAnalysisResult();
         List<LdifEntryDto> entries = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -55,6 +61,7 @@ public class LineTrackingLdifParser {
                         // 현재 레코드 완료, 파싱 시도
                         recordNumber++;
                         try {
+                            log.debug("currentRecord of LDIF:\n{}", currentRecord.toString());
                             LdifEntryDto entry = parseRecord(currentRecord.toString(), recordNumber, lineNumber);
                             if (entry != null) {
                                 entries.add(entry);
@@ -63,6 +70,7 @@ public class LineTrackingLdifParser {
                             }
                         } catch (Exception e) {
                             errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber, e.getMessage()));
+                            log.error("Error parsing record {}: {}", recordNumber, e.getMessage(), e);
                         }
                         currentRecord.setLength(0);
                         inRecord = false;
@@ -70,7 +78,7 @@ public class LineTrackingLdifParser {
                     continue;
                 }
 
-                // ㅜ석 라인 스킵
+                // 주석 라인 스킵
                 if (line.startsWith("#")) {
                     continue;
                 }
@@ -89,6 +97,7 @@ public class LineTrackingLdifParser {
                             }
                         } catch (Exception e) {
                             errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber - 1, e.getMessage()));
+                            log.error("Error parsing record {}: {}", recordNumber, e.getMessage(), e);
                         }
                     }
                     // 새로운 레코드 시작
@@ -113,6 +122,7 @@ public class LineTrackingLdifParser {
                     }
                 } catch (Exception e) {
                     errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber, e.getMessage()));
+                    log.error("Error parsing record {}: {}", recordNumber, e.getMessage(), e);
                 }
             }
         } catch (IOException e) {
@@ -135,13 +145,19 @@ public class LineTrackingLdifParser {
     }
 
     private LdifEntryDto parseRecord(String recordText, int recordNumber, int lineNumber) throws LDIFException, IOException {
-        try (StringReader stringReader = new StringReader(recordText);
-            LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader))) {
-                Entry entry = ldifReader.readEntry();
-                if (entry != null) {
-                    return convertEntryDto(entry, "ADD");
-                }
-                return null;
+        try {
+            // 커스텀 파싱을 먼저 수행하여 바이너리 속성 처라
+            Map<String, Object> customParsedAttributes = customParseRecord(recordText);
+
+            try (StringReader stringReader = new StringReader(recordText);
+                LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader))) {
+                    Entry entry = ldifReader.readEntry();
+                    log.debug("entry data to LDIFString:\n {}", entry.toLDIFString());
+                    if (entry != null) {
+                        return convertEntryDto(entry, "ADD", customParsedAttributes);
+                    }
+                    return null;
+            }
         } catch (LDIFException e) {
             throw new LDIFException(
                 "LDIF parsing error in record " + recordNumber + ": " + e.getMessage(),
@@ -152,13 +168,104 @@ public class LineTrackingLdifParser {
         }
     }
 
-    private LdifEntryDto convertEntryDto(Entry entry, String entryType) {
+    /**
+     * 바이너리 속성을 올바르게 처리하기 위한 커스텀 파싱
+     * @param recordText
+     * @return
+     */
+    private Map<String, Object> customParseRecord(String recordText) {
+        Map<String, Object> binaryAttributes = new HashMap<>();
+        String[] lines = recordText.split("\n");
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("dn:")) {
+                continue;
+            }
+
+            // Base64 인코딩된 바이너리 속성 찾기 (:: 표기)
+            if (line.contains("::")) {
+                String[] parts = line.split("::", 2);
+                if (parts.length == 2) {
+                    String attrName = parts[0].trim();
+                    String base64Value = parts[1].trim();
+
+                    // ;binary 접미사 제거
+                    if (attrName.endsWith(";binary")) {
+                        attrName = attrName.replace(";binary", "");
+                    }
+
+                    // 여러 줄에 걸친 Base64 데이터 처리
+                    StringBuilder fullBase64 = new StringBuilder(base64Value);
+
+                    // 다음 줄들이 공백으로 시작하면 연속된 데이터
+                    while (i + 1 < lines.length && lines[i + 1].startsWith(" ")) {
+                        i++;
+                        fullBase64.append(lines[i].substring(1)); // 앞의 공백 제거
+                    }
+
+                    // 바아너리 속성인지 확인
+                    if (isBinaryAttribute(attrName)) {
+                        try {
+                            byte[] binaryData = Base64.getDecoder().decode(fullBase64.toString());
+
+                            @SuppressWarnings("unchecked")
+                            List<byte[]> existingValues = (List<byte[]>) binaryAttributes.get(attrName);
+                            if (existingValues == null) {
+                                existingValues = new ArrayList<>();
+                                binaryAttributes.put(attrName, existingValues);
+                            }
+                            existingValues.add(binaryData);
+
+                            log.debug("Successfully parsed binary attribute '{}' with {} bytes", attrName, binaryData.length);
+                        } catch (IllegalArgumentException e) {
+                            log.warn("Failed to decode Base64 for attribute '{}': {}", attrName, e.getMessage());
+                        }
+                    }
+                }
+            }
+        }
+
+        return binaryAttributes;
+    }
+
+    /**
+     * 바이너리 속성 여부 확인
+     * @param String attributeName
+     * @return boolean
+     */
+    private boolean isBinaryAttribute(String attributeName) {
+        return BINARY_ATTRIBUTES.stream()
+            .anyMatch(binaryAttr -> attributeName.toLowerCase().contains(binaryAttr.toLowerCase()));
+    }
+
+    private LdifEntryDto convertEntryDto(Entry entry, String entryType, Map<String, Object> customParsedAttributes) {
         Map<String, List<String>> attributes = new HashMap<>();
 
         for (Attribute attribute : entry.getAttributes()) {
             String attributeName = attribute.getName();
-            String[] values = attribute.getValues();
-            attributes.put(attributeName, Arrays.asList(values));
+
+            // ;binary 접미사 정규화
+            String normalizedAttrName = attributeName.replace(";binary", "");
+
+            // 바이너리 속성인 경우 커스텀 파싱 결과 사용
+            if (isBinaryAttribute(normalizedAttrName) && customParsedAttributes.containsKey(normalizedAttrName)) {
+                @SuppressWarnings("unchecked")
+                List<byte[]> binaryValues = (List<byte[]>) customParsedAttributes.get(normalizedAttrName);
+                List<String> base64Values = new ArrayList<>();
+                
+                for (byte[] binaryValue : binaryValues) {
+                    // Base64로 다시 인코딩하여 저장 (LDAP 저장용)
+                    base64Values.add(Base64.getEncoder().encodeToString(binaryValue));
+                }
+                
+                attributes.put(normalizedAttrName, base64Values);
+                log.debug("Processed binary attribute '{}' with {} values", normalizedAttrName, base64Values.size());
+            } else {
+                // 일반 속성 처리
+                String[] values = attribute.getValues();
+                attributes.put(attributeName, Arrays.asList(values));
+            }
         }
 
         return new LdifEntryDto(
@@ -221,6 +328,39 @@ public class LineTrackingLdifParser {
             return hasValidEntry;
         } catch (Exception e) {
             log.warn("LDIF validation failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Base64 문자열 검증
+     */
+    private boolean isValidBase64(String str) {
+        try {
+            Base64.getDecoder().decode(str);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /**
+     * X.509 인증서 검증 (선택적)
+     */
+    private boolean isValidX509Certificate(byte[] certBytes) {
+        try {
+            // 기본적인 DER 인코딩 검증 (0x30으로 시작해야 함)
+            if (certBytes.length < 4 || certBytes[0] != 0x30) {
+                return false;
+            }
+            
+            // java.security.cert.CertificateFactory로 추가 검증 가능
+            // CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            // cf.generateCertificate(new ByteArrayInputStream(certBytes));
+            
+            return true;
+        } catch (Exception e) {
+            log.warn("Invalid X.509 certificate: {}", e.getMessage());
             return false;
         }
     }
