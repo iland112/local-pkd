@@ -10,9 +10,11 @@ public class LdifAnalysisResult {
     private int deleteEntries;
     private List<LdifEntryDto> entries;
     private List<String> errors;
+    private List<String> warnings;
     private Map<String, Integer> objectClassCount;
+    private Map<String, Integer> certificateValidationStats;
     private boolean hasValidationErrors;
-
+    
     public LdifAnalysisResult() {}
 
     public int getTotalEntries() {
@@ -63,12 +65,28 @@ public class LdifAnalysisResult {
         this.errors = errors;
     }
 
+    public List<String> getWarnings() {
+        return warnings;
+    }
+
+    public void setWarnings(List<String> warnings) {
+        this.warnings = warnings;
+    }
+
     public Map<String, Integer> getObjectClassCount() {
         return objectClassCount;
     }
 
     public void setObjectClassCount(Map<String, Integer> objectClassCount) {
         this.objectClassCount = objectClassCount;
+    }
+
+    public Map<String, Integer> getCertificateValidationStats() {
+        return certificateValidationStats;
+    }
+
+    public void setCertificateValidationStats(Map<String, Integer> certificateValidationStats) {
+        this.certificateValidationStats = certificateValidationStats;
     }
 
     public boolean isHasValidationErrors() {

@@ -16,12 +16,23 @@
                 <i class="fas fa-chart-line mr-3"></i> LDIF 분석 결과
               </h1>
               <p class="text-gray-600 mt-1">
-                파일: <span th:text="${fileName}" class="font-medium"></span>
+                세션ID:
+                <span
+                  th:text="${sessionId}"
+                  class="font-medium text-blue-600"
+                ></span>
+              </p>
+              <p class="text-gray-600 mt-1">
+                파일:
+                <span
+                  th:text="${fileName}"
+                  class="font-medium text-blue-600"
+                ></span>
               </p>
             </div>
             <a
-              href="/ldif/"
-              class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              href="/ldif"
+              class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors shadow-md hover:shadow-lg"
             >
               <i class="fas fa-arrow-left mr-2"></i> 돌아가기
             </a>
@@ -31,7 +42,7 @@
         <!-- Alert Messages -->
         <div
           th:if="${error}"
-          class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+          class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 animate-fadeIn"
           role="alert"
         >
           <div class="flex items-center">
@@ -49,7 +60,7 @@
 
         <div
           th:if="${success}"
-          class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6"
+          class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 animate-fadeIn"
           role="alert"
         >
           <div class="flex items-center">
@@ -67,7 +78,7 @@
 
         <div
           th:if="${warning}"
-          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6"
+          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 animate-fadeIn"
           role="alert"
         >
           <div class="flex items-center">
@@ -85,7 +96,9 @@
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div class="bg-blue-600 text-white rounded-lg p-6 shadow-lg">
+          <div
+            class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow"
+          >
             <div class="flex items-center justify-between">
               <div>
                 <h4
@@ -101,7 +114,9 @@
               </div>
             </div>
           </div>
-          <div class="bg-green-600 text-white rounded-lg p-6 shadow-lg">
+          <div
+            class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow"
+          >
             <div class="flex items-center justify-between">
               <div>
                 <h4
@@ -117,7 +132,9 @@
               </div>
             </div>
           </div>
-          <div class="bg-cyan-600 text-white rounded-lg p-6 shadow-lg">
+          <div
+            class="bg-gradient-to-br from-cyan-500 to-cyan-600 text-white rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow"
+          >
             <div class="flex items-center justify-between">
               <div>
                 <h4
@@ -133,12 +150,14 @@
               </div>
             </div>
           </div>
-          <div class="bg-red-600 text-white rounded-lg p-6 shadow-lg">
+          <div
+            class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow"
+          >
             <div class="flex items-center justify-between">
               <div>
                 <h4
                   class="text-2xl font-bold"
-                  th:text="${#lists.size(analysisResult.errors)}"
+                  th:text="${analysisResult.totalErrors ?: #lists.size(analysisResult.errors)}"
                 >
                   0
                 </h4>
@@ -151,7 +170,64 @@
           </div>
         </div>
 
-        <!-- Errors Section -->
+        <!-- Certificate Validation Stats -->
+        <div
+          th:if="${!#maps.isEmpty(analysisResult.certificateValidationStats)}"
+          class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
+        >
+          <div class="bg-purple-600 text-white px-6 py-4">
+            <h5 class="text-xl font-semibold flex items-center">
+              <i class="fas fa-certificate mr-2"></i> 인증서 검증 결과
+            </h5>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="text-center">
+                <div
+                  class="text-3xl font-bold text-purple-600"
+                  th:text="${analysisResult.certificateValidationStats['total']}"
+                >
+                  0
+                </div>
+                <div class="text-gray-600">총 인증서</div>
+              </div>
+              <div class="text-center">
+                <div
+                  class="text-3xl font-bold text-green-600"
+                  th:text="${analysisResult.certificateValidationStats['valid']}"
+                >
+                  0
+                </div>
+                <div class="text-gray-600">유효한 인증서</div>
+              </div>
+              <div class="text-center">
+                <div
+                  class="text-3xl font-bold text-red-600"
+                  th:text="${analysisResult.certificateValidationStats['invalid']}"
+                >
+                  0
+                </div>
+                <div class="text-gray-600">무효한 인증서</div>
+              </div>
+            </div>
+            <div class="mt-4">
+              <div class="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  class="bg-green-500 h-3 rounded-full transition-all duration-1000"
+                  th:style="'width: ' + ${(analysisResult.certificateValidationStats['valid'] * 100.0) / analysisResult.certificateValidationStats['total']} + '%'"
+                ></div>
+              </div>
+              <div class="text-center mt-2 text-sm text-gray-600">
+                <span
+                  th:text="${T(java.lang.Math).round((analysisResult.certificateValidationStats['valid'] * 100.0) / analysisResult.certificateValidationStats['total'])}"
+                  >0</span
+                >% 유효율
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Errors and Warnings Section -->
         <div
           th:if="${analysisResult.hasValidationErrors}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
@@ -159,14 +235,52 @@
           <div class="bg-red-600 text-white px-6 py-4">
             <h5 class="text-xl font-semibold flex items-center">
               <i class="fas fa-exclamation-triangle mr-2"></i> 발견된 오류
+              <span
+                th:if="${analysisResult.totalErrors > #lists.size(analysisResult.errors)}"
+                class="ml-2 text-red-200 text-sm"
+              >
+                (처음 10개만 표시, 총 [[${analysisResult.totalErrors}]]개)
+              </span>
             </h5>
           </div>
           <div class="p-6">
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div
+              class="bg-red-50 border border-red-200 rounded-lg p-4 max-h-60 overflow-y-auto"
+            >
               <ul class="list-disc pl-5 space-y-1 text-red-800">
                 <li
                   th:each="error : ${analysisResult.errors}"
                   th:text="${error}"
+                ></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warnings Section -->
+        <div
+          th:if="${!#lists.isEmpty(analysisResult.warnings)}"
+          class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
+        >
+          <div class="bg-yellow-600 text-white px-6 py-4">
+            <h5 class="text-xl font-semibold flex items-center">
+              <i class="fas fa-exclamation-triangle mr-2"></i> 경고
+              <span
+                th:if="${analysisResult.totalWarnings > #lists.size(analysisResult.warnings)}"
+                class="ml-2 text-yellow-200 text-sm"
+              >
+                (처음 10개만 표시, 총 [[${analysisResult.totalWarnings}]]개)
+              </span>
+            </h5>
+          </div>
+          <div class="p-6">
+            <div
+              class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-h-60 overflow-y-auto"
+            >
+              <ul class="list-disc pl-5 space-y-1 text-yellow-800">
+                <li
+                  th:each="warning : ${analysisResult.warnings}"
+                  th:text="${warning}"
                 ></li>
               </ul>
             </div>
@@ -180,7 +294,8 @@
         >
           <div class="border-b border-gray-200 px-6 py-4">
             <h5 class="text-xl font-semibold text-gray-900 flex items-center">
-              <i class="fas fa-chart-pie mr-2"></i> ObjectClass 통계
+              <i class="fas fa-chart-pie mr-2 text-blue-600"></i> ObjectClass
+              통계
             </h5>
           </div>
           <div class="p-6">
@@ -194,14 +309,14 @@
                     >objectClass</span
                   >
                   <span
-                    class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm font-medium"
+                    class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
                     th:text="${entry.value}"
                     >0</span
                   >
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    class="bg-blue-600 h-2 rounded-full transition-all duration-1000"
                     th:style="'width: ' + ${entry.value * 100 / analysisResult.totalEntries} + '%'"
                   ></div>
                 </div>
@@ -226,78 +341,96 @@
             </p>
             <button
               id="saveToLdapBtn"
-              class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-lg shadow-md"
+              class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-lg shadow-md hover:shadow-lg"
+              th:data-session-id="${sessionId}"
             >
               <i class="fas fa-save mr-2"></i> LDAP에 저장하기
             </button>
+
+            <!-- Progress Section (Hidden by default) -->
+            <div id="progressSection" class="mt-6 hidden">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-blue-700 font-medium">저장 진행률</span>
+                  <span id="progressText" class="text-blue-600 text-sm"
+                    >0%</span
+                  >
+                </div>
+                <div class="w-full bg-blue-100 rounded-full h-3">
+                  <div
+                    id="progressBar"
+                    class="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                    style="width: 0%"
+                  ></div>
+                </div>
+                <div class="flex justify-between mt-2 text-sm text-blue-600">
+                  <span id="currentCount">0</span>
+                  <span
+                    >총<span th:text="${analysisResult.totalEntries}">0</span
+                    >개</span
+                  >
+                </div>
+              </div>
+            </div>
+
             <div id="saveResult" class="mt-4"></div>
           </div>
         </div>
 
-        <!-- Entries Table -->
-        <div class="bg-base-100 rounded-box shadow-md overflow-x-auto">
-          <div class="border-b border-base-300 px-6 py-4">
-            <h5
-              class="text-xl font-semibold text-base-content flex items-center"
-            >
-              <i class="fas fa-table mr-2"></i> 엔트리 목록
+        <!-- Entries Table with Pagination -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          <div class="border-b border-gray-200 px-6 py-4">
+            <h5 class="text-xl font-semibold text-gray-900 flex items-center">
+              <i class="fas fa-table mr-2 text-blue-600"></i> 엔트리 목록
+              <span class="ml-2 text-gray-500 text-base">
+                (총 <span th:text="${analysisResult.totalEntries}">0</span>개)
+              </span>
             </h5>
           </div>
-          <div class="overflow-x-auto">
-            <table class="table table-zebra w-full text-sm">
-              <thead class="bg-base-200 text-base-content">
-                <tr>
-                  <th class="px-4 py-3">#</th>
-                  <th class="px-4 py-3">DN</th>
-                  <th class="px-4 py-3">타입</th>
-                  <th class="px-4 py-3">속성 수</th>
-                  <th class="px-4 py-3">ObjectClass</th>
-                  <th class="px-4 py-3">액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr th:each="entry, iterStat : ${analysisResult.entries}">
-                  <td class="px-4 py-2" th:text="${iterStat.count}">1</td>
-                  <td class="px-4 py-2 break-all">
-                    <code
-                      class="bg-base-200 px-2 py-1 rounded text-xs font-mono"
-                      th:text="${entry.dn}"
-                    >
-                      cn=user,ou=people,dc=example,dc=com
-                    </code>
-                  </td>
-                  <td class="px-4 py-2">
-                    <span
-                      class="badge badge-success text-xs"
-                      th:text="${entry.entryType}"
-                      >ADD</span
-                    >
-                  </td>
-                  <td
-                    class="px-4 py-2"
-                    th:text="${#maps.size(entry.attributes)}"
-                  >
-                    5
-                  </td>
-                  <td class="px-4 py-2">
-                    <span
-                      th:if="${entry.attributes.containsKey('objectClass')}"
-                      th:text="${#strings.listJoin(entry.attributes['objectClass'], ', ')}"
-                    >
-                      inetOrgPerson
-                    </span>
-                  </td>
-                  <td class="px-4 py-2">
-                    <button
-                      class="btn btn-sm btn-info text-white"
-                      th:onclick="'showEntryDetails(' + ${iterStat.index} + ')'"
-                    >
-                      <i class="fas fa-eye mr-1"></i> 상세보기
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+
+          <!-- Table Content -->
+          <div id="entriesTableContainer">
+            <div class="text-center py-8">
+              <div
+                class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"
+              ></div>
+              <p class="text-gray-600 mt-2">엔트리 목록을 로드하는 중...</p>
+            </div>
+          </div>
+
+          <!-- Pagination Controls -->
+          <div
+            id="paginationControls"
+            class="border-t border-gray-200 px-6 py-4 hidden"
+          >
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-gray-700">
+                총
+                <span id="totalEntries" th:text="${analysisResult.totalEntries}"
+                  >0</span
+                >개 중 <span id="rangeStart">0</span>-<span id="rangeEnd"
+                  >0</span
+                >개 표시
+              </div>
+              <div class="flex space-x-1">
+                <button
+                  id="prevBtn"
+                  class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="pageNumbers" class="flex space-x-1">
+                  <!-- Page numbers will be inserted here -->
+                </div>
+                <button
+                  id="nextBtn"
+                  class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -337,45 +470,482 @@
       </div>
     </div>
     <th:block layout:fragment="script-content">
-      <script>
-        const analysisData = /*[[${analysisResult}]]*/ {};
+      <script th:inline="javascript">
+        let currentPage = 0;
+        const pageSize = 20;
+        let totalPages = 0;
+        const sessionId = /*[[${sessionId}]]*/ "";
+        let currentTaskId = null;
 
-        function showEntryDetails(index) {
-          const entry = analysisData.entries[index];
-          let html =
-            '<h6 class="text-lg font-semibold mb-2">DN: <code class="bg-gray-100 px-2 py-1 rounded text-sm">' +
-            entry.dn +
-            "</code></h6>";
-          html += '<h6 class="text-lg font-semibold mt-4 mb-2">속성:</h6>';
-          html +=
-            '<div class="overflow-x-auto"><table class="w-full border border-gray-200 rounded-lg">';
-          html +=
-            '<thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left border-b">속성</th><th class="px-4 py-2 text-left border-b">값</th></tr></thead><tbody>';
+        // Load first page on document ready
+        document.addEventListener("DOMContentLoaded", function () {
+          // loadEntries(0);
+          console.log("sessionId: ", sessionId)
+          setupEventListeners();
+        });
 
-          for (const [key, values] of Object.entries(entry.attributes)) {
-            html +=
-              '<tr class="border-b"><td class="px-4 py-2 font-semibold bg-gray-50">' +
-              key +
-              '</td><td class="px-4 py-2">';
-            if (Array.isArray(values)) {
-              html += values.join("<br>");
-            } else {
-              html += values;
-            }
-            html += "</td></tr>";
+        function loadEntries(page) {
+          const container = document.getElementById("entriesTableContainer");
+          container.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p class="text-gray-600 mt-2">엔트리 목록을 로드하는 중...</p>
+                    </div>
+                `;
+
+          fetch(
+            `/ldif/entries?sessionId=${sessionId}&page=${page}&size=${pageSize}`
+          )
+            .then((response) => response.json())
+            .then((data) => {
+              currentPage = data.number;
+              totalPages = data.totalPages;
+              renderEntriesTable(data.content);
+              updatePagination(data);
+            })
+            .catch((error) => {
+              console.error("Error loading entries:", error);
+              container.innerHTML = `
+                            <div class="text-center py-8 text-red-600">
+                                <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                                <p>엔트리 목록을 로드하는데 실패했습니다.</p>
+                            </div>
+                        `;
+            });
+        }
+
+        function renderEntriesTable(entries) {
+          const container = document.getElementById("entriesTableContainer");
+
+          let html = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">#</th>
+                                    <th class="px-4 py-3 text-left">DN</th>
+                                    <th class="px-4 py-3 text-left">타입</th>
+                                    <th class="px-4 py-3 text-left">속성 수</th>
+                                    <th class="px-4 py-3 text-left">ObjectClass</th>
+                                    <th class="px-4 py-3 text-left">액션</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                `;
+
+          entries.forEach((entry, index) => {
+            const globalIndex = currentPage * pageSize + index + 1;
+            const objectClasses = entry.attributes.objectClass
+              ? entry.attributes.objectClass.join(", ")
+              : "";
+
+            html += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-3 text-gray-900 font-medium">${globalIndex}</td>
+                            <td class="px-4 py-3 break-all">
+                                <code class="bg-gray-100 px-2 py-1 rounded text-xs font-mono text-gray-800">
+                                    ${entry.dn}
+                                </code>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ${entry.entryType}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-900">
+                                ${Object.keys(entry.attributes).length}
+                            </td>
+                            <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${objectClasses}">
+                                ${objectClasses}
+                            </td>
+                            <td class="px-4 py-3">
+                                <button
+                                    class="inline-flex items-center px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md transition-colors"
+                                    onclick="showEntryDetails(${
+                                      globalIndex - 1
+                                    })">
+                                    <i class="fas fa-eye mr-1"></i> 상세보기
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+          });
+
+          html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+          container.innerHTML = html;
+        }
+
+        function updatePagination(data) {
+          const paginationControls =
+            document.getElementById("paginationControls");
+          const rangeStart = data.number * data.size + 1;
+          const rangeEnd = Math.min(
+            (data.number + 1) * data.size,
+            data.totalElements
+          );
+
+          document.getElementById("rangeStart").textContent = rangeStart;
+          document.getElementById("rangeEnd").textContent = rangeEnd;
+          document.getElementById("totalEntries").textContent =
+            data.totalElements;
+
+          // Update navigation buttons
+          const prevBtn = document.getElementById("prevBtn");
+          const nextBtn = document.getElementById("nextBtn");
+
+          prevBtn.disabled = data.first;
+          nextBtn.disabled = data.last;
+
+          // Generate page numbers
+          const pageNumbers = document.getElementById("pageNumbers");
+          pageNumbers.innerHTML = "";
+
+          const startPage = Math.max(0, data.number - 2);
+          const endPage = Math.min(data.totalPages - 1, data.number + 2);
+
+          for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement("button");
+            pageBtn.className = `px-3 py-2 text-sm rounded-md transition-colors ${
+              i === data.number
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`;
+            pageBtn.textContent = i + 1;
+            pageBtn.onclick = () => loadEntries(i);
+            pageNumbers.appendChild(pageBtn);
           }
-          html += "</tbody></table></div>";
 
-          html += '<h6 class="text-lg font-semibold mt-4 mb-2">원본 LDIF:</h6>';
-          html +=
-            '<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code class="text-sm">' +
-            entry.originalLdif +
-            "</code></pre>";
+          paginationControls.classList.remove("hidden");
+        }
 
-          document.getElementById("entryDetailsBody").innerHTML = html;
+        function setupEventListeners() {
+          // Pagination buttons
           document
-            .getElementById("entryDetailsModal")
-            .classList.remove("hidden");
+            .getElementById("prevBtn")
+            .addEventListener("click", function () {
+              if (currentPage > 0) {
+                loadEntries(currentPage - 1);
+              }
+            });
+
+          document
+            .getElementById("nextBtn")
+            .addEventListener("click", function () {
+              if (currentPage < totalPages - 1) {
+                loadEntries(currentPage + 1);
+              }
+            });
+
+          // Save to LDAP button
+          const saveBtn = document.getElementById("saveToLdapBtn");
+          if (saveBtn) {
+            saveBtn.addEventListener("click", function () {
+              startSaveProcess();
+            });
+          }
+        }
+
+        function startSaveProcess() {
+          const btn = document.getElementById("saveToLdapBtn");
+          const progressSection = document.getElementById("progressSection");
+          const saveResult = document.getElementById("saveResult");
+
+          btn.disabled = true;
+          btn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 준비 중...';
+          btn.classList.add("opacity-75", "cursor-not-allowed");
+
+          // Clear previous results
+          saveResult.innerHTML = "";
+          progressSection.classList.remove("hidden");
+
+          console.log("sessionId=", sessionId);
+
+          // 단순한 GET 요청으로 변경
+          fetch(`/ldif/save-to-ldap?sessionId=${sessionId}`, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(
+                  `HTTP ${response.status}: ${response.statusText}`
+                );
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.success && data.taskId) {
+                currentTaskId = data.taskId;
+                startProgressTracking(data.taskId);
+                btn.innerHTML =
+                  '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
+              } else {
+                handleSaveError(data.message || "저장 시작 실패");
+              }
+            })
+            .catch((error) => {
+              console.error("Save request error:", error);
+              handleSaveError("저장 요청 실패: " + error.message);
+            });
+        }
+
+        function startProgressTracking(taskId) {
+          const eventSource = new EventSource(
+            `/ldif/progress?taskId=${taskId}`
+          );
+
+          eventSource.onmessage = function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              handleProgressUpdate(data);
+            } catch (e) {
+              console.error("Error parsing progress data:", e);
+            }
+          };
+
+          eventSource.onerror = function (event) {
+            console.error("SSE connection error:", event);
+            eventSource.close();
+            handleSaveError("진행률 추적 연결이 끊어졌습니다.");
+          };
+
+          // 타임아웃 처리
+          setTimeout(() => {
+            if (eventSource.readyState === EventSource.OPEN) {
+              eventSource.close();
+              handleSaveError(
+                "저장 작업이 너무 오래 걸립니다. 다시 시도해주세요."
+              );
+            }
+          }, 300000); // 5분 타임아웃
+        }
+
+        function handleProgressUpdate(data) {
+          const progressBar = document.getElementById("progressBar");
+          const progressText = document.getElementById("progressText");
+          const currentCount = document.getElementById("currentCount");
+          const saveResult = document.getElementById("saveResult");
+          const btn = document.getElementById("saveToLdapBtn");
+
+          switch (data.type) {
+            case "progress":
+              const percentage = data.percentage || 0;
+              progressBar.style.width = percentage + "%";
+              progressText.textContent = percentage + "%";
+              currentCount.textContent = data.current || 0;
+
+              // 진행률이 있으면 성공 메시지도 업데이트
+              if (data.successCount !== undefined) {
+                const successRate = Math.round(
+                  (data.successCount / data.current) * 100
+                );
+                progressText.textContent = `${percentage}% (성공률: ${successRate}%)`;
+              }
+              break;
+
+            case "complete":
+              progressBar.style.width = "100%";
+              progressText.textContent = "100%";
+              currentCount.textContent = data.savedCount || 0;
+
+              saveResult.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center animate-fadeIn">
+                    <i class="fas fa-check text-green-500 mr-3 text-xl"></i>
+                    <div>
+                        <div class="text-green-800 font-medium">저장 완료!</div>
+                        <div class="text-green-700 text-sm mt-1">
+                            ${data.savedCount}/${
+                data.totalCount
+              }개 엔트리가 성공적으로 저장되었습니다.
+                            ${
+                              data.savedCount < data.totalCount
+                                ? `<br><span class="text-yellow-600">일부 엔트리는 저장되지 않았습니다.</span>`
+                                : ""
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-check mr-2"></i> 저장 완료';
+              btn.classList.remove("opacity-75", "cursor-not-allowed");
+              btn.classList.add("bg-gray-500", "cursor-default");
+              break;
+
+            case "error":
+              handleSaveError(
+                data.message || "알 수 없는 오류가 발생했습니다."
+              );
+              break;
+          }
+        }
+
+        function handleSaveError(message) {
+          const saveResult = document.getElementById("saveResult");
+          const btn = document.getElementById("saveToLdapBtn");
+          const progressSection = document.getElementById("progressSection");
+
+          saveResult.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center animate-fadeIn">
+              <i class="fas fa-times text-red-500 mr-3 text-xl"></i>
+                <div>
+                  <div class="text-red-800 font-medium">저장 실패</div>
+                  <div class="text-red-700 text-sm mt-1">${message}</div>
+                </div>
+            </div>
+          `;
+
+          // 진행률 섹션 숨기기
+          progressSection.classList.add("hidden");
+
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save mr-2"></i> 다시 시도';
+          btn.classList.remove("opacity-75", "cursor-not-allowed");
+        }
+
+        // Entry details modal functions
+        let allEntries = []; // Store entries for details modal
+
+        function showEntryDetails(globalIndex) {
+          // Load the specific entry from the server if needed
+          const pageIndex = Math.floor(globalIndex / pageSize);
+          const entryIndex = globalIndex % pageSize;
+
+          if (pageIndex === currentPage) {
+            // Entry is on current page, show from current data
+            displayEntryModal(globalIndex);
+          } else {
+            // Load the page containing this entry
+            fetch(
+              `/ldif/entries?sessionId=${sessionId}&page=${pageIndex}&size=${pageSize}`
+            )
+              .then((response) => response.json())
+              .then((data) => {
+                displayEntryModal(globalIndex, data.content[entryIndex]);
+              })
+              .catch((error) => {
+                console.error("Error loading entry details:", error);
+              });
+          }
+        }
+
+        function displayEntryModal(globalIndex, entryData = null) {
+          // If entryData is not provided, try to get it from current page
+          if (!entryData) {
+            const tableRows = document.querySelectorAll(
+              "#entriesTableContainer tbody tr"
+            );
+            const currentPageEntryIndex = globalIndex - currentPage * pageSize;
+            if (
+              currentPageEntryIndex >= 0 &&
+              currentPageEntryIndex < tableRows.length
+            ) {
+              // Extract entry data from the table or make another API call
+              console.log(
+                "Need to implement entry data extraction or API call"
+              );
+              return;
+            }
+          }
+
+          if (entryData) {
+            let html = `
+                        <h6 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
+                            DN: <code class="bg-gray-100 px-3 py-1 rounded text-sm font-mono">${entryData.dn}</code>
+                        </h6>
+                        <h6 class="text-lg font-semibold mt-6 mb-3">속성:</h6>
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+                            <table class="w-full">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">속성</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">값</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                    `;
+
+            for (const [key, values] of Object.entries(entryData.attributes)) {
+              html += `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 font-semibold bg-gray-50 text-gray-800 align-top">${key}</td>
+                                <td class="px-4 py-3 text-gray-700 max-w-md">
+                        `;
+
+              if (Array.isArray(values)) {
+                values.forEach((value, index) => {
+                  if (index > 0) html += '<br class="mb-1">';
+                  // Truncate long values and add expand option
+                  if (value.length > 100) {
+                    html += `
+                                        <div class="truncated-value">
+                                            <span class="truncated">${value.substring(
+                                              0,
+                                              100
+                                            )}...</span>
+                                            <button class="text-blue-600 hover:text-blue-800 text-xs ml-2 expand-btn">
+                                                [더 보기]
+                                            </button>
+                                            <span class="full-value hidden">${value}</span>
+                                        </div>
+                                    `;
+                  } else {
+                    html += value;
+                  }
+                });
+              } else {
+                html += values;
+              }
+
+              html += `
+                                </td>
+                            </tr>
+                        `;
+            }
+
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <h6 class="text-lg font-semibold mt-6 mb-3">원본 LDIF:</h6>
+                        <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono border border-gray-200 max-h-60 overflow-y-auto"><code>${entryData.originalLdif}</code></pre>
+                    `;
+
+            document.getElementById("entryDetailsBody").innerHTML = html;
+
+            // Add event listeners for expand buttons
+            document.querySelectorAll(".expand-btn").forEach((btn) => {
+              btn.addEventListener("click", function () {
+                const truncatedValue = this.parentElement;
+                const truncated = truncatedValue.querySelector(".truncated");
+                const fullValue = truncatedValue.querySelector(".full-value");
+
+                if (fullValue.classList.contains("hidden")) {
+                  truncated.classList.add("hidden");
+                  fullValue.classList.remove("hidden");
+                  this.textContent = "[줄이기]";
+                } else {
+                  truncated.classList.remove("hidden");
+                  fullValue.classList.add("hidden");
+                  this.textContent = "[더 보기]";
+                }
+              });
+            });
+
+            document
+              .getElementById("entryDetailsModal")
+              .classList.remove("hidden");
+          }
         }
 
         function closeModal() {
@@ -391,50 +961,66 @@
             }
           });
 
-        document
-          .getElementById("saveToLdapBtn")
-          ?.addEventListener("click", function () {
-            const btn = this;
-            const resultDiv = document.getElementById("saveResult");
-
-            btn.disabled = true;
-            btn.innerHTML =
-              '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
-            btn.classList.add("opacity-75", "cursor-not-allowed");
-
-            fetch("/ldif/save-to-ldap", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(analysisData),
-            })
-              .then((response) => response.json())
-              .then((data) => {
-                if (data.success) {
-                  resultDiv.innerHTML =
-                    '<div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center"><i class="fas fa-check text-green-500 mr-2"></i><span class="text-green-800">' +
-                    data.message +
-                    "</span></div>";
-                } else {
-                  resultDiv.innerHTML =
-                    '<div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center"><i class="fas fa-times text-red-500 mr-2"></i><span class="text-red-800">' +
-                    data.message +
-                    "</span></div>";
-                }
-              })
-              .catch((error) => {
-                resultDiv.innerHTML =
-                  '<div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center"><i class="fas fa-times text-red-500 mr-2"></i><span class="text-red-800">저장 중 오류가 발생했습니다.</span></div>';
-              })
-              .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML =
-                  '<i class="fas fa-save mr-2"></i> LDAP에 저장하기';
-                btn.classList.remove("opacity-75", "cursor-not-allowed");
-              });
-          });
+        // Keyboard shortcuts
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") {
+            closeModal();
+          }
+        });
       </script>
+
+      <style>
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Custom scrollbar for tables */
+        .overflow-x-auto::-webkit-scrollbar,
+        .overflow-y-auto::-webkit-scrollbar {
+          height: 8px;
+          width: 8px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-track,
+        .overflow-y-auto::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-thumb,
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+
+        /* Smooth transitions */
+        * {
+          transition-property: all;
+          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          transition-duration: 150ms;
+        }
+
+        /* Progress bar animation */
+        #progressBar {
+          transition: width 0.5s ease-in-out;
+        }
+      </style>
     </th:block>
   </body>
 </html>
