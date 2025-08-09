@@ -59,14 +59,14 @@ public class LdapService {
                 log.debug("Processing attribute: {}, values count = {}", attrName, attrValues.size());
 
                 if (attrValues != null && !attrValues.isEmpty()) {
-                    BasicAttribute attr;
+                    BasicAttribute attr = new BasicAttribute(attrName);
                     // 바이너리 속성 처리
                     if (isBinaryAttribute(attrName)) {
-                        attr = new BasicAttribute(attrName + ";binary");
+                        // attr = new BasicAttribute(attrName + ";binary");
                         log.debug("Processing binary attribute: {}", attrName);
                         processBinaryAttribute(attr, attrValues);
                     } else {
-                        attr = new BasicAttribute(attrName);
+                        // attr = new BasicAttribute(attrName);
                         for (String value : attrValues) {
                             attr.add(value);
                         }

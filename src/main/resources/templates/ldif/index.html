@@ -1,198 +1,412 @@
 <!DOCTYPE html>
-<html lang="en"
-      xmlns:th="http://www.thymeleaf.org"
-      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
-      layout:decorate="~{layout/main}">
-<body>
-<div layout:fragment="content">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
+<html
+  lang="en"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div class="container mx-auto px-4 py-8 max-w-4xl">
         <div class="flex justify-center">
-            <div class="w-full max-w-2xl">
-                <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-                    <!-- Header -->
-                    <div class="bg-blue-600 text-white px-6 py-4">
-                        <h1 class="text-2xl font-bold flex items-center gap-3">
-                            <i class="fas fa-file-upload text-blue-200"></i> 
-                            LDIF File Manager
-                        </h1>
+          <div class="w-full max-w-2xl">
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+              <!-- Header -->
+              <div class="bg-blue-600 text-white px-6 py-4">
+                <h1 class="text-2xl font-bold flex items-center gap-3">
+                  <i class="fas fa-file-upload text-blue-200"></i>
+                  LDIF File Manager
+                </h1>
+              </div>
+
+              <div class="p-6">
+                <!-- Alert Messages -->
+                <div
+                  th:if="${error}"
+                  class="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-md"
+                >
+                  <div class="flex items-center">
+                    <i
+                      class="fas fa-exclamation-triangle text-red-500 mr-3"
+                    ></i>
+                    <div class="flex-1">
+                      <span th:text="${error}" class="text-red-700"></span>
                     </div>
-                    
-                    <div class="p-6">
-                        <!-- Alert Messages -->
-                        <div th:if="${error}" class="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-md">
-                            <div class="flex items-center">
-                                <i class="fas fa-exclamation-triangle text-red-500 mr-3"></i>
-                                <div class="flex-1">
-                                    <span th:text="${error}" class="text-red-700"></span>
-                                </div>
-                                <button type="button" class="text-red-400 hover:text-red-600 transition-colors" onclick="this.parentElement.parentElement.style.display='none'">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
+                    <button
+                      type="button"
+                      class="text-red-400 hover:text-red-600 transition-colors"
+                      onclick="this.parentElement.parentElement.remove()"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
 
-                        <div th:if="${success}" class="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-md">
-                            <div class="flex items-center">
-                                <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                <div class="flex-1">
-                                    <span th:text="${success}" class="text-green-700"></span>
-                                </div>
-                                <button type="button" class="text-green-400 hover:text-green-600 transition-colors" onclick="this.parentElement.parentElement.style.display='none'">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Connection Test -->
-                        <div class="mb-6">
-                            <button id="testConnectionBtn" class="bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2">
-                                <i class="fas fa-plug"></i> LDAP 연결 테스트
-                            </button>
-                            <div id="connectionResult" class="mt-3"></div>
-                        </div>
-
-                        <!-- File Upload Form -->
-                        <form th:action="@{/ldif/upload}" method="post" enctype="multipart/form-data" class="space-y-6">
-                            <div>
-                                <label for="file" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-file text-blue-500 mr-2"></i> LDIF 파일 선택
-                                </label>
-                                <input type="file" 
-                                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-                                       id="file" 
-                                       name="file" 
-                                       accept=".ldif" 
-                                       required>
-                                <p class="mt-2 text-sm text-gray-600">
-                                    LDIF (LDAP Data Interchange Format) 파일만 업로드할 수 있습니다.
-                                </p>
-                            </div>
-
-                            <div>
-                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-md transition-colors duration-200 flex items-center justify-center gap-3 text-lg">
-                                    <i class="fas fa-upload"></i> 파일 업로드 및 분석
-                                </button>
-                            </div>
-                        </form>
-
-                        <!-- Features -->
-                        <div class="mt-8">
-                            <h5 class="text-lg font-semibold text-gray-800 mb-4">기능</h5>
-                            <div class="bg-gray-50 rounded-lg p-4">
-                                <ul class="space-y-3">
-                                    <li class="flex items-center gap-3 py-2">
-                                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-search text-blue-600 text-sm"></i>
-                                        </div>
-                                        <span class="text-gray-700">LDIF 파일 구문 분석 및 검증</span>
-                                    </li>
-                                    <li class="flex items-center gap-3 py-2">
-                                        <div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-chart-bar text-green-600 text-sm"></i>
-                                        </div>
-                                        <span class="text-gray-700">엔트리 통계 및 ObjectClass 분석</span>
-                                    </li>
-                                    <li class="flex items-center gap-3 py-2">
-                                        <div class="flex-shrink-0 w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-database text-cyan-600 text-sm"></i>
-                                        </div>
-                                        <span class="text-gray-700">OpenLDAP 서버에 직접 저장</span>
-                                    </li>
-                                    <li class="flex items-center gap-3 py-2">
-                                        <div class="flex-shrink-0 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-exclamation-triangle text-yellow-600 text-sm"></i>
-                                        </div>
-                                        <span class="text-gray-700">오류 검출 및 보고</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
+                <div
+                  th:if="${success}"
+                  class="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-md"
+                >
+                  <div class="flex items-center">
+                    <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                    <div class="flex-1">
+                      <span th:text="${success}" class="text-green-700"></span>
                     </div>
+                    <button
+                      type="button"
+                      class="text-green-400 hover:text-green-600 transition-colors"
+                      onclick="this.parentElement.parentElement.remove()"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
                 </div>
-                
-                <!-- Footer -->
-                <div class="text-center mt-8 text-gray-500 text-sm">
-                    <p>© 2024 LDIF File Manager. 안전하고 효율적인 LDAP 데이터 관리.</p>
+
+                <!-- Connection Test -->
+                <div class="mb-6">
+                  <button
+                    id="testConnectionBtn"
+                    class="bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <i class="fas fa-plug"></i> LDAP 연결 테스트
+                  </button>
+                  <div id="connectionResult" class="mt-3"></div>
                 </div>
+
+                <!-- File Upload Form -->
+                <form
+                  th:action="@{/ldif/upload}"
+                  method="post"
+                  enctype="multipart/form-data"
+                  class="space-y-6"
+                >
+                  <div>
+                    <label
+                      for="file"
+                      class="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      <i class="fas fa-file text-blue-500 mr-2"></i> LDIF 파일
+                      선택
+                    </label>
+                    <input
+                      type="file"
+                      class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      id="file"
+                      name="file"
+                      accept=".ldif"
+                      required
+                    />
+                    <div
+                      id="fileInfo"
+                      class="mt-2 text-sm text-gray-600 hidden"
+                    >
+                      <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                      <span id="fileName"></span>
+                      <span id="fileSize" class="ml-2 text-gray-400"></span>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600">
+                      LDIF (LDAP Data Interchange Format) 파일만 업로드할 수
+                      있습니다.
+                    </p>
+                  </div>
+
+                  <!-- Upload Progress Indicator -->
+                  <div id="uploadIndicator" class="htmx-indicator">
+                    <div
+                      class="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                    >
+                      <div class="flex items-center justify-center space-x-3">
+                        <div
+                          class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"
+                        ></div>
+                        <span class="text-blue-700 font-medium"
+                          >파일 업로드 및 분석 중...</span
+                        >
+                      </div>
+                      <div class="mt-3">
+                        <div class="bg-blue-100 rounded-full h-2">
+                          <div
+                            class="bg-blue-600 h-2 rounded-full animate-pulse"
+                            style="width: 100%"
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      type="submit"
+                      class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-md transition-all duration-200 flex items-center justify-center gap-3 text-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                    >
+                      <i class="fas fa-upload"></i> 파일 업로드 및 분석
+                    </button>
+                  </div>
+                </form>
+
+                <!-- Features -->
+                <div class="mt-8">
+                  <h5 class="text-lg font-semibold text-gray-800 mb-4">
+                    주요 기능
+                  </h5>
+                  <div
+                    class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200"
+                  >
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"
+                        >
+                          <i class="fas fa-search text-blue-600"></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >LDIF 파일 구문 분석 및 검증</span
+                        >
+                      </div>
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"
+                        >
+                          <i class="fas fa-chart-bar text-green-600"></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >엔트리 통계 및 ObjectClass 분석</span
+                        >
+                      </div>
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-cyan-100 rounded-full flex items-center justify-center"
+                        >
+                          <i class="fas fa-database text-cyan-600"></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >OpenLDAP 서버 직접 저장</span
+                        >
+                      </div>
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center"
+                        >
+                          <i class="fas fa-certificate text-purple-600"></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >X.509 인증서 검증</span
+                        >
+                      </div>
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center"
+                        >
+                          <i
+                            class="fas fa-exclamation-triangle text-yellow-600"
+                          ></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >실시간 오류 검출 및 보고</span
+                        >
+                      </div>
+                      <div
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div
+                          class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center"
+                        >
+                          <i class="fas fa-bolt text-indigo-600"></i>
+                        </div>
+                        <span class="text-gray-700 font-medium"
+                          >실시간 진행률 표시</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- System Requirements -->
+                <div
+                  class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <h6 class="text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>시스템
+                    요구사항
+                  </h6>
+                  <ul class="text-sm text-gray-600 space-y-1">
+                    <li>• 최대 파일 크기: 100MB</li>
+                    <li>• 지원 형식: LDIF (RFC 2849)</li>
+                    <li>• 권장 브라우저: Chrome, Firefox, Safari</li>
+                  </ul>
+                </div>
+              </div>
             </div>
+
+            <!-- Footer -->
+            <div class="text-center mt-8 text-gray-500 text-sm">
+              <p>
+                © 2024 LDIF File Manager. 안전하고 효율적인 LDAP 데이터 관리.
+              </p>
+              <p class="mt-1">
+                <i class="fas fa-shield-alt text-green-500 mr-1"></i>
+                SSL 암호화 및 안전한 데이터 처리
+              </p>
+            </div>
+          </div>
         </div>
+      </div>
     </div>
-</div>
-<th:block layout:fragment="script-content">
-    <script>
-        document.getElementById('testConnectionBtn').addEventListener('click', function() {
+    <th:block layout:fragment="script-content">
+      <script>
+        document
+          .getElementById("testConnectionBtn")
+          .addEventListener("click", function () {
             const btn = this;
-            const resultDiv = document.getElementById('connectionResult');
-            
+            const resultDiv = document.getElementById("connectionResult");
+
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner animate-spin mr-2"></i>테스트중...';
-            btn.classList.add('opacity-75', 'cursor-not-allowed');
-            
-            fetch('/ldif/test-connection')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        resultDiv.innerHTML = `
-                            <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded-md">
+            btn.innerHTML =
+              '<i class="fas fa-spinner animate-spin mr-2"></i>테스트중...';
+            btn.classList.add("opacity-75", "cursor-not-allowed");
+
+            fetch("/ldif/test-connection")
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.success) {
+                  resultDiv.innerHTML = `
+                            <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded-md animate-fadeIn">
                                 <div class="flex items-center">
                                     <i class="fas fa-check text-green-500 mr-3"></i>
-                                    <span class="text-green-700">${data.message}</span>
+                                    <span class="text-green-700 font-medium">${data.message}</span>
                                 </div>
                             </div>
                         `;
-                    } else {
-                        resultDiv.innerHTML = `
-                            <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md">
+                } else {
+                  resultDiv.innerHTML = `
+                            <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md animate-fadeIn">
                                 <div class="flex items-center">
                                     <i class="fas fa-times text-red-500 mr-3"></i>
-                                    <span class="text-red-700">${data.message}</span>
+                                    <span class="text-red-700 font-medium">${data.message}</span>
                                 </div>
                             </div>
                         `;
-                    }
-                })
-                .catch(error => {
-                    resultDiv.innerHTML = `
-                        <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md">
+                }
+              })
+              .catch((error) => {
+                resultDiv.innerHTML = `
+                        <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md animate-fadeIn">
                             <div class="flex items-center">
                                 <i class="fas fa-times text-red-500 mr-3"></i>
-                                <span class="text-red-700">연결 테스트 실패</span>
+                                <span class="text-red-700 font-medium">연결 테스트 실패</span>
                             </div>
                         </div>
                     `;
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-plug mr-2"></i>LDAP 연결 테스트';
-                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
-                });
+              })
+              .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML =
+                  '<i class="fas fa-plug mr-2"></i>LDAP 연결 테스트';
+                btn.classList.remove("opacity-75", "cursor-not-allowed");
+              });
+          });
+
+        // File input enhanced functionality
+        document.getElementById("file").addEventListener("change", function () {
+          const file = this.files[0];
+          const fileInfo = document.getElementById("fileInfo");
+          const fileName = document.getElementById("fileName");
+          const fileSize = document.getElementById("fileSize");
+
+          if (file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = `(${formatFileSize(file.size)})`;
+            fileInfo.classList.remove("hidden");
+
+            // Validate file extension
+            if (!file.name.toLowerCase().endsWith(".ldif")) {
+              showFileError("LDIF 파일만 업로드할 수 있습니다.");
+              this.value = "";
+              fileInfo.classList.add("hidden");
+            }
+          } else {
+            fileInfo.classList.add("hidden");
+          }
         });
 
-        // File input enhanced styling
-        document.getElementById('file').addEventListener('change', function() {
-            const fileName = this.files[0]?.name;
-            if (fileName) {
-                // You could add file name display here if needed
-                console.log('Selected file:', fileName);
-            }
-        });
+        // File size formatter
+        function formatFileSize(bytes) {
+          if (bytes === 0) return "0 Bytes";
+          const k = 1024;
+          const sizes = ["Bytes", "KB", "MB", "GB"];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return (
+            parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+          );
+        }
+
+        // Show file error
+        function showFileError(message) {
+          const errorDiv = document.createElement("div");
+          errorDiv.className =
+            "mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 animate-fadeIn";
+          errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i>${message}`;
+
+          const fileInput = document.getElementById("file");
+          fileInput.parentNode.insertBefore(errorDiv, fileInput.nextSibling);
+
+          setTimeout(() => {
+            errorDiv.remove();
+          }, 3000);
+        }
 
         // Auto-hide alerts after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('[th\\:if]');
-            alerts.forEach(alert => {
-                if (alert.style.display !== 'none') {
-                    setTimeout(() => {
-                        alert.style.opacity = '0';
-                        alert.style.transform = 'translateY(-10px)';
-                        setTimeout(() => {
-                            alert.style.display = 'none';
-                        }, 300);
-                    }, 5000);
+        document.addEventListener("DOMContentLoaded", function () {
+          const alerts = document.querySelectorAll(".animate-pulse");
+          alerts.forEach((alert) => {
+            setTimeout(() => {
+              alert.style.opacity = "0";
+              alert.style.transform = "translateY(-10px)";
+              alert.style.transition = "all 0.3s ease-out";
+              setTimeout(() => {
+                if (alert.parentNode) {
+                  alert.remove();
                 }
-            });
+              }, 300);
+            }, 5000);
+          });
         });
-    </script>
-</th:block>
-</body>
+      </script>
+
+      <style>
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Custom file input styling */
+        input[type="file"]::-webkit-file-upload-button {
+          transition: all 0.2s ease-in-out;
+        }
+
+        input[type="file"]:hover::-webkit-file-upload-button {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+      </style>
+    </th:block>
+  </body>
 </html>

@@ -1,10 +1,14 @@
 package com.smartcoreinc.localpkd.ldif.service;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -33,15 +37,29 @@ public class LineTrackingLdifParser {
         "certificateRevocationList", "authorityRevocationList"
     );
 
+    // 인증서 검증을 위한 CertificateFactory
+    private static final CertificateFactory CERTIFICATE_FACTORY;
+    
+    static {
+        try {
+            CERTIFICATE_FACTORY = CertificateFactory.getInstance("X.509");
+        } catch (CertificateException e) {
+            throw new RuntimeException("Failed to initialize X.509 CertificateFactory", e);
+        }
+    }
+
     public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
         log.info("Starting line-tracking LDIF parsing for file: {}", file.getOriginalFilename());
         
         LdifAnalysisResult result = new LdifAnalysisResult();
         List<LdifEntryDto> entries = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
         Map<String, Integer> objectClassCount = new HashMap<>();
+        Map<String, Integer> certificateValidationStats = new HashMap<>();
 
         int addCount = 0, modifyCount = 0, deleteCount = 0;
+        int totalCertificates = 0, validCertificates = 0, invalidCertificates = 0;
 
         // 라인 번호 추적을 위한 사전 처리
         try (InputStream inputStream = file.getInputStream();
@@ -61,12 +79,21 @@ public class LineTrackingLdifParser {
                         // 현재 레코드 완료, 파싱 시도
                         recordNumber++;
                         try {
-                            log.debug("currentRecord of LDIF:\n{}", currentRecord.toString());
-                            LdifEntryDto entry = parseRecord(currentRecord.toString(), recordNumber, lineNumber);
-                            if (entry != null) {
-                                entries.add(entry);
+                            log.debug("Number of th current record: {} ", recordNumber);
+                            ParseResult parseResult = parseRecord(currentRecord.toString(), recordNumber, lineNumber);
+                            if (parseResult.entry != null) {
+                                entries.add(parseResult.entry);
                                 addCount++;
-                                countObjectClasses(entry, objectClassCount);
+                                countObjectClasses(parseResult.entry, objectClassCount);
+
+                                // 인증서 검증 통계 업데이트
+                                totalCertificates += parseResult.totalCertificates;
+                                validCertificates += parseResult.validCertificates;
+                                invalidCertificates += parseResult.invalidCertificates;
+
+                                if (!parseResult.warnings.isEmpty()) {
+                                    warnings.addAll(parseResult.warnings);
+                                }
                             }
                         } catch (Exception e) {
                             errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber, e.getMessage()));
@@ -89,11 +116,20 @@ public class LineTrackingLdifParser {
                         // 이전 레코드 처리
                         recordNumber++;
                         try {
-                            LdifEntryDto entryDto = parseRecord(currentRecord.toString(), recordNumber, lineNumber - 1);
-                            if (entryDto != null) {
-                                entries.add(entryDto);
+                            ParseResult parseResult = parseRecord(currentRecord.toString(), recordNumber, lineNumber - 1);
+                            if (parseResult.entry != null) {
+                                entries.add(parseResult.entry);
                                 addCount++;
-                                countObjectClasses(entryDto, objectClassCount);
+                                countObjectClasses(parseResult.entry, objectClassCount);
+
+                                // 인증서 검증 통계 업데이트
+                                totalCertificates += parseResult.totalCertificates;
+                                validCertificates += parseResult.validCertificates;
+                                invalidCertificates += parseResult.invalidCertificates;
+                                
+                                if (!parseResult.warnings.isEmpty()) {
+                                    warnings.addAll(parseResult.warnings);
+                                }
                             }
                         } catch (Exception e) {
                             errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber - 1, e.getMessage()));
@@ -114,11 +150,20 @@ public class LineTrackingLdifParser {
             if (inRecord && currentRecord.length() > 0) {
                 recordNumber++;
                 try {
-                    LdifEntryDto entryDto = parseRecord(currentRecord.toString(), recordNumber, lineNumber);
-                    if (entryDto != null) {
-                        entries.add(entryDto);
+                    ParseResult parseResult = parseRecord(currentRecord.toString(), recordNumber, lineNumber);
+                    if (parseResult.entry != null) {
+                        entries.add(parseResult.entry);
                         addCount++;
-                        countObjectClasses(entryDto, objectClassCount);
+                        countObjectClasses(parseResult.entry, objectClassCount);
+                        
+                        // 인증서 검증 통계 업데이트
+                        totalCertificates += parseResult.totalCertificates;
+                        validCertificates += parseResult.validCertificates;
+                        invalidCertificates += parseResult.invalidCertificates;
+                        
+                        if (!parseResult.warnings.isEmpty()) {
+                            warnings.addAll(parseResult.warnings);
+                        }
                     }
                 } catch (Exception e) {
                     errors.add(String.format("Record %d (around line %d): %s", recordNumber, lineNumber, e.getMessage()));
@@ -130,33 +175,50 @@ public class LineTrackingLdifParser {
             errors.add("File reading error: " + e.getMessage());
         }
 
+        // 인증서 검증 통계 설정
+        if (totalCertificates > 0) {
+            certificateValidationStats.put("total", totalCertificates);
+            certificateValidationStats.put("valid", validCertificates);
+            certificateValidationStats.put("invalid", invalidCertificates);
+        }
+
         // 결과 설정
         result.setEntries(entries);
         result.setErrors(errors);
+        result.setWarnings(warnings);
         result.setTotalEntries(entries.size());
         result.setAddEntries(addCount);
         result.setModifyEntries(modifyCount);
         result.setDeleteEntries(deleteCount);
         result.setObjectClassCount(objectClassCount);
+        result.setCertificateValidationStats(certificateValidationStats);
         result.setHasValidationErrors(!errors.isEmpty());
 
-        log.info("LDIF parsing completed. Entries: {}, Errors: {}", entries.size(), errors.size());
+        log.info("LDIF parsing completed. Entries: {}, Errors: {}, Warnings: {}, Certificates: {} (Valid: {}, Invalid: {})", 
+                entries.size(), errors.size(), warnings.size(), totalCertificates, validCertificates, invalidCertificates);
         return result;
     }
 
-    private LdifEntryDto parseRecord(String recordText, int recordNumber, int lineNumber) throws LDIFException, IOException {
+    private ParseResult parseRecord(String recordText, int recordNumber, int lineNumber) throws LDIFException, IOException {
         try {
             // 커스텀 파싱을 먼저 수행하여 바이너리 속성 처라
-            Map<String, Object> customParsedAttributes = customParseRecord(recordText);
+            CustomParseResult customParseResult = customParseRecord(recordText, recordNumber);
 
             try (StringReader stringReader = new StringReader(recordText);
                 LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader))) {
                     Entry entry = ldifReader.readEntry();
-                    log.debug("entry data to LDIFString:\n {}", entry.toLDIFString());
+                    log.debug("entry dn: {}", entry.getDN());
                     if (entry != null) {
-                        return convertEntryDto(entry, "ADD", customParsedAttributes);
+                        LdifEntryDto entryDto = convertEntryDto(entry, "ADD", customParseResult.binaryAttributes);
+                        return new ParseResult(
+                            entryDto,
+                            customParseResult.warnings,
+                            customParseResult.totalCertificates,
+                            customParseResult.validCertificates,
+                            customParseResult.invalidCertificates
+                        );
                     }
-                    return null;
+                    return new ParseResult(null, customParseResult.warnings, 0, 0, 0);
             }
         } catch (LDIFException e) {
             throw new LDIFException(
@@ -170,12 +232,18 @@ public class LineTrackingLdifParser {
 
     /**
      * 바이너리 속성을 올바르게 처리하기 위한 커스텀 파싱
-     * @param recordText
-     * @return
+     * @param String recordText
+     * @param int recordNumber
+     * @return CustomParseResult
      */
-    private Map<String, Object> customParseRecord(String recordText) {
+    private CustomParseResult customParseRecord(String recordText, int recordNumber) {
         Map<String, Object> binaryAttributes = new HashMap<>();
+        List<String> warnings = new ArrayList<>();
         String[] lines = recordText.split("\n");
+
+        int totalCertificates = 0;
+        int validCertificates = 0;
+        int invalidCertificates = 0;
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();
@@ -191,9 +259,9 @@ public class LineTrackingLdifParser {
                     String base64Value = parts[1].trim();
 
                     // ;binary 접미사 제거
-                    if (attrName.endsWith(";binary")) {
-                        attrName = attrName.replace(";binary", "");
-                    }
+                    // if (attrName.endsWith(";binary")) {
+                    //     attrName = attrName.replace(";binary", "");
+                    // }
 
                     // 여러 줄에 걸친 Base64 데이터 처리
                     StringBuilder fullBase64 = new StringBuilder(base64Value);
@@ -217,16 +285,71 @@ public class LineTrackingLdifParser {
                             }
                             existingValues.add(binaryData);
 
+                            if (attrName.toLowerCase().contains("certificate")) {
+                                totalCertificates++;
+                                CertificateValidationResult validationResult = validateX509Cerificate(binaryData, recordNumber);
+                                if (validationResult.isValid) {
+                                    validCertificates++;
+                                    log.debug("Valid X.509 certificate found in record {}: {}", recordNumber, validationResult.details);
+                                } else {
+                                    invalidCertificates++;
+                                    warnings.add(String.format("Record %d: Invalid X.509 certificate - %s", recordNumber, validationResult.errorMessage));
+                                    log.warn("Invalid X.509 certificate in record {}: {}", recordNumber, validationResult.errorMessage);
+                                }
+                            }
+
                             log.debug("Successfully parsed binary attribute '{}' with {} bytes", attrName, binaryData.length);
                         } catch (IllegalArgumentException e) {
-                            log.warn("Failed to decode Base64 for attribute '{}': {}", attrName, e.getMessage());
+                            warnings.add(String.format("Record %d: Failed to decode Base64 for attribute '%s': %s", recordNumber, attrName, e.getMessage()));
+                            log.warn("Failed to decode Base64 for attribute '{}' in record {}: {}", attrName, recordNumber, e.getMessage());
                         }
                     }
                 }
             }
         }
 
-        return binaryAttributes;
+        return new CustomParseResult(binaryAttributes, warnings, totalCertificates, validCertificates, invalidCertificates);
+    }
+
+    /**
+     * X.509 인증서 검증
+     */
+    private CertificateValidationResult validateX509Cerificate(byte[] certBytes, int recordNumber) {
+        try {
+            // 기본적인 DER 인코딩 검증 (0x30으로 시작해야 함)
+            if (certBytes.length < 10) {
+                return new CertificateValidationResult(false, "Certificate data too short", null);
+            }
+
+            if (certBytes[0] != 0x30) {
+                return new CertificateValidationResult(false, "Invalide DER encoding - does not start with 0x30", null);
+            }
+
+            // X.509 인증서 파싱 시도
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(certBytes)) {
+                X509Certificate certificate = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bis);
+
+                // 인증서 기본 정보 추출
+                String subject = certificate.getSubjectX500Principal().getName();
+                String issuer = certificate.getIssuerX500Principal().getName();
+                String serialNumber = certificate.getSerialNumber().toString();
+
+                // 유효 기간 검증
+                try {
+                    certificate.checkValidity();
+                    String details = String.format("Subject: %s, Issuer: %s, Serial: %s", subject, issuer, serialNumber);
+                    return new CertificateValidationResult(true, "Valid certificate", details);
+                } catch (Exception validityException) {
+                    String details = String.format("Subject: %s, Issuer: %s, Serial: %s, Validity Error: %s", 
+                                                  subject, issuer, serialNumber, validityException.getMessage());
+                    return new CertificateValidationResult(false, "Certificate validity check failed", details);
+                }
+            }
+        } catch (CertificateException e) {
+            return new CertificateValidationResult(false, "Cerficiate parsing failed: " + e.getMessage(), null);
+        } catch (Exception e) {
+            return new CertificateValidationResult(false, "Unexpected error during validation: " + e.getMessage(), null);
+        }
     }
 
     /**
@@ -236,7 +359,7 @@ public class LineTrackingLdifParser {
      */
     private boolean isBinaryAttribute(String attributeName) {
         return BINARY_ATTRIBUTES.stream()
-            .anyMatch(binaryAttr -> attributeName.toLowerCase().contains(binaryAttr.toLowerCase()));
+            .anyMatch(binaryAttr -> attributeName.toLowerCase().contains(binaryAttr.toLowerCase()) || attributeName.contains(";binary"));
     }
 
     private LdifEntryDto convertEntryDto(Entry entry, String entryType, Map<String, Object> customParsedAttributes) {
@@ -246,12 +369,12 @@ public class LineTrackingLdifParser {
             String attributeName = attribute.getName();
 
             // ;binary 접미사 정규화
-            String normalizedAttrName = attributeName.replace(";binary", "");
+            // String normalizedAttrName = attributeName.replace(";binary", "");
 
             // 바이너리 속성인 경우 커스텀 파싱 결과 사용
-            if (isBinaryAttribute(normalizedAttrName) && customParsedAttributes.containsKey(normalizedAttrName)) {
+            if (isBinaryAttribute(attributeName)) {
                 @SuppressWarnings("unchecked")
-                List<byte[]> binaryValues = (List<byte[]>) customParsedAttributes.get(normalizedAttrName);
+                List<byte[]> binaryValues = (List<byte[]>) customParsedAttributes.get(attributeName);
                 List<String> base64Values = new ArrayList<>();
                 
                 for (byte[] binaryValue : binaryValues) {
@@ -259,8 +382,8 @@ public class LineTrackingLdifParser {
                     base64Values.add(Base64.getEncoder().encodeToString(binaryValue));
                 }
                 
-                attributes.put(normalizedAttrName, base64Values);
-                log.debug("Processed binary attribute '{}' with {} values", normalizedAttrName, base64Values.size());
+                attributes.put(attributeName, base64Values);
+                log.debug("Processed binary attribute '{}' with {} values", attributeName, base64Values.size());
             } else {
                 // 일반 속성 처리
                 String[] values = attribute.getValues();
@@ -362,6 +485,64 @@ public class LineTrackingLdifParser {
         } catch (Exception e) {
             log.warn("Invalid X.509 certificate: {}", e.getMessage());
             return false;
+        }
+    }
+
+    // 내부 클래스들
+    private static class ParseResult {
+        final LdifEntryDto entry;
+        final List<String> warnings;
+        final int totalCertificates;
+        final int validCertificates;
+        final int invalidCertificates;
+
+        ParseResult(
+            LdifEntryDto entry,
+            List<String> warnings,
+            int totalCertificates,
+            int validCertificates,
+            int invalidCertificates
+        ) {
+            this.entry = entry;
+            this.warnings = warnings;
+            this.totalCertificates = totalCertificates;
+            this.validCertificates = validCertificates;
+            this.invalidCertificates = invalidCertificates;
+        }
+    }
+
+    private static class CustomParseResult {
+        final Map<String, Object> binaryAttributes;
+        final List<String> warnings;
+        final int totalCertificates;
+        final int validCertificates;
+        final int invalidCertificates;
+
+        CustomParseResult(
+            Map<String, Object> binaryAttributes,
+            List<String> warnings,
+            int totalCertificates,
+            int validCertificates,
+            int invalidCertificates
+        ) {
+            this.binaryAttributes = binaryAttributes;
+            this.warnings = warnings;
+            this.totalCertificates = totalCertificates;
+            this.validCertificates = validCertificates;
+            this.invalidCertificates = invalidCertificates;
+        }
+        
+    }
+
+    private static class CertificateValidationResult {
+        final boolean isValid;
+        final String errorMessage;
+        final String details;
+
+        CertificateValidationResult(boolean isValid, String errorMessage, String details) {
+            this.isValid = isValid;
+            this.errorMessage = errorMessage;
+            this.details = details;
         }
     }
 }
