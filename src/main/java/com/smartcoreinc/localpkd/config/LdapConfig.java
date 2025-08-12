@@ -32,7 +32,8 @@ public class LdapConfig {
     }
 
     @Bean
-    public LdapTemplate ldapTemplate() {
-        return new LdapTemplate(contextSource());
+    public LdapTemplate ldapTemplate(LdapContextSource contextSource) {
+        LdapTemplate ldapTemplate = new LdapTemplate(contextSource);
+        return ldapTemplate;
     }
 }

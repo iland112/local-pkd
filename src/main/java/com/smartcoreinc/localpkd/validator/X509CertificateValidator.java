@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.service;
+package com.smartcoreinc.localpkd.validator;
 
 import java.security.cert.X509Certificate;
 

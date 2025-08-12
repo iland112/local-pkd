@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.entity;
+package com.smartcoreinc.localpkd.icaomasterlist.entity;
 
 import javax.naming.Name;
 
@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.smartcoreinc.localpkd.ldaphelper.NameDeserializer;
 import com.smartcoreinc.localpkd.ldaphelper.NameSerializer;
 
-@Entry(base = "ou=CSCA", objectClasses = {"top", "person", "organizationalPerson", "inetOrgPerson", "pkiCA"})
+@Entry(base = "dc=ml-data,dc=download,dc=pkd", objectClasses = {"top", "person", "organizationalPerson", "inetOrgPerson", "pkiCA"})
 public final class CscaCertificate {
 
     @Id
@@ -19,16 +19,19 @@ public final class CscaCertificate {
     @JsonDeserialize(using = NameDeserializer.class)
     private Name dn;
 
+    @Attribute(name = "gn")
+    private String subjectName;
+
+    @Attribute(name = "ou")
+    private String issuerName;
+
     @Attribute(name = "sn")
     private String seralNumber;
 
-    @Attribute(name = "l")
-    private String country;
-
-    @Attribute(name = "cn")
-    private String issuerName;
+    @Attribute(name = "description")
+    private String valid;
     
-    @Attribute(name = "cACertificate;binary")
+    @Attribute(name = "cACertificate;binary", type = Attribute.Type.BINARY)
     private byte[] certificate;
     
     public CscaCertificate() {}
@@ -41,20 +44,12 @@ public final class CscaCertificate {
         this.dn = dn;
     }
 
-    public String getSeralNumber() {
-        return seralNumber;
+    public String getSubjectName() {
+        return subjectName;
     }
 
-    public void setSeralNumber(String seralNumber) {
-        this.seralNumber = seralNumber;
-    }
-
-    public String getCountry() {
-        return country;
-    }
-
-    public void setCountry(String country) {
-        this.country = country;
+    public void setSubjectName(String subjectName) {
+        this.subjectName = subjectName;
     }
 
     public String getIssuerName() {
@@ -65,6 +60,22 @@ public final class CscaCertificate {
         this.issuerName = issuerName;
     }
 
+    public String getSeralNumber() {
+        return seralNumber;
+    }
+
+    public void setSeralNumber(String seralNumber) {
+        this.seralNumber = seralNumber;
+    }
+
+    public String getValid() {
+        return valid;
+    }
+
+    public void setValid(String valid) {
+        this.valid = valid;
+    }
+
     public byte[] getCertificate() {
         return certificate;
     }
@@ -72,5 +83,7 @@ public final class CscaCertificate {
     public void setCertificate(byte[] certificate) {
         this.certificate = certificate;
     }
+
+    
 
 }

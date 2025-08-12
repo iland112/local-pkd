@@ -1,9 +1,9 @@
-package com.smartcoreinc.localpkd.icao.repository;
+package com.smartcoreinc.localpkd.icaomasterlist.repository;
 
 import org.springframework.data.ldap.repository.LdapRepository;
 import org.springframework.stereotype.Repository;
 
-import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
+import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
 
 @Repository
 public interface CscaCertificateRepository extends LdapRepository<CscaCertificate> {

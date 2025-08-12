@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.sse;
+package com.smartcoreinc.localpkd.sse;
 
 import org.springframework.util.Assert;
 
