@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
@@ -44,12 +46,64 @@ public class LdifController {
     // 세션별 분석 결과 저장 (실제로는 Redis나 DB 사용 권장)
     private final Map<String, LdifAnalysisResult> sessionResults = new ConcurrentHashMap<>();
 
-    // SSE Emitter 관리
-    private final Map<String, SseEmitter> activeEmitters = new ConcurrentHashMap<>();
+    // SSE Emitter 관리 - 연결 상태 추적을 위한 래퍼 클래스
+    private final Map<String, SseEmitterWrapper> activeEmitters = new ConcurrentHashMap<>();
+    
+    // 진행 중인 작업 추적
+    private final Map<String, AtomicBoolean> runningTasks = new ConcurrentHashMap<>();
 
     public LdifController(LineTrackingLdifParser ldifParserService, LdapService ldapService) {
         this.ldifParserService = ldifParserService;
         this.ldapService = ldapService;
+    }
+
+    // SSE Emitter 래퍼 클래스
+    private static class SseEmitterWrapper {
+        private final SseEmitter emitter;
+        private final AtomicBoolean isConnected;
+        
+        public SseEmitterWrapper(SseEmitter emitter) {
+            this.emitter = emitter;
+            this.isConnected = new AtomicBoolean(true);
+        }
+        
+        public SseEmitter getEmitter() {
+            return emitter;
+        }
+        
+        public boolean isConnected() {
+            return isConnected.get();
+        }
+        
+        public void disconnect() {
+            isConnected.set(false);
+        }
+        
+        public boolean sendSafely(Object data) {
+            if (!isConnected()) {
+                return false;
+            }
+            
+            try {
+                emitter.send(SseEmitter.event().data(data));
+                return true;
+            } catch (Exception e) {
+                log.debug("Failed to send SSE data, marking connection as disconnected: {}", e.getMessage());
+                disconnect();
+                return false;
+            }
+        }
+        
+        public void completeSafely() {
+            if (isConnected()) {
+                try {
+                    emitter.complete();
+                } catch (Exception e) {
+                    log.debug("Error completing SSE emitter: {}", e.getMessage());
+                }
+                disconnect();
+            }
+        }
     }
 
     @GetMapping
@@ -167,43 +221,15 @@ public class LdifController {
             String taskId = generateTaskId();
             log.info("Generated task ID: {} for session: {}", taskId, sessionId);
             
+            // 작업 시작 표시
+            runningTasks.put(taskId, new AtomicBoolean(true));
+            
             CompletableFuture.supplyAsync(() -> {
                 return saveEntriesWithProgress(analysisResult.getEntries(), taskId);
             }).thenAccept(savedCount -> {
-                // 완료 후 결과 전송
-                SseEmitter emitter = activeEmitters.get(taskId);
-                if (emitter != null) {
-                    try {
-                        Map<String, Object> completeData = new HashMap<>();
-                        completeData.put("type", "complete");
-                        completeData.put("savedCount", savedCount);
-                        completeData.put("totalCount", analysisResult.getTotalEntries());
-                        emitter.send(SseEmitter.event().data(completeData));
-                        emitter.complete();
-                        log.info("Save process completed: {}/{} entries saved", savedCount, analysisResult.getTotalEntries());
-                    } catch (Exception e) {
-                        log.error("Error sending completion event: {}", e.getMessage(), e);
-                    } finally {
-                        activeEmitters.remove(taskId);
-                    }
-                }
+                handleSaveCompletion(taskId, savedCount, analysisResult.getTotalEntries());
             }).exceptionally(throwable -> {
-                // 에러 처리
-                log.error("Error during save process: {}", throwable.getMessage(), throwable);
-                SseEmitter emitter = activeEmitters.get(taskId);
-                if (emitter != null) {
-                    try {
-                        Map<String, Object> errorData = new HashMap<>();
-                        errorData.put("type", "error");
-                        errorData.put("message", "저장 중 오류가 발생했습니다: " + throwable.getMessage());
-                        emitter.send(SseEmitter.event().data(errorData));
-                        emitter.complete();
-                    } catch (Exception e) {
-                        log.error("Error sending error event: {}", e.getMessage(), e);
-                    } finally {
-                        activeEmitters.remove(taskId);
-                    }
-                }
+                handleSaveError(taskId, throwable);
                 return null;
             });
 
@@ -224,22 +250,27 @@ public class LdifController {
     public SseEmitter getProgress(@RequestParam String taskId) {
         log.info("Starting progress tracking for task: {}", taskId);
         
-        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
-        activeEmitters.put(taskId, emitter);
+        SseEmitter emitter = new SseEmitter(300000L); // 5분 타임아웃
+        SseEmitterWrapper wrapper = new SseEmitterWrapper(emitter);
+        activeEmitters.put(taskId, wrapper);
 
         emitter.onCompletion(() -> {
             log.debug("SSE completed for task: {}", taskId);
-            activeEmitters.remove(taskId);
+            cleanupTask(taskId);
         });
         
         emitter.onTimeout(() -> {
             log.warn("SSE timeout for task: {}", taskId);
-            activeEmitters.remove(taskId);
+            cleanupTask(taskId);
         });
         
         emitter.onError((e) -> {
-            log.error("SSE error for task {}: {}", taskId, e.getMessage(), e);
-            activeEmitters.remove(taskId);
+            if (e instanceof AsyncRequestNotUsableException) {
+                log.debug("Client disconnected for task: {}", taskId);
+            } else {
+                log.error("SSE error for task {}: {}", taskId, e.getMessage());
+            }
+            cleanupTask(taskId);
         });
 
         return emitter;
@@ -263,13 +294,46 @@ public class LdifController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping(value = "/cancel-task", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> cancelTask(@RequestParam String taskId) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            AtomicBoolean taskFlag = runningTasks.get(taskId);
+            if (taskFlag != null) {
+                taskFlag.set(false);
+                cleanupTask(taskId);
+                response.put("success", true);
+                response.put("message", "작업이 취소되었습니다.");
+                log.info("Task {} cancelled by user", taskId);
+            } else {
+                response.put("success", false);
+                response.put("message", "취소할 작업을 찾을 수 없습니다.");
+            }
+        } catch (Exception e) {
+            log.error("Error cancelling task {}: {}", taskId, e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "작업 취소 중 오류가 발생했습니다.");
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
     private int saveEntriesWithProgress(List<LdifEntryDto> entries, String taskId) {
         int successCount = 0;
         int totalCount = entries.size();
+        AtomicBoolean shouldContinue = runningTasks.get(taskId);
 
         log.info("Starting to save {} entries for task: {}", totalCount, taskId);
 
         for (int i = 0; i < entries.size(); i++) {
+            // 작업 취소 확인
+            if (shouldContinue == null || !shouldContinue.get()) {
+                log.info("Task {} cancelled, stopping at entry {}/{}", taskId, i, totalCount);
+                break;
+            }
+
             try {
                 if (ldapService.saveEntry(entries.get(i))) {
                     successCount++;
@@ -277,21 +341,7 @@ public class LdifController {
 
                 // 진행률 업데이트 (매 10개마다 또는 마지막에)
                 if ((i + 1) % 10 == 0 || i == entries.size() - 1) {
-                    SseEmitter emitter = activeEmitters.get(taskId);
-                    if (emitter != null) {
-                        try {
-                            Map<String, Object> progressData = new HashMap<>();
-                            progressData.put("type", "progress");
-                            progressData.put("current", i + 1);
-                            progressData.put("total", totalCount);
-                            progressData.put("percentage", Math.round((double) (i + 1) / totalCount * 100));
-                            progressData.put("successCount", successCount);
-                            emitter.send(SseEmitter.event().data(progressData));
-                        } catch (Exception e) {
-                            log.error("Error sending progress update: {}", e.getMessage(), e);
-                            break;
-                        }
-                    }
+                    sendProgressUpdate(taskId, i + 1, totalCount, successCount);
                 }
 
                 // Add small delay to avoid overwhelming LDAP server
@@ -308,6 +358,76 @@ public class LdifController {
 
         log.info("Completed saving {}/{} entries to LDAP for task: {}", successCount, entries.size(), taskId);
         return successCount;
+    }
+
+    private void sendProgressUpdate(String taskId, int current, int total, int successCount) {
+        SseEmitterWrapper wrapper = activeEmitters.get(taskId);
+        if (wrapper != null && wrapper.isConnected()) {
+            Map<String, Object> progressData = new HashMap<>();
+            progressData.put("type", "progress");
+            progressData.put("current", current);
+            progressData.put("total", total);
+            progressData.put("percentage", Math.round((double) current / total * 100));
+            progressData.put("successCount", successCount);
+            
+            if (!wrapper.sendSafely(progressData)) {
+                log.debug("Failed to send progress update for task: {}, client likely disconnected", taskId);
+            }
+        }
+    }
+
+    private void handleSaveCompletion(String taskId, int savedCount, int totalCount) {
+        try {
+            SseEmitterWrapper wrapper = activeEmitters.get(taskId);
+            if (wrapper != null && wrapper.isConnected()) {
+                Map<String, Object> completeData = new HashMap<>();
+                completeData.put("type", "complete");
+                completeData.put("savedCount", savedCount);
+                completeData.put("totalCount", totalCount);
+                
+                if (wrapper.sendSafely(completeData)) {
+                    log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
+                }
+                wrapper.completeSafely();
+            }
+        } catch (Exception e) {
+            log.error("Error in save completion handling: {}", e.getMessage(), e);
+        } finally {
+            cleanupTask(taskId);
+        }
+    }
+
+    private void handleSaveError(String taskId, Throwable throwable) {
+        log.error("Error during save process for task {}: {}", taskId, throwable.getMessage(), throwable);
+        
+        try {
+            SseEmitterWrapper wrapper = activeEmitters.get(taskId);
+            if (wrapper != null && wrapper.isConnected()) {
+                Map<String, Object> errorData = new HashMap<>();
+                errorData.put("type", "error");
+                errorData.put("message", "저장 중 오류가 발생했습니다: " + throwable.getMessage());
+                
+                wrapper.sendSafely(errorData);
+                wrapper.completeSafely();
+            }
+        } catch (Exception e) {
+            log.error("Error in save error handling: {}", e.getMessage(), e);
+        } finally {
+            cleanupTask(taskId);
+        }
+    }
+
+    private void cleanupTask(String taskId) {
+        try {
+            SseEmitterWrapper wrapper = activeEmitters.remove(taskId);
+            if (wrapper != null) {
+                wrapper.disconnect();
+            }
+            runningTasks.remove(taskId);
+            log.debug("Cleaned up resources for task: {}", taskId);
+        } catch (Exception e) {
+            log.error("Error during task cleanup for {}: {}", taskId, e.getMessage(), e);
+        }
     }
 
     private LdifAnalysisSummary createSummary(LdifAnalysisResult result) {
