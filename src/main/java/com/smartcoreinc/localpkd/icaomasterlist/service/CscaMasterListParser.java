@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.service;
+package com.smartcoreinc.localpkd.icaomasterlist.service;
 
 import java.security.Security;
 import java.security.cert.X509Certificate;
@@ -25,9 +25,10 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
 import org.springframework.stereotype.Service;
 
-import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
-import com.smartcoreinc.localpkd.icao.sse.Progress;
-import com.smartcoreinc.localpkd.icao.sse.ProgressListener;
+import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
+import com.smartcoreinc.localpkd.sse.Progress;
+import com.smartcoreinc.localpkd.sse.ProgressListener;
+import com.smartcoreinc.localpkd.validator.X509CertificateValidator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,6 +48,9 @@ public class CscaMasterListParser {
     private int numberOfCertsTotal;
     private int numberOfCertsParsered;
     private Map<String, Integer> cscaCountByCountry = new HashMap<>();
+    private List<X509Certificate> validCerts = new ArrayList<>();
+    private List<X509Certificate> invalidCerts = new ArrayList<>();
+
 
     public CscaMasterListParser(X509CertificateValidator cscaCertificateValidator,
                                 CscaLdapAddService cscaCertificateService) {
@@ -56,6 +60,14 @@ public class CscaMasterListParser {
 
     public Map<String, Integer> getCscaCountByCountry() {
         return cscaCountByCountry;
+    }
+
+    public List<X509Certificate> getValidCertificates() {
+        return validCerts;
+    }
+
+    public List<X509Certificate> getInvalidCertificates() {
+        return invalidCerts;
     }
 
     public List<X509Certificate> parseMasterList(byte[] data, boolean isAddLdap) throws Exception {
@@ -76,15 +88,13 @@ public class CscaMasterListParser {
         ASN1Set certSet = (ASN1Set) masterListSeq.getObjectAt(1);
         numberOfCertsTotal = certSet.size();
 
-        List<X509Certificate> validCerts = new ArrayList<>();
-        List<X509Certificate> invalidCerts = new ArrayList<>();
-
         for (ASN1Encodable encodable : certSet) {
             Certificate bcCert = Certificate.getInstance(encodable);
             X509CertificateHolder holder = new X509CertificateHolder(bcCert);
 
             X509Certificate x509Cert = converter.getCertificate(holder);
-            if (certificateValidator.isCertificateValid(x509Cert)) {
+            boolean isValid = certificateValidator.isCertificateValid(x509Cert);
+            if (isValid) {
                 validCerts.add(x509Cert);
             } else {
                 invalidCerts.add(x509Cert);
@@ -100,7 +110,13 @@ public class CscaMasterListParser {
             // cscaCountByCountry.forEach((key, value) -> log.debug("key: {}, value: {}", key, value));
             
             if (isAddLdap) {
-                CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert);
+                String valid = "";
+                if (isValid) {
+                    valid = "Valid";
+                } else {
+                    valid = "Invalid";
+                }
+                CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert, valid);
                 log.debug("Added DN: {}", cscaCertificate.getDn().toString());
             }
 
@@ -167,19 +183,8 @@ public class CscaMasterListParser {
     private void notifyProgressListeners(String subject) {
         for (ProgressListener progressListener : progressListeners) {
             Progress progress = new Progress(numberOfCertsParsered / (double) numberOfCertsTotal);
-            log.debug("current progress: {}%", (int) (progress.value() * 100));
-            // String html = """
-            //     <div class="indicator">
-            //         <span class="indicator-item badge badge-secondary">%d</span>
-            //         <img class="h-6 w-12 object-cover" src="%s" />
-            //     </div>
-            //     """;
-            // StringBuilder stringBuilder = new StringBuilder();
-            // getCscaCountByCountry().forEach(
-            //     (key, value) -> stringBuilder.append(
-            //         html.formatted(value, String.format("https://flagcdn.com/%s.svg", key.toLowerCase())))
-            // );
-            progressListener.onProgress(progress, "Processing Subject: " + subject);
+            log.debug("current progress: {}/{} ({}%)", numberOfCertsParsered, numberOfCertsTotal, (int) (progress.value() * 100));
+            progressListener.onProgress(progress, numberOfCertsParsered, numberOfCertsTotal, "Cureent Processing Subject: " + subject);
         }
     }
 }

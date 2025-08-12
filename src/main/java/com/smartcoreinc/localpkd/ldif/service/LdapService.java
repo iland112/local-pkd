@@ -47,6 +47,7 @@ public class LdapService {
         String newDN = entryDto.getDn().replace(",dc=icao,dc=int", "");
         log.debug("변경된 DN: {}", newDN);
         Name dn = LdapNameBuilder.newInstance(newDN).build();
+        ensureParentEntriesExist(dn);
         
         try {
             

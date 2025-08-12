@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.controller;
+package com.smartcoreinc.localpkd.icaomasterlist.controller;
 
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -18,9 +18,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.smartcoreinc.localpkd.icao.service.CscaMasterListParser;
-import com.smartcoreinc.localpkd.icao.sse.SseBroker;
-import com.smartcoreinc.localpkd.icao.sse.SseBroker.ProgressEvent;
+import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
+import com.smartcoreinc.localpkd.sse.SseBroker;
+import com.smartcoreinc.localpkd.sse.SseBroker.ProgressEvent;
 
 import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +42,7 @@ public class CscaUploadController {
 
     @GetMapping
     public String uploadForm() {
-        return "upload";
+        return "masterlist/upload";
     }
 
     @HxRequest

@@ -1,11 +1,11 @@
-package com.smartcoreinc.localpkd.icao.sse;
+package com.smartcoreinc.localpkd.sse;
 
 import java.time.Duration;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.smartcoreinc.localpkd.icao.service.CscaMasterListParser;
+import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -28,8 +28,8 @@ public class SseBroker {
 
     @PostConstruct
     void init() {
-        progressListener = (progress, message) -> 
-            eventPublisher.tryEmitNext(new ProgressEvent(progress, message));
+        progressListener = (progress, processedCount, totalCount, message) -> 
+            eventPublisher.tryEmitNext(new ProgressEvent(progress, processedCount, totalCount, message));
         masterListParser.addProgressListener(progressListener);
     }
 
@@ -49,7 +49,7 @@ public class SseBroker {
             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
     }
 
-    public record ProgressEvent(Progress progress, String message) {
+    public record ProgressEvent(Progress progress, int processedCount, int totalCount, String message) {
 
     }
 }

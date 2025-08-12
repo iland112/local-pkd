@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.icao.controller;
+package com.smartcoreinc.localpkd.icaomasterlist.controller;
 
 import java.util.List;
 
@@ -7,8 +7,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-import com.smartcoreinc.localpkd.icao.entity.CscaCertificate;
-import com.smartcoreinc.localpkd.icao.service.CscaLdapSearchService;
+import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
+import com.smartcoreinc.localpkd.icaomasterlist.service.CscaLdapSearchService;
 
 import lombok.extern.slf4j.Slf4j;
 
