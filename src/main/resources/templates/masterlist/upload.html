@@ -14,7 +14,7 @@
       <div
         class="m-4"
         hx-ext="sse"
-        sse-connect="/icao/csca/progress"
+        sse-connect="/progress"
         hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
         hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
       >

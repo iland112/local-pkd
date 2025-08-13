@@ -31,7 +31,7 @@ import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
-import com.smartcoreinc.localpkd.ldif.service.LineTrackingLdifParser;
+import com.smartcoreinc.localpkd.ldif.service.LdifParser;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/ldif")
 public class LdifController {
 
-    private final LineTrackingLdifParser ldifParserService;
+    private final LdifParser ldifParserService;
     private final LdapService ldapService;
 
     // 세션별 분석 결과 저장 (실제로는 Redis나 DB 사용 권장)
@@ -52,7 +52,7 @@ public class LdifController {
     // 진행 중인 작업 추적
     private final Map<String, AtomicBoolean> runningTasks = new ConcurrentHashMap<>();
 
-    public LdifController(LineTrackingLdifParser ldifParserService, LdapService ldapService) {
+    public LdifController(LdifParser ldifParserService, LdapService ldapService) {
         this.ldifParserService = ldifParserService;
         this.ldapService = ldapService;
     }
