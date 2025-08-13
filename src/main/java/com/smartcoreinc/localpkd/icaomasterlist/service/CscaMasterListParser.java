@@ -27,11 +27,16 @@ import org.springframework.stereotype.Service;
 
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
 import com.smartcoreinc.localpkd.sse.Progress;
+import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressListener;
+import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 import com.smartcoreinc.localpkd.validator.X509CertificateValidator;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * ICAO Master List (회원국들의 CSCA Master List) 파셔
+ */
 @Slf4j
 @Service
 public class CscaMasterListParser {
@@ -39,11 +44,11 @@ public class CscaMasterListParser {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    private final Set<ProgressListener> progressListeners = new HashSet<>();
-
     // Dependencies
     private final X509CertificateValidator certificateValidator;
     private final CscaLdapAddService cscaCertificateService;
+    // SSE publisher(파싱 진행 상태 정보 생성자)
+    private final ProgressPublisher progressPublisher;
 
     private int numberOfCertsTotal;
     private int numberOfCertsParsered;
@@ -53,9 +58,11 @@ public class CscaMasterListParser {
 
 
     public CscaMasterListParser(X509CertificateValidator cscaCertificateValidator,
-                                CscaLdapAddService cscaCertificateService) {
+                                CscaLdapAddService cscaCertificateService,
+                                ProgressPublisher progressPublisher) {
         this.certificateValidator = cscaCertificateValidator;
         this.cscaCertificateService = cscaCertificateService;
+        this.progressPublisher = progressPublisher;
     }
 
     public Map<String, Integer> getCscaCountByCountry() {
@@ -70,9 +77,20 @@ public class CscaMasterListParser {
         return invalidCerts;
     }
 
+    /**
+     * ICAO Master List 파일의 내용(byte array)을 분석하고 개별 CSCA 인증서를
+     * CscaLdapAddService에 전달하여 LDAP(local PKD)등록한다.
+     * 
+     * @param byte[] data
+     * @param boolean isAddLdap : 디버깅 용으로 이 플래그 값을 false 로 하면 ldap에 저장하지 않음.
+     * @return List<X509Certificate> : 파싱 결과, 유효한 CSCA 인증서 들만 리턴
+     * @throws Exception
+     */
     public List<X509Certificate> parseMasterList(byte[] data, boolean isAddLdap) throws Exception {
+        // X.509 인증서 Converter Provider를 Bouncy Castle로 지정 
         JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider("BC");
         
+        // PKCS7-signature message 처리 클래스 생성
         CMSSignedData signedData = new CMSSignedData(data);
 
         // ICAO/UN 서명자 인증서 검증
@@ -93,6 +111,7 @@ public class CscaMasterListParser {
             X509CertificateHolder holder = new X509CertificateHolder(bcCert);
 
             X509Certificate x509Cert = converter.getCertificate(holder);
+            // CSCA(X.509)인증서 검증 후 클래스 내부 멤버 변수에 저장.
             boolean isValid = certificateValidator.isCertificateValid(x509Cert);
             if (isValid) {
                 validCerts.add(x509Cert);
@@ -100,7 +119,7 @@ public class CscaMasterListParser {
                 invalidCerts.add(x509Cert);
             }
 
-            String subject = x509Cert.getSubjectX500Principal().toString();
+            String subject = x509Cert.getSubjectX500Principal().getName();
             String country = extractCountryCode(subject);
             if (!cscaCountByCountry.containsKey(country)) {
                 cscaCountByCountry.put(country, 1);
@@ -109,7 +128,10 @@ public class CscaMasterListParser {
             }
             // cscaCountByCountry.forEach((key, value) -> log.debug("key: {}, value: {}", key, value));
             
+            // TODO: 개발 완료 시 아래 코드 수정할 것 
+            // LDAP 저장 플래그 여부에 따라 실행
             if (isAddLdap) {
+                // LDAP Entry description attribute 값 설정
                 String valid = "";
                 if (isValid) {
                     valid = "Valid";
@@ -119,16 +141,23 @@ public class CscaMasterListParser {
                 CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert, valid);
                 log.debug("Added DN: {}", cscaCertificate.getDn().toString());
             }
-
-            sleepQuietly(10);
+            
             numberOfCertsParsered += 1;
-            notifyProgressListeners(subject);
+
+            // 0.01 초 간 sleep 
+            sleepQuietly(10);
+
+            // SSE Emitter에 전달
+            Progress progress = new Progress(numberOfCertsParsered/ (double) numberOfCertsTotal);
+            ProgressEvent progressEvent = new ProgressEvent(progress, numberOfCertsParsered, numberOfCertsTotal, subject);
+            progressPublisher.notifyProgressListeners(progressEvent);
         }
 
         log.debug("the count of valid certs: ", validCerts.size());
         log.debug("the count of invalid certs", invalidCerts.size());
 
         asn1In.close();
+        // 유효한 인증서들만 리턴 
         return validCerts;
     }
 
@@ -164,14 +193,6 @@ public class CscaMasterListParser {
         return "UNKNOWN";
     }
 
-    public void addProgressListener(ProgressListener progressListener) {
-        progressListeners.add(progressListener);
-    }
-
-    public void removeProgressListener(ProgressListener progressListener) {
-        progressListeners.remove(progressListener);
-    }
-
     private static void sleepQuietly(int ms) {
         try {
             Thread.sleep(ms);
@@ -180,11 +201,4 @@ public class CscaMasterListParser {
         }
     }
 
-    private void notifyProgressListeners(String subject) {
-        for (ProgressListener progressListener : progressListeners) {
-            Progress progress = new Progress(numberOfCertsParsered / (double) numberOfCertsTotal);
-            log.debug("current progress: {}/{} ({}%)", numberOfCertsParsered, numberOfCertsTotal, (int) (progress.value() * 100));
-            progressListener.onProgress(progress, numberOfCertsParsered, numberOfCertsTotal, "Cureent Processing Subject: " + subject);
-        }
-    }
 }

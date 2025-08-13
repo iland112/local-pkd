@@ -17,12 +17,12 @@ import reactor.util.concurrent.Queues;
 public class SseBroker {
     private final Sinks.Many<ProgressEvent> eventPublisher;
 
-    private final CscaMasterListParser masterListParser;
+    private final ProgressPublisher progressPublisher;
     private ProgressListener progressListener;
 
 
-    public SseBroker(CscaMasterListParser masterListParser) {
-        this.masterListParser = masterListParser;
+    public SseBroker(ProgressPublisher progressPublisher) {
+        this.progressPublisher = progressPublisher;
         eventPublisher = createNewSink();
     }
 
@@ -30,12 +30,12 @@ public class SseBroker {
     void init() {
         progressListener = (progress, processedCount, totalCount, message) -> 
             eventPublisher.tryEmitNext(new ProgressEvent(progress, processedCount, totalCount, message));
-        masterListParser.addProgressListener(progressListener);
+        progressPublisher.addProgressListener(progressListener);
     }
 
     @PreDestroy
     void destroy() {
-        masterListParser.removeProgressListener(progressListener);
+        progressPublisher.removeProgressListener(progressListener);
     }
 
     public Flux<List<ProgressEvent>> subscribeToUpdates() {
@@ -49,7 +49,4 @@ public class SseBroker {
             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
     }
 
-    public record ProgressEvent(Progress progress, int processedCount, int totalCount, String message) {
-
-    }
 }

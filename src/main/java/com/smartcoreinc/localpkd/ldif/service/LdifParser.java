@@ -13,14 +13,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
+import com.smartcoreinc.localpkd.sse.ProgressListener;
 import com.unboundid.ldap.sdk.Attribute;
 import com.unboundid.ldap.sdk.Entry;
 import com.unboundid.ldif.LDIFException;
@@ -30,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-public class LineTrackingLdifParser {
+public class LdifParser {
 
     private static final List<String> BINARY_ATTRIBUTES = Arrays.asList(
         "userCertificate", "caCertificate", "crossCertificatePair", 
@@ -47,6 +50,9 @@ public class LineTrackingLdifParser {
             throw new RuntimeException("Failed to initialize X.509 CertificateFactory", e);
         }
     }
+
+    // 파싱 진행 상테 정보 Listener 컨테이너
+    private final Set<ProgressListener> progressListeners = new HashSet<>();
 
     public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
         log.info("Starting line-tracking LDIF parsing for file: {}", file.getOriginalFilename());
@@ -463,27 +469,6 @@ public class LineTrackingLdifParser {
             Base64.getDecoder().decode(str);
             return true;
         } catch (IllegalArgumentException e) {
-            return false;
-        }
-    }
-
-    /**
-     * X.509 인증서 검증 (선택적)
-     */
-    private boolean isValidX509Certificate(byte[] certBytes) {
-        try {
-            // 기본적인 DER 인코딩 검증 (0x30으로 시작해야 함)
-            if (certBytes.length < 4 || certBytes[0] != 0x30) {
-                return false;
-            }
-            
-            // java.security.cert.CertificateFactory로 추가 검증 가능
-            // CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            // cf.generateCertificate(new ByteArrayInputStream(certBytes));
-            
-            return true;
-        } catch (Exception e) {
-            log.warn("Invalid X.509 certificate: {}", e.getMessage());
             return false;
         }
     }

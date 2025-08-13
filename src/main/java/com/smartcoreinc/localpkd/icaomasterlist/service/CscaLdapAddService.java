@@ -1,8 +1,6 @@
 package com.smartcoreinc.localpkd.icaomasterlist.service;
 
-import java.io.ByteArrayInputStream;
 import java.security.MessageDigest;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.HexFormat;
 
@@ -19,6 +17,12 @@ import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * CscaLdapAddService
+ * 
+ * 기능:
+ *  ICAO Master list 내의 개별 CSCA 인증서를 국가 별로 나누어서 LDAP에 저장.
+ */
 @Slf4j
 @Service
 public class CscaLdapAddService {
@@ -67,7 +71,7 @@ public class CscaLdapAddService {
 
             // 4. 새로 생성된 항목을 다시 조회하여 반환합니다.
             cscaCertificate = ldapTemplate.findByDn(dn, CscaCertificate.class);
-            log.debug("DN: {}", cscaCertificate.getDn().toString());
+            log.debug("등록된 CSCA 인증서 DN: {}", cscaCertificate.getDn().toString());
             // log.debug("certificate: {}", cscaCertificate.getCertificate());
             // CertificateFactory cf = CertificateFactory.getInstance("X.509");
             // X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(cscaCertificate.getCertificate()));
