@@ -5,8 +5,6 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import reactor.core.publisher.Flux;

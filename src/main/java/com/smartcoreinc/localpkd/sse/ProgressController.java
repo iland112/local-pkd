@@ -51,19 +51,29 @@ public class ProgressController {
     }
 
     private static ServerSentEvent<String> createProgressEvent(List<ProgressEvent> events) {
+        
+        String eventName = events.stream()
+            .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
+            .map(progressEvent -> {
+                return progressEvent.progress().type().toLowerCase();
+            })
+            .orElse(null); 
+        
         String htmlTag = """
                     <progress class="progress w-full h-6" value="%d" max="100"></progress>
                     <p class="text-gray-900 font-mono">진행률: %d &percnt;</p>
-                """; 
+                """;
+        String data = events.stream()
+            .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
+            .map(progressEvent -> {
+                int progressRate = (int) (progressEvent.progress().value() * 100);
+                return htmlTag.formatted(progressRate, progressRate);
+            })
+            .orElse(null);
+        
         return ServerSentEvent.<String>builder()
-            .event("progress-event")
-            .data(events.stream()
-                    .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
-                    .map(progressEvent -> {
-                        int progressRate = (int) (progressEvent.progress().value() * 100);
-                        return htmlTag.formatted(progressRate, progressRate);
-                    })
-                    .orElse(null))
+            .event("progress-%s-event".formatted(eventName))
+            .data(data)
             .build();
     }
 

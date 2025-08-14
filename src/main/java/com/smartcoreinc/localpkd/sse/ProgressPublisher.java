@@ -28,8 +28,19 @@ public class ProgressPublisher {
 
     public void notifyProgressListeners(ProgressEvent progressEvent) {
         for (ProgressListener progressListener : progressListeners) {
-            log.debug("current progress: {}/{} ({}%)", progressEvent.processedCount(), progressEvent.totalCount(), (int) (progressEvent.progress().value() * 100));
-            progressListener.onProgress(progressEvent.progress(), progressEvent.processedCount(), progressEvent.totalCount(), "Current Processing Subject: " + progressEvent.message());
+            log.debug(
+                "type: {}, current progress: {}/{} ({}%)",
+                progressEvent.progress().type(),
+                progressEvent.processedCount(),
+                progressEvent.totalCount(),
+                (int) (progressEvent.progress().value() * 100)
+            );
+            progressListener.onProgress(
+                progressEvent.progress(),
+                progressEvent.processedCount(),
+                progressEvent.totalCount(),
+                "Current Processing Subject: " + progressEvent.message()
+            );
         }
     }
 

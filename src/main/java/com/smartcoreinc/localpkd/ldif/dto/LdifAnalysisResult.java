@@ -8,12 +8,13 @@ public class LdifAnalysisResult {
     private int addEntries;
     private int modifyEntries;
     private int deleteEntries;
-    private List<LdifEntryDto> entries;
     private List<String> errors;
     private List<String> warnings;
     private Map<String, Integer> objectClassCount;
     private Map<String, Integer> certificateValidationStats;
     private boolean hasValidationErrors;
+    
+    private List<LdifEntryDto> entries;
     
     public LdifAnalysisResult() {}
 

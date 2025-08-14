@@ -239,7 +239,7 @@ public class LdapService {
         try {
             // 간단한 연결 테스트: base DN lookup
             Object result = ldapTemplate.lookup("");
-            log.info("LDAP connection test successful");
+            log.info("LDAP connection test successful: {}", result.toString());
             return true;
         } catch (Exception e) {
             try {
@@ -256,7 +256,7 @@ public class LdapService {
                         }
                     }
                 );
-                log.info("LDAP connection test successful via search");
+                log.info("LDAP connection test successful via search: {}", results.size());
                 return true;
             } catch (Exception searchException) {
                 // 마지막 시도: context source 직접 테스트
