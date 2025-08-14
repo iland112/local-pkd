@@ -19,6 +19,7 @@
                 </h1>
               </div>
 
+              <!-- 본문 -->
               <div class="p-6">
                 <!-- Alert Messages -->
                 <div
@@ -61,7 +62,7 @@
                   </div>
                 </div>
 
-                <!-- Connection Test -->
+                <!-- LD 연결 테스트 -->
                 <div class="mb-6">
                   <button
                     id="testConnectionBtn"
@@ -73,76 +74,90 @@
                 </div>
 
                 <!-- File Upload Form -->
-                <form
-                  th:action="@{/ldif/upload}"
-                  method="post"
-                  enctype="multipart/form-data"
-                  class="space-y-6"
+                <div class="mb-6"
+                  hx-ext="sse"
+                  sse-connect="/progress"
+                  hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
+                  hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
                 >
-                  <div>
-                    <label
-                      for="file"
-                      class="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      <i class="fas fa-file text-blue-500 mr-2"></i> LDIF 파일
-                      선택
-                    </label>
-                    <input
-                      type="file"
-                      class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      id="file"
-                      name="file"
-                      accept=".ldif"
-                      required
-                    />
-                    <div
-                      id="fileInfo"
-                      class="mt-2 text-sm text-gray-600 hidden"
-                    >
-                      <i class="fas fa-check-circle text-green-500 mr-1"></i>
-                      <span id="fileName"></span>
-                      <span id="fileSize" class="ml-2 text-gray-400"></span>
-                    </div>
-                    <p class="mt-2 text-sm text-gray-600">
-                      LDIF (LDAP Data Interchange Format) 파일만 업로드할 수
-                      있습니다.
-                    </p>
-                  </div>
-
-                  <!-- Upload Progress Indicator -->
-                  <div id="uploadIndicator" class="htmx-indicator">
-                    <div
-                      class="bg-blue-50 border border-blue-200 rounded-lg p-4"
-                    >
-                      <div class="flex items-center justify-center space-x-3">
-                        <div
-                          class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"
-                        ></div>
-                        <span class="text-blue-700 font-medium"
-                          >파일 업로드 및 분석 중...</span
-                        >
+                  <form
+                    th:action="@{/ldif/upload}"
+                    method="post"
+                    enctype="multipart/form-data"
+                    class="space-y-6"
+                  >
+                    <div>
+                      <label
+                        for="file"
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        <i class="fas fa-file text-blue-500 mr-2"></i> LDIF 파일
+                        선택
+                      </label>
+                      <input
+                        type="file"
+                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        id="file"
+                        name="file"
+                        accept=".ldif"
+                        required
+                      />
+                      <div
+                        id="fileInfo"
+                        class="mt-2 text-sm text-gray-600 hidden"
+                      >
+                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                        <span id="fileName"></span>
+                        <span id="fileSize" class="ml-2 text-gray-400"></span>
                       </div>
-                      <div class="mt-3">
-                        <div class="bg-blue-100 rounded-full h-2">
+                      <p class="mt-2 text-sm text-gray-600">
+                        LDIF (LDAP Data Interchange Format) 파일만 업로드할 수
+                        있습니다.
+                      </p>
+                    </div>
+  
+                    <!-- Upload Progress Indicator -->
+                    <div id="uploadIndicator" class="htmx-indicator">
+                      <div
+                        class="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                      >
+                        <div class="flex items-center justify-center space-x-3">
                           <div
-                            class="bg-blue-600 h-2 rounded-full animate-pulse"
-                            style="width: 100%"
+                            class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"
                           ></div>
+                          <span class="text-blue-700 font-medium"
+                            >파일 업로드 및 분석 중...</span
+                          >
+                        </div>
+                        <div class="mt-3">
+                          <div class="bg-blue-100 rounded-full h-2">
+                            <div
+                              class="bg-blue-600 h-2 rounded-full animate-pulse"
+                              style="width: 100%"
+                            ></div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <button
-                      type="submit"
-                      class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-md transition-all duration-200 flex items-center justify-center gap-3 text-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-                    >
-                      <i class="fas fa-upload"></i> 파일 업로드 및 분석
-                    </button>
-                  </div>
-                </form>
+                    <div>
+                      <button
+                        type="submit"
+                        class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-md transition-all duration-200 flex items-center justify-center gap-3 text-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                      >
+                        <i class="fas fa-upload"></i> 파일 업로드 및 분석
+                      </button>
+                    </div>
+                  </form>
+                </div>
 
-                <!-- Features -->
+                <div class="mt-4 card bg-base-100 card-lg shadow-sm">
+                  <div class="card-body">
+                    <h2 class="card-title">LDIF 파싱 진행 상태</h2>
+                    <div sse-swap="progress-ldif-event"></div>
+                  </div>
+                </div>
+
+                <!-- 주요 기능 소개 -->
                 <div class="mt-8">
                   <h5 class="text-lg font-semibold text-gray-800 mb-4">
                     주요 기능
@@ -229,7 +244,7 @@
                   </div>
                 </div>
 
-                <!-- System Requirements -->
+                <!-- 시스템 요구 사항 -->
                 <div
                   class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200"
                 >
@@ -261,7 +276,12 @@
       </div>
     </div>
     <th:block layout:fragment="script-content">
+      <script
+        type="text/javascript"
+        th:src="@{/webjars/htmx.org/dist/ext/sse.js}"
+      ></script>
       <script>
+        // Test LDAP Connection functionality
         document
           .getElementById("testConnectionBtn")
           .addEventListener("click", function () {

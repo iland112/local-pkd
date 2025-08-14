@@ -13,17 +13,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
-import com.smartcoreinc.localpkd.sse.ProgressListener;
+import com.smartcoreinc.localpkd.sse.Progress;
+import com.smartcoreinc.localpkd.sse.ProgressEvent;
+import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 import com.unboundid.ldap.sdk.Attribute;
 import com.unboundid.ldap.sdk.Entry;
 import com.unboundid.ldif.LDIFException;
@@ -51,8 +50,12 @@ public class LdifParser {
         }
     }
 
-    // 파싱 진행 상테 정보 Listener 컨테이너
-    private final Set<ProgressListener> progressListeners = new HashSet<>();
+    // SSE dependency
+    private final ProgressPublisher progressPublisher;
+
+    public LdifParser(ProgressPublisher progressPublisher) {
+        this.progressPublisher = progressPublisher;
+    }
 
     public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
         log.info("Starting line-tracking LDIF parsing for file: {}", file.getOriginalFilename());
@@ -64,21 +67,31 @@ public class LdifParser {
         Map<String, Integer> objectClassCount = new HashMap<>();
         Map<String, Integer> certificateValidationStats = new HashMap<>();
 
+        // 데이터 처리 개수 로컬 변수들
         int addCount = 0, modifyCount = 0, deleteCount = 0;
         int totalCertificates = 0, validCertificates = 0, invalidCertificates = 0;
 
+        int totalLines = countLines(file);
+        
         // 라인 번호 추적을 위한 사전 처리
         try (InputStream inputStream = file.getInputStream();
-            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream))) {
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream))) {
             StringBuilder currentRecord = new StringBuilder();
+            int processedLines = 0;
             int lineNumber = 0;
             int recordNumber = 0;
             String line;
             boolean inRecord = false;
 
             while ((line = bufferedReader.readLine()) != null) {
+                // SSE로 진행 상대 전송.
+                processedLines++;
+                Progress progress = new Progress(processedLines / (double) totalLines, "LDIF");
+                ProgressEvent progressEvent = new ProgressEvent(progress, processedLines, totalLines, line);
+                progressPublisher.notifyProgressListeners(progressEvent);
+                
+                // 라인 분석 및 LDAP Entry 레코드 생성
                 lineNumber++;
-
                 // 빈 라인이나 주석 라인 처리
                 if (line.trim().isEmpty()) {
                     if (inRecord && currentRecord.length() > 0) {
@@ -223,8 +236,9 @@ public class LdifParser {
                             customParseResult.validCertificates,
                             customParseResult.invalidCertificates
                         );
+                    } else {
+                        return new ParseResult(null, customParseResult.warnings, 0, 0, 0);
                     }
-                    return new ParseResult(null, customParseResult.warnings, 0, 0, 0);
             }
         } catch (LDIFException e) {
             throw new LDIFException(
@@ -461,16 +475,14 @@ public class LdifParser {
         }
     }
 
-    /**
-     * Base64 문자열 검증
-     */
-    private boolean isValidBase64(String str) {
-        try {
-            Base64.getDecoder().decode(str);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
+    private int countLines(MultipartFile file) throws IOException {
+        int count = 0;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            while (reader.readLine() != null) {
+                count++;
+            }
         }
+        return count;
     }
 
     // 내부 클래스들

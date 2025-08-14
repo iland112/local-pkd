@@ -8,16 +8,19 @@ import java.util.Map;
  * 전체 엔트리 데이터는 페이징을 통해 별도로 조회
  */
 public class LdifAnalysisSummary {
+  
     private int totalEntries;
     private int addEntries;
     private int modifyEntries;
     private int deleteEntries;
     private boolean hasValidationErrors;
+
     private Map<String, Integer> objectClassCount;
     private Map<String, Integer> certificateValidationStats;
 
     private List<String> errors;
     private List<String> warnings;
+
     private int totalErrors;
     private int totalWarnings;
 
@@ -111,4 +114,16 @@ public class LdifAnalysisSummary {
         this.totalWarnings = totalWarnings;
     }
 
+    @Override
+    public String toString() {
+        return "LdifAnalysisSummary{" +
+                "totalEntries=" + totalEntries +
+                ", addEntries=" + addEntries +
+                ", modifyEntries=" + modifyEntries +
+                ", deleteEntries=" + deleteEntries +
+                ", hasValidationErrors=" + hasValidationErrors +
+                ", totalErrors=" + totalErrors +
+                ", totalWarnings=" + totalWarnings +
+                '}';
+    }
 }

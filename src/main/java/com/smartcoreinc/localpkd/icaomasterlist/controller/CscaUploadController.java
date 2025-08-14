@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
-
 import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
 import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +29,7 @@ public class CscaUploadController {
 
     @GetMapping
     public String uploadForm() {
-        return "masterlist/upload";
+        return "masterlist/upload-ml";
     }
 
     /**
@@ -42,8 +41,10 @@ public class CscaUploadController {
     @HxRequest
     @PostMapping("/upload")
     @ResponseBody
-    public void handleUpload(@RequestParam("file") MultipartFile file, Model model) throws Exception {
+    public void handleUpload(@RequestParam("file") MultipartFile file,
+                             Model model) throws Exception {
         log.debug("Start file upload: {}, {} bytes", file.getOriginalFilename(), file.getSize());
+        log.info("=== File upload endpoint called ===");
         
         // TODO: 개발 완료 후 isAddLdap 파라미터 제거할 것
         List<X509Certificate> x509Certs = parser.parseMasterList(file.getBytes(), true);

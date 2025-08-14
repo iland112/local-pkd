@@ -4,11 +4,8 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -28,7 +25,6 @@ import org.springframework.stereotype.Service;
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
 import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
-import com.smartcoreinc.localpkd.sse.ProgressListener;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 import com.smartcoreinc.localpkd.validator.X509CertificateValidator;
 
@@ -148,7 +144,7 @@ public class CscaMasterListParser {
             sleepQuietly(10);
 
             // SSE Emitter에 전달
-            Progress progress = new Progress(numberOfCertsParsered/ (double) numberOfCertsTotal);
+            Progress progress = new Progress(numberOfCertsParsered/ (double) numberOfCertsTotal, "ML");
             ProgressEvent progressEvent = new ProgressEvent(progress, numberOfCertsParsered, numberOfCertsTotal, subject);
             progressPublisher.notifyProgressListeners(progressEvent);
         }

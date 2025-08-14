@@ -7,7 +7,6 @@
 >
   <body>
     <div layout:fragment="content">
-      <div layout:fragment="content">
       <div class="container mx-auto px-4 py-8 max-w-7xl">
         <!-- Header -->
         <div class="mb-6">
@@ -173,7 +172,7 @@
 
         <!-- Certificate Validation Stats -->
         <div
-          th:if="${!#maps.isEmpty(analysisResult.certificateValidationStats)}"
+          th:if="${analysisResult?.certificateValidationStats != null and !#maps.isEmpty(analysisResult.certificateValidationStats)}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-purple-600 text-white px-6 py-4">
@@ -290,7 +289,7 @@
 
         <!-- ObjectClass Statistics -->
         <div
-          th:if="${!#maps.isEmpty(analysisResult.objectClassCount)}"
+          th:if="${analysisResult?.objectClassCount != null and !#maps.isEmpty(analysisResult.objectClassCount)}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="border-b border-gray-200 px-6 py-4">
@@ -328,7 +327,7 @@
 
         <!-- Save to LDAP Button -->
         <div
-          th:if="${!analysisResult.hasValidationErrors and analysisResult.totalEntries > 0}"
+          th:if="${analysisResult != null and !analysisResult.hasValidationErrors and analysisResult.totalEntries > 0}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-green-600 text-white px-6 py-4">
@@ -357,7 +356,6 @@
               </button>
             </div>
 
-            <!-- Progress Section (Hidden by default) -->
             <div id="progressSection" class="mt-6 hidden">
               <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div class="flex items-center justify-between mb-2">
@@ -385,98 +383,7 @@
             <div id="saveResult" class="mt-4"></div>
           </div>
         </div>
-
-        <!-- Entries Table with Pagination -->
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-          <div class="border-b border-gray-200 px-6 py-4">
-            <div class="flex items-center justify-between">
-              <h5 class="text-xl font-semibold text-gray-900 flex items-center">
-                <i class="fas fa-table mr-2 text-blue-600"></i> 엔트리 목록
-                <span class="ml-2 text-gray-500 text-base">
-                  (총 <span th:text="${analysisResult.totalEntries}">0</span>개)
-                </span>
-              </h5>
-              <button
-                id="loadEntriesBtn"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg"
-                onclick="loadEntries(0)"
-              >
-                <i class="fas fa-eye mr-2"></i> 엔트리 목록 보기
-              </button>
-            </div>
-          </div>
-
-          <!-- Table Content -->
-          <div id="entriesTableContainer">
-            <div class="text-center py-12 text-gray-500">
-              <i class="fas fa-table text-4xl mb-4"></i>
-              <p class="text-lg">엔트리 목록을 보려면 위의 버튼을 클릭하세요.</p>
-              <p class="text-sm mt-2">대용량 파일의 경우 로딩에 시간이 걸릴 수 있습니다.</p>
-            </div>
-          </div>
-
-          <!-- Pagination Controls -->
-          <div
-            id="paginationControls"
-            class="border-t border-gray-200 px-6 py-4 hidden"
-          >
-            <div class="flex items-center justify-between">
-              <div class="text-sm text-gray-700">
-                총
-                <span id="totalEntries" th:text="${analysisResult.totalEntries}">0</span>개 중 
-                <span id="rangeStart">0</span>-<span id="rangeEnd">0</span>개 표시
-              </div>
-              <div class="flex space-x-1">
-                <button
-                  id="prevBtn"
-                  class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled
-                >
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                <div id="pageNumbers" class="flex space-x-1">
-                  <!-- Page numbers will be inserted here -->
-                </div>
-                <button
-                  id="nextBtn"
-                  class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
-
-      <!-- Entry Details Modal -->
-      <div class="fixed inset-0 z-50 hidden" id="entryDetailsModal">
-        <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        <div class="fixed inset-0 z-10 overflow-y-auto">
-          <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
-              <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-                <div class="flex items-center justify-between mb-4">
-                  <h3 class="text-lg font-semibold text-gray-900">
-                    엔트리 상세 정보
-                  </h3>
-                  <button
-                    type="button"
-                    class="text-gray-400 hover:text-gray-600"
-                    onclick="closeModal()"
-                  >
-                    <i class="fas fa-times text-xl"></i>
-                  </button>
-                </div>
-                <div id="entryDetailsBody" class="mt-4">
-                  <!-- Entry details will be loaded here -->
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
     </div>
     <th:block layout:fragment="script-content">
       <script th:inline="javascript">
@@ -495,177 +402,7 @@
           setupEventListeners();
         });
 
-        function loadEntries(page) {
-          if (!entriesLoaded) {
-            document.getElementById('loadEntriesBtn').style.display = 'none';
-          }
-          
-          const container = document.getElementById("entriesTableContainer");
-          container.innerHTML = `
-            <div class="text-center py-8">
-              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p class="text-gray-600 mt-2">엔트리 목록을 로드하는 중...</p>
-            </div>
-          `;
-
-          fetch(`/ldif/entries?sessionId=${sessionId}&page=${page}&size=${pageSize}`)
-            .then((response) => {
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-              }
-              return response.json();
-            })
-            .then((data) => {
-              currentPage = data.number;
-              totalPages = data.totalPages;
-              renderEntriesTable(data.content);
-              updatePagination(data);
-              entriesLoaded = true;
-            })
-            .catch((error) => {
-              console.error("Error loading entries:", error);
-              container.innerHTML = `
-                <div class="text-center py-8 text-red-600">
-                  <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                  <p>엔트리 목록을 로드하는데 실패했습니다.</p>
-                  <p class="text-sm mt-2">${error.message}</p>
-                  <button 
-                    onclick="loadEntries(${page})"
-                    class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                  >
-                    다시 시도
-                  </button>
-                </div>
-              `;
-            });
-        }
-
-        function renderEntriesTable(entries) {
-          const container = document.getElementById("entriesTableContainer");
-
-          if (entries.length === 0) {
-            container.innerHTML = `
-              <div class="text-center py-8 text-gray-500">
-                <i class="fas fa-inbox text-4xl mb-2"></i>
-                <p>표시할 엔트리가 없습니다.</p>
-              </div>
-            `;
-            return;
-          }
-
-          let html = `
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead class="bg-gray-50 text-gray-600 sticky top-0">
-                  <tr>
-                    <th class="px-4 py-3 text-left">#</th>
-                    <th class="px-4 py-3 text-left">DN</th>
-                    <th class="px-4 py-3 text-left">타입</th>
-                    <th class="px-4 py-3 text-left">속성 수</th>
-                    <th class="px-4 py-3 text-left">ObjectClass</th>
-                    <th class="px-4 py-3 text-left">액션</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-          `;
-
-          entries.forEach((entry, index) => {
-            const globalIndex = currentPage * pageSize + index + 1;
-            const objectClasses = entry.attributes.objectClass
-              ? entry.attributes.objectClass.join(", ")
-              : "";
-
-            html += `
-              <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-3 text-gray-900 font-medium">${globalIndex}</td>
-                <td class="px-4 py-3 break-all">
-                  <code class="bg-gray-100 px-2 py-1 rounded text-xs font-mono text-gray-800">
-                    ${entry.dn}
-                  </code>
-                </td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    ${entry.entryType}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-gray-900">
-                  ${Object.keys(entry.attributes).length}
-                </td>
-                <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${objectClasses}">
-                  ${objectClasses}
-                </td>
-                <td class="px-4 py-3">
-                  <button
-                    class="inline-flex items-center px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md transition-colors"
-                    onclick="showEntryDetails(${globalIndex - 1})">
-                    <i class="fas fa-eye mr-1"></i> 상세보기
-                  </button>
-                </td>
-              </tr>
-            `;
-          });
-
-          html += `
-                </tbody>
-              </table>
-            </div>
-          `;
-
-          container.innerHTML = html;
-        }
-
-        function updatePagination(data) {
-          const paginationControls = document.getElementById("paginationControls");
-          const rangeStart = data.number * data.size + 1;
-          const rangeEnd = Math.min((data.number + 1) * data.size, data.totalElements);
-
-          document.getElementById("rangeStart").textContent = rangeStart;
-          document.getElementById("rangeEnd").textContent = rangeEnd;
-          document.getElementById("totalEntries").textContent = data.totalElements;
-
-          // Update navigation buttons
-          const prevBtn = document.getElementById("prevBtn");
-          const nextBtn = document.getElementById("nextBtn");
-
-          prevBtn.disabled = data.first;
-          nextBtn.disabled = data.last;
-
-          // Generate page numbers
-          const pageNumbers = document.getElementById("pageNumbers");
-          pageNumbers.innerHTML = "";
-
-          const startPage = Math.max(0, data.number - 2);
-          const endPage = Math.min(data.totalPages - 1, data.number + 2);
-
-          for (let i = startPage; i <= endPage; i++) {
-            const pageBtn = document.createElement("button");
-            pageBtn.className = `px-3 py-2 text-sm rounded-md transition-colors ${
-              i === data.number
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-            }`;
-            pageBtn.textContent = i + 1;
-            pageBtn.onclick = () => loadEntries(i);
-            pageNumbers.appendChild(pageBtn);
-          }
-
-          paginationControls.classList.remove("hidden");
-        }
-
         function setupEventListeners() {
-          // Pagination buttons
-          document.getElementById("prevBtn").addEventListener("click", function () {
-            if (currentPage > 0) {
-              loadEntries(currentPage - 1);
-            }
-          });
-
-          document.getElementById("nextBtn").addEventListener("click", function () {
-            if (currentPage < totalPages - 1) {
-              loadEntries(currentPage + 1);
-            }
-          });
-
           // Save to LDAP button
           const saveBtn = document.getElementById("saveToLdapBtn");
           if (saveBtn) {
@@ -681,13 +418,6 @@
               cancelSaveProcess();
             });
           }
-
-          // Handle page visibility change (user switching tabs/closing browser)
-          document.addEventListener('visibilitychange', function() {
-            if (document.hidden && eventSource) {
-              console.log('Page hidden, keeping connection alive');
-            }
-          });
 
           // Handle beforeunload (user refreshing/closing page)
           window.addEventListener('beforeunload', function() {
@@ -770,121 +500,7 @@
             });
         }
 
-        function startProgressTracking(taskId) {
-          if (eventSource) {
-            eventSource.close();
-          }
-
-          eventSource = new EventSource(`/ldif/progress?taskId=${taskId}`);
-
-          eventSource.onmessage = function (event) {
-            try {
-              const data = JSON.parse(event.data);
-              handleProgressUpdate(data);
-            } catch (e) {
-              console.error("Error parsing progress data:", e);
-            }
-          };
-
-          eventSource.onerror = function (event) {
-            console.error("SSE connection error:", event);
-            if (eventSource.readyState === EventSource.CLOSED) {
-              console.log("SSE connection closed");
-            }
-          };
-
-          eventSource.onopen = function (event) {
-            console.log("SSE connection opened for task:", taskId);
-          };
-        }
-
-        function handleProgressUpdate(data) {
-          const progressBar = document.getElementById("progressBar");
-          const progressText = document.getElementById("progressText");
-          const currentCount = document.getElementById("currentCount");
-          const successCount = document.getElementById("successCount");
-          const estimatedTime = document.getElementById("estimatedTime");
-          const saveResult = document.getElementById("saveResult");
-          const btn = document.getElementById("saveToLdapBtn");
-          const cancelBtn = document.getElementById("cancelTaskBtn");
-
-          switch (data.type) {
-            case "progress":
-              const percentage = data.percentage || 0;
-              progressBar.style.width = percentage + "%";
-              progressText.textContent = percentage + "%";
-              currentCount.textContent = data.current || 0;
-              successCount.textContent = data.successCount || 0;
-
-              // Calculate estimated completion time
-              if (progressStartTime && data.current > 0 && data.total > 0) {
-                const elapsed = Date.now() - progressStartTime;
-                const rate = data.current / elapsed; // entries per ms
-                const remaining = data.total - data.current;
-                const estimatedMs = remaining / rate;
-                
-                if (estimatedMs > 0 && estimatedMs < 3600000) { // Less than 1 hour
-                  const minutes = Math.floor(estimatedMs / 60000);
-                  const seconds = Math.floor((estimatedMs % 60000) / 1000);
-                  estimatedTime.textContent = `예상 완료: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-                  estimatedTime.classList.remove("hidden");
-                }
-              }
-
-              // Update progress bar text
-              if (percentage >= 15) {
-                progressBar.textContent = percentage + "%";
-              }
-              break;
-
-            case "complete":
-              progressBar.style.width = "100%";
-              progressBar.textContent = "100%";
-              progressText.textContent = "100%";
-              currentCount.textContent = data.savedCount || 0;
-              successCount.textContent = data.savedCount || 0;
-              estimatedTime.classList.add("hidden");
-
-              const successRate = Math.round((data.savedCount / data.totalCount) * 100);
-              
-              saveResult.innerHTML = `
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start animate-fadeIn">
-                  <i class="fas fa-check-circle text-green-500 mr-3 text-xl mt-0.5"></i>
-                  <div class="flex-1">
-                    <div class="text-green-800 font-medium">저장 완료!</div>
-                    <div class="text-green-700 text-sm mt-1">
-                      ${data.savedCount}/${data.totalCount}개 엔트리가 성공적으로 저장되었습니다. (성공률: ${successRate}%)
-                      ${data.savedCount < data.totalCount 
-                        ? `<br><span class="text-yellow-600">⚠️ ${data.totalCount - data.savedCount}개 엔트리는 저장되지 않았습니다.</span>`
-                        : ""
-                      }
-                    </div>
-                    <div class="text-green-600 text-xs mt-2">
-                      소요 시간: ${formatElapsedTime(Date.now() - progressStartTime)}
-                    </div>
-                  </div>
-                </div>
-              `;
-
-              btn.disabled = false;
-              btn.innerHTML = '<i class="fas fa-check mr-2"></i> 저장 완료';
-              btn.classList.remove("opacity-75", "cursor-not-allowed");
-              btn.classList.add("bg-gray-500", "cursor-default");
-              
-              cancelBtn.classList.add("hidden");
-              
-              if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-              }
-              break;
-
-            case "error":
-              handleSaveError(data.message || "알 수 없는 오류가 발생했습니다.");
-              break;
-          }
-        }
-
+        
         function handleSaveError(message) {
           const saveResult = document.getElementById("saveResult");
           const btn = document.getElementById("saveToLdapBtn");
@@ -941,260 +557,6 @@
             return `${seconds}초`;
           }
         }
-
-        // Entry details modal functions
-        function showEntryDetails(globalIndex) {
-          // Load the specific entry from the server if needed
-          const pageIndex = Math.floor(globalIndex / pageSize);
-          const entryIndex = globalIndex % pageSize;
-
-          if (pageIndex === currentPage && entriesLoaded) {
-            // Entry is on current page, show from current data
-            displayEntryModal(globalIndex);
-          } else {
-            // Load the page containing this entry
-            const modal = document.getElementById("entryDetailsModal");
-            const modalBody = document.getElementById("entryDetailsBody");
-            
-            modalBody.innerHTML = `
-              <div class="text-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p class="text-gray-600 mt-2">엔트리 상세 정보를 로드하는 중...</p>
-              </div>
-            `;
-            modal.classList.remove("hidden");
-            
-            fetch(`/ldif/entries?sessionId=${sessionId}&page=${pageIndex}&size=${pageSize}`)
-              .then((response) => {
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-              })
-              .then((data) => {
-                if (data.content && data.content[entryIndex]) {
-                  displayEntryModal(globalIndex, data.content[entryIndex]);
-                } else {
-                  throw new Error('엔트리를 찾을 수 없습니다.');
-                }
-              })
-              .catch((error) => {
-                console.error("Error loading entry details:", error);
-                modalBody.innerHTML = `
-                  <div class="text-center py-8 text-red-600">
-                    <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                    <p>엔트리 상세 정보를 로드하는데 실패했습니다.</p>
-                    <p class="text-sm mt-2">${error.message}</p>
-                    <button 
-                      onclick="showEntryDetails(${globalIndex})"
-                      class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                    >
-                      다시 시도
-                    </button>
-                  </div>
-                `;
-              });
-          }
-        }
-
-        function displayEntryModal(globalIndex, entryData = null) {
-          const modal = document.getElementById("entryDetailsModal");
-          const modalBody = document.getElementById("entryDetailsBody");
-          
-          // If entryData is not provided, try to get it from current page
-          if (!entryData && entriesLoaded) {
-            const tableRows = document.querySelectorAll("#entriesTableContainer tbody tr");
-            const currentPageEntryIndex = globalIndex - currentPage * pageSize;
-            if (currentPageEntryIndex >= 0 && currentPageEntryIndex < tableRows.length) {
-              // We need to make an API call to get the full entry data
-              console.log("Need to load entry data for index:", globalIndex);
-              showEntryDetails(globalIndex);
-              return;
-            }
-          }
-
-          if (entryData) {
-            let html = `
-              <div class="space-y-6">
-                <div class="bg-gray-50 rounded-lg p-4">
-                  <h6 class="text-lg font-semibold mb-2 text-gray-800">
-                    <i class="fas fa-key text-blue-600 mr-2"></i>Distinguished Name
-                  </h6>
-                  <code class="bg-white border px-3 py-2 rounded text-sm font-mono text-gray-800 block break-all">
-                    ${entryData.dn}
-                  </code>
-                </div>
-                
-                <div>
-                  <h6 class="text-lg font-semibold mb-4 text-gray-800">
-                    <i class="fas fa-tags text-green-600 mr-2"></i>속성 정보
-                    <span class="text-sm text-gray-500 font-normal ml-2">(${Object.keys(entryData.attributes).length}개)</span>
-                  </h6>
-                  <div class="border border-gray-200 rounded-lg overflow-hidden">
-                    <div class="max-h-96 overflow-y-auto">
-                      <table class="w-full">
-                        <thead class="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b w-1/3">속성명</th>
-                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">값</th>
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-            `;
-
-            // Sort attributes for better readability
-            const sortedAttributes = Object.entries(entryData.attributes).sort(([a], [b]) => a.localeCompare(b));
-
-            sortedAttributes.forEach(([key, values]) => {
-              html += `
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-3 font-semibold bg-gray-50 text-gray-800 align-top">
-                    <div class="flex items-center">
-                      ${key}
-                      ${Array.isArray(values) && values.length > 1 ? 
-                        `<span class="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">${values.length}</span>` : 
-                        ''}
-                    </div>
-                  </td>
-                  <td class="px-4 py-3 text-gray-700">
-              `;
-
-              if (Array.isArray(values)) {
-                values.forEach((value, index) => {
-                  if (index > 0) html += '<div class="mt-2 pt-2 border-t border-gray-100"></div>';
-                  
-                  // Check if value looks like binary data
-                  if (typeof value === 'string' && (value.includes('\\x') || value.length > 200)) {
-                    html += `
-                      <div class="bg-gray-100 rounded p-2">
-                        <div class="text-xs text-gray-500 mb-1">
-                          <i class="fas fa-file-code mr-1"></i>이진 데이터 또는 긴 텍스트 (${value.length} 글자)
-                        </div>
-                        <div class="truncated-value">
-                          <pre class="text-xs text-gray-700 truncated whitespace-pre-wrap">${value.substring(0, 100)}...</pre>
-                          <button class="text-blue-600 hover:text-blue-800 text-xs mt-1 expand-btn">
-                            <i class="fas fa-expand-alt mr-1"></i>전체 보기
-                          </button>
-                          <pre class="text-xs text-gray-700 full-value hidden whitespace-pre-wrap break-all">${value}</pre>
-                        </div>
-                      </div>
-                    `;
-                  } else {
-                    // Regular text value
-                    if (value.length > 100) {
-                      html += `
-                        <div class="truncated-value">
-                          <span class="truncated">${value.substring(0, 100)}...</span>
-                          <button class="text-blue-600 hover:text-blue-800 text-xs ml-2 expand-btn">
-                            <i class="fas fa-expand-alt mr-1"></i>더 보기
-                          </button>
-                          <span class="full-value hidden break-all">${value}</span>
-                        </div>
-                      `;
-                    } else {
-                      html += `<span class="break-all">${value}</span>`;
-                    }
-                  }
-                });
-              } else {
-                html += `<span class="break-all">${values}</span>`;
-              }
-
-              html += `
-                  </td>
-                </tr>
-              `;
-            });
-
-            html += `
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h6 class="text-lg font-semibold mb-3 text-gray-800">
-                    <i class="fas fa-code text-purple-600 mr-2"></i>원본 LDIF
-                  </h6>
-                  <div class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-                    <div class="bg-gray-100 px-4 py-2 border-b border-gray-200">
-                      <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-600 font-medium">LDIF 형식</span>
-                        <button 
-                          onclick="copyToClipboard(this.nextElementSibling.textContent)"
-                          class="text-gray-500 hover:text-gray-700 text-sm"
-                          title="클립보드에 복사"
-                        >
-                          <i class="fas fa-copy mr-1"></i>복사
-                        </button>
-                        <span class="hidden">${entryData.originalLdif}</span>
-                      </div>
-                    </div>
-                    <pre class="p-4 text-sm font-mono text-gray-800 max-h-60 overflow-y-auto whitespace-pre-wrap"><code>${entryData.originalLdif}</code></pre>
-                  </div>
-                </div>
-              </div>
-            `;
-
-            modalBody.innerHTML = html;
-
-            // Add event listeners for expand buttons
-            document.querySelectorAll(".expand-btn").forEach((btn) => {
-              btn.addEventListener("click", function () {
-                const truncatedValue = this.closest('.truncated-value');
-                const truncated = truncatedValue.querySelector(".truncated");
-                const fullValue = truncatedValue.querySelector(".full-value");
-
-                if (fullValue.classList.contains("hidden")) {
-                  if (truncated) truncated.classList.add("hidden");
-                  fullValue.classList.remove("hidden");
-                  this.innerHTML = '<i class="fas fa-compress-alt mr-1"></i>줄이기';
-                } else {
-                  if (truncated) truncated.classList.remove("hidden");
-                  fullValue.classList.add("hidden");
-                  this.innerHTML = '<i class="fas fa-expand-alt mr-1"></i>더 보기';
-                }
-              });
-            });
-
-            modal.classList.remove("hidden");
-          }
-        }
-
-        function copyToClipboard(text) {
-          navigator.clipboard.writeText(text).then(function() {
-            // Show temporary success message
-            const event = new CustomEvent('show-toast', {
-              detail: { message: '클립보드에 복사되었습니다!', type: 'success' }
-            });
-            document.dispatchEvent(event);
-          }).catch(function(err) {
-            console.error('클립보드 복사 실패:', err);
-            const event = new CustomEvent('show-toast', {
-              detail: { message: '클립보드 복사에 실패했습니다.', type: 'error' }
-            });
-            document.dispatchEvent(event);
-          });
-        }
-
-        function closeModal() {
-          document.getElementById("entryDetailsModal").classList.add("hidden");
-        }
-
-        // Close modal when clicking outside
-        document.getElementById("entryDetailsModal").addEventListener("click", function (e) {
-          if (e.target === this) {
-            closeModal();
-          }
-        });
-
-        // Keyboard shortcuts
-        document.addEventListener("keydown", function (e) {
-          if (e.key === "Escape") {
-            closeModal();
-          }
-        });
 
         // Toast notification system
         document.addEventListener('show-toast', function(e) {

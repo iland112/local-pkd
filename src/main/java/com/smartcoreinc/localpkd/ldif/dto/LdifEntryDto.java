@@ -3,10 +3,14 @@ package com.smartcoreinc.localpkd.ldif.dto;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class LdifEntryDto {
     private String dn;
     private String entryType;   // ADD, MODIFY, DELETE
     private Map<String, List<String>> attributes;
+    
+    @JsonIgnore
     private String originalLdif;
 
     public LdifEntryDto() {}
