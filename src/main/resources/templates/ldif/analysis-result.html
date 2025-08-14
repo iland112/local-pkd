@@ -347,7 +347,7 @@
               >
                 <i class="fas fa-save mr-2"></i> LDAP에 저장하기
               </button>
-              
+
               <button
                 id="cancelTaskBtn"
                 class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg hidden"
@@ -360,7 +360,9 @@
               <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-blue-700 font-medium">저장 진행률</span>
-                  <span id="progressText" class="text-blue-600 text-sm">0%</span>
+                  <span id="progressText" class="text-blue-600 text-sm"
+                    >0%</span
+                  >
                 </div>
                 <div class="w-full bg-blue-100 rounded-full h-4">
                   <div
@@ -371,11 +373,17 @@
                 </div>
                 <div class="flex justify-between mt-2 text-sm text-blue-600">
                   <span id="currentCount">0</span>
-                  <span>총 <span th:text="${analysisResult.totalEntries}">0</span>개</span>
+                  <span
+                    >총
+                    <span th:text="${analysisResult.totalEntries}">0</span
+                    >개</span
+                  >
                 </div>
                 <div class="flex justify-between mt-1 text-xs text-blue-500">
                   <span>성공: <span id="successCount">0</span>개</span>
-                  <span id="estimatedTime" class="hidden">예상 완료: --:--</span>
+                  <span id="estimatedTime" class="hidden"
+                    >예상 완료: --:--</span
+                  >
                 </div>
               </div>
             </div>
@@ -386,6 +394,7 @@
       </div>
     </div>
     <th:block layout:fragment="script-content">
+      <script type="text/javascript" th:src="@{/webjars/htmx.org/dist/ext/sse.js}"></script>
       <script th:inline="javascript">
         let currentPage = 0;
         const pageSize = 20;
@@ -420,7 +429,7 @@
           }
 
           // Handle beforeunload (user refreshing/closing page)
-          window.addEventListener('beforeunload', function() {
+          window.addEventListener("beforeunload", function () {
             if (eventSource) {
               eventSource.close();
             }
@@ -434,9 +443,10 @@
           const saveResult = document.getElementById("saveResult");
 
           btn.disabled = true;
-          btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 준비 중...';
+          btn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 준비 중...';
           btn.classList.add("opacity-75", "cursor-not-allowed");
-          
+
           cancelBtn.classList.remove("hidden");
           progressSection.classList.remove("hidden");
           saveResult.innerHTML = "";
@@ -453,7 +463,9 @@
           })
             .then((response) => {
               if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(
+                  `HTTP ${response.status}: ${response.statusText}`
+                );
               }
               return response.json();
             })
@@ -461,7 +473,8 @@
               if (data.success && data.taskId) {
                 currentTaskId = data.taskId;
                 startProgressTracking(data.taskId);
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
+                btn.innerHTML =
+                  '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
               } else {
                 handleSaveError(data.message || "저장 시작 실패");
               }
@@ -472,6 +485,98 @@
             });
         }
 
+        function startProgressTracking(taskId) {
+          const eventSource = new EventSource(
+            `/ldif/progress?taskId=${taskId}`
+          );
+
+          eventSource.onmessage = function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              handleProgressUpdate(data);
+            } catch (e) {
+              console.error("Error parsing progress data:", e);
+            }
+          };
+
+          eventSource.onerror = function (event) {
+            console.error("SSE connection error:", event);
+            eventSource.close();
+            handleSaveError("진행률 추적 연결이 끊어졌습니다.");
+          };
+
+          // 타임아웃 처리
+          setTimeout(() => {
+            if (eventSource.readyState === EventSource.OPEN) {
+              eventSource.close();
+              handleSaveError(
+                "저장 작업이 너무 오래 걸립니다. 다시 시도해주세요."
+              );
+            }
+          }, 300000); // 5분 타임아웃
+        }
+
+        function handleProgressUpdate(data) {
+          const progressBar = document.getElementById("progressBar");
+          const progressText = document.getElementById("progressText");
+          const currentCount = document.getElementById("currentCount");
+          const saveResult = document.getElementById("saveResult");
+          const btn = document.getElementById("saveToLdapBtn");
+
+          switch (data.type) {
+            case "progress":
+              const percentage = data.percentage || 0;
+              progressBar.style.width = percentage + "%";
+              progressText.textContent = percentage + "%";
+              currentCount.textContent = data.current || 0;
+
+              // 진행률이 있으면 성공 메시지도 업데이트
+              if (data.successCount !== undefined) {
+                const successRate = Math.round(
+                  (data.successCount / data.current) * 100
+                );
+                progressText.textContent = `${percentage}% (성공률: ${successRate}%)`;
+              }
+              break;
+
+            case "complete":
+              progressBar.style.width = "100%";
+              progressText.textContent = "100%";
+              currentCount.textContent = data.savedCount || 0;
+
+              saveResult.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center animate-fadeIn">
+                    <i class="fas fa-check text-green-500 mr-3 text-xl"></i>
+                    <div>
+                        <div class="text-green-800 font-medium">저장 완료!</div>
+                        <div class="text-green-700 text-sm mt-1">
+                            ${data.savedCount}/${
+                data.totalCount
+              }개 엔트리가 성공적으로 저장되었습니다.
+                            ${
+                              data.savedCount < data.totalCount
+                                ? `<br><span class="text-yellow-600">일부 엔트리는 저장되지 않았습니다.</span>`
+                                : ""
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-check mr-2"></i> 저장 완료';
+              btn.classList.remove("opacity-75", "cursor-not-allowed");
+              btn.classList.add("bg-gray-500", "cursor-default");
+              break;
+
+            case "error":
+              handleSaveError(
+                data.message || "알 수 없는 오류가 발생했습니다."
+              );
+              break;
+          }
+        }
+
         function cancelSaveProcess() {
           if (!currentTaskId) {
             return;
@@ -479,7 +584,8 @@
 
           const cancelBtn = document.getElementById("cancelTaskBtn");
           cancelBtn.disabled = true;
-          cancelBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 취소 중...';
+          cancelBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-2"></i> 취소 중...';
 
           fetch(`/ldif/cancel-task?taskId=${currentTaskId}`, {
             method: "GET",
@@ -500,7 +606,6 @@
             });
         }
 
-        
         function handleSaveError(message) {
           const saveResult = document.getElementById("saveResult");
           const btn = document.getElementById("saveToLdapBtn");
@@ -514,11 +619,17 @@
               <div class="flex-1">
                 <div class="text-red-800 font-medium">저장 실패</div>
                 <div class="text-red-700 text-sm mt-1">${message}</div>
-                ${progressStartTime ? `
+                ${
+                  progressStartTime
+                    ? `
                   <div class="text-red-600 text-xs mt-2">
-                    소요 시간: ${formatElapsedTime(Date.now() - progressStartTime)}
+                    소요 시간: ${formatElapsedTime(
+                      Date.now() - progressStartTime
+                    )}
                   </div>
-                ` : ''}
+                `
+                    : ""
+                }
               </div>
             </div>
           `;
@@ -526,11 +637,11 @@
           // 진행률 섹션 숨기기
           progressSection.classList.add("hidden");
           estimatedTime.classList.add("hidden");
-          
+
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-save mr-2"></i> 다시 시도';
           btn.classList.remove("opacity-75", "cursor-not-allowed");
-          
+
           cancelBtn.classList.add("hidden");
           cancelBtn.disabled = false;
           cancelBtn.innerHTML = '<i class="fas fa-times mr-2"></i> 작업 취소';
@@ -539,7 +650,7 @@
             eventSource.close();
             eventSource = null;
           }
-          
+
           currentTaskId = null;
           progressStartTime = null;
         }
@@ -548,7 +659,7 @@
           const seconds = Math.floor(milliseconds / 1000);
           const minutes = Math.floor(seconds / 60);
           const hours = Math.floor(minutes / 60);
-          
+
           if (hours > 0) {
             return `${hours}시간 ${minutes % 60}분 ${seconds % 60}초`;
           } else if (minutes > 0) {
@@ -559,28 +670,32 @@
         }
 
         // Toast notification system
-        document.addEventListener('show-toast', function(e) {
-          const toast = document.createElement('div');
+        document.addEventListener("show-toast", function (e) {
+          const toast = document.createElement("div");
           toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white font-medium transform transition-all duration-300 translate-x-full ${
-            e.detail.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            e.detail.type === "success" ? "bg-green-600" : "bg-red-600"
           }`;
           toast.innerHTML = `
             <div class="flex items-center">
-              <i class="fas ${e.detail.type === 'success' ? 'fa-check' : 'fa-exclamation-triangle'} mr-2"></i>
+              <i class="fas ${
+                e.detail.type === "success"
+                  ? "fa-check"
+                  : "fa-exclamation-triangle"
+              } mr-2"></i>
               ${e.detail.message}
             </div>
           `;
-          
+
           document.body.appendChild(toast);
-          
+
           // Show toast
           setTimeout(() => {
-            toast.classList.remove('translate-x-full');
+            toast.classList.remove("translate-x-full");
           }, 100);
-          
+
           // Hide toast after 3 seconds
           setTimeout(() => {
-            toast.classList.add('translate-x-full');
+            toast.classList.add("translate-x-full");
             setTimeout(() => {
               document.body.removeChild(toast);
             }, 300);
@@ -639,7 +754,8 @@
         }
 
         /* Smooth transitions for all interactive elements */
-        button, .transition-colors {
+        button,
+        .transition-colors {
           transition: all 0.2s ease-in-out;
         }
 
@@ -654,7 +770,7 @@
             transform: rotate(360deg);
           }
         }
-        
+
         .animate-spin {
           animation: spin 1s linear infinite;
         }

@@ -74,16 +74,12 @@
                 </div>
 
                 <!-- File Upload Form -->
-                <div class="mb-6"
-                  hx-ext="sse"
-                  sse-connect="/progress"
-                  hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
-                  hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
-                >
+                <div class="mb-6" hx-ext="sse" sse-connect="/progress">
                   <form
-                    th:action="@{/ldif/upload}"
-                    method="post"
-                    enctype="multipart/form-data"
+                    hx-encoding="multipart/form-data"
+                    hx:post="@{/ldif/upload}"
+                    hx-disabled-elt=".disable-during-request"
+                    hx-swap="none"
                     class="space-y-6"
                   >
                     <div>
@@ -96,7 +92,7 @@
                       </label>
                       <input
                         type="file"
-                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        class="disable-during-request block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         id="file"
                         name="file"
                         accept=".ldif"
@@ -115,46 +111,21 @@
                         있습니다.
                       </p>
                     </div>
-  
-                    <!-- Upload Progress Indicator -->
-                    <div id="uploadIndicator" class="htmx-indicator">
-                      <div
-                        class="bg-blue-50 border border-blue-200 rounded-lg p-4"
-                      >
-                        <div class="flex items-center justify-center space-x-3">
-                          <div
-                            class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"
-                          ></div>
-                          <span class="text-blue-700 font-medium"
-                            >파일 업로드 및 분석 중...</span
-                          >
-                        </div>
-                        <div class="mt-3">
-                          <div class="bg-blue-100 rounded-full h-2">
-                            <div
-                              class="bg-blue-600 h-2 rounded-full animate-pulse"
-                              style="width: 100%"
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                     <div>
                       <button
                         type="submit"
-                        class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-md transition-all duration-200 flex items-center justify-center gap-3 text-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                        class="disable-during-request w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-md transition-all duration-200 flex items-center justify-center gap-3 text-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                       >
                         <i class="fas fa-upload"></i> 파일 업로드 및 분석
                       </button>
                     </div>
+                    <div class="mt-4 card bg-base-100 card-lg shadow-sm">
+                      <div class="card-body">
+                        <h2 class="card-title">LDIF 분석 상태</h2>
+                        <div sse-swap="progress-update"></div>
+                      </div>
+                    </div>
                   </form>
-                </div>
-
-                <div class="mt-4 card bg-base-100 card-lg shadow-sm">
-                  <div class="card-body">
-                    <h2 class="card-title">LDIF 파싱 진행 상태</h2>
-                    <div sse-swap="progress-ldif-event"></div>
-                  </div>
                 </div>
 
                 <!-- 주요 기능 소개 -->
