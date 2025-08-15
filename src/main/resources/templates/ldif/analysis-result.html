@@ -103,7 +103,7 @@
               <div>
                 <h4
                   class="text-2xl font-bold"
-                  th:text="${analysisResult.totalEntries}"
+                  th:text="${summary.totalEntries}"
                 >
                   0
                 </h4>
@@ -121,7 +121,7 @@
               <div>
                 <h4
                   class="text-2xl font-bold"
-                  th:text="${analysisResult.addEntries}"
+                  th:text="${summary.addEntries}"
                 >
                   0
                 </h4>
@@ -139,7 +139,7 @@
               <div>
                 <h4
                   class="text-2xl font-bold"
-                  th:text="${analysisResult.modifyEntries}"
+                  th:text="${summary.modifyEntries}"
                 >
                   0
                 </h4>
@@ -157,7 +157,7 @@
               <div>
                 <h4
                   class="text-2xl font-bold"
-                  th:text="${analysisResult.totalErrors ?: #lists.size(analysisResult.errors)}"
+                  th:text="${summary.totalErrors ?: #lists.size(summary.errors)}"
                 >
                   0
                 </h4>
@@ -172,7 +172,7 @@
 
         <!-- Certificate Validation Stats -->
         <div
-          th:if="${analysisResult?.certificateValidationStats != null and !#maps.isEmpty(analysisResult.certificateValidationStats)}"
+          th:if="${summary?.certificateValidationStats != null and !#maps.isEmpty(summary.certificateValidationStats)}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-purple-600 text-white px-6 py-4">
@@ -185,7 +185,7 @@
               <div class="text-center">
                 <div
                   class="text-3xl font-bold text-purple-600"
-                  th:text="${analysisResult.certificateValidationStats['total']}"
+                  th:text="${summary.certificateValidationStats['total']}"
                 >
                   0
                 </div>
@@ -194,7 +194,7 @@
               <div class="text-center">
                 <div
                   class="text-3xl font-bold text-green-600"
-                  th:text="${analysisResult.certificateValidationStats['valid']}"
+                  th:text="${summary.certificateValidationStats['valid']}"
                 >
                   0
                 </div>
@@ -203,7 +203,7 @@
               <div class="text-center">
                 <div
                   class="text-3xl font-bold text-red-600"
-                  th:text="${analysisResult.certificateValidationStats['invalid']}"
+                  th:text="${summary.certificateValidationStats['invalid']}"
                 >
                   0
                 </div>
@@ -214,12 +214,12 @@
               <div class="w-full bg-gray-200 rounded-full h-3">
                 <div
                   class="bg-green-500 h-3 rounded-full transition-all duration-1000"
-                  th:style="'width: ' + ${(analysisResult.certificateValidationStats['valid'] * 100.0) / analysisResult.certificateValidationStats['total']} + '%'"
+                  th:style="'width: ' + ${(summary.certificateValidationStats['valid'] * 100.0) / summary.certificateValidationStats['total']} + '%'"
                 ></div>
               </div>
               <div class="text-center mt-2 text-sm text-gray-600">
                 <span
-                  th:text="${T(java.lang.Math).round((analysisResult.certificateValidationStats['valid'] * 100.0) / analysisResult.certificateValidationStats['total'])}"
+                  th:text="${T(java.lang.Math).round((summary.certificateValidationStats['valid'] * 100.0) /summary.certificateValidationStats['total'])}"
                   >0</span
                 >% 유효율
               </div>
@@ -229,17 +229,17 @@
 
         <!-- Errors and Warnings Section -->
         <div
-          th:if="${analysisResult.hasValidationErrors}"
+          th:if="${summary.hasValidationErrors}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-red-600 text-white px-6 py-4">
             <h5 class="text-xl font-semibold flex items-center">
               <i class="fas fa-exclamation-triangle mr-2"></i> 발견된 오류
               <span
-                th:if="${analysisResult.totalErrors > #lists.size(analysisResult.errors)}"
+                th:if="${summary.totalErrors > #lists.size(summary.errors)}"
                 class="ml-2 text-red-200 text-sm"
               >
-                (처음 10개만 표시, 총 [[${analysisResult.totalErrors}]]개)
+                (처음 10개만 표시, 총 [[${summary.totalErrors}]]개)
               </span>
             </h5>
           </div>
@@ -249,7 +249,7 @@
             >
               <ul class="list-disc pl-5 space-y-1 text-red-800">
                 <li
-                  th:each="error : ${analysisResult.errors}"
+                  th:each="error : ${summary.errors}"
                   th:text="${error}"
                 ></li>
               </ul>
@@ -259,17 +259,17 @@
 
         <!-- Warnings Section -->
         <div
-          th:if="${!#lists.isEmpty(analysisResult.warnings)}"
+          th:if="${!#lists.isEmpty(summary.warnings)}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-yellow-600 text-white px-6 py-4">
             <h5 class="text-xl font-semibold flex items-center">
               <i class="fas fa-exclamation-triangle mr-2"></i> 경고
               <span
-                th:if="${analysisResult.totalWarnings > #lists.size(analysisResult.warnings)}"
+                th:if="${summary.totalWarnings > #lists.size(summary.warnings)}"
                 class="ml-2 text-yellow-200 text-sm"
               >
-                (처음 10개만 표시, 총 [[${analysisResult.totalWarnings}]]개)
+                (처음 10개만 표시, 총 [[${summary.totalWarnings}]]개)
               </span>
             </h5>
           </div>
@@ -279,7 +279,7 @@
             >
               <ul class="list-disc pl-5 space-y-1 text-yellow-800">
                 <li
-                  th:each="warning : ${analysisResult.warnings}"
+                  th:each="warning : ${summary.warnings}"
                   th:text="${warning}"
                 ></li>
               </ul>
@@ -289,7 +289,7 @@
 
         <!-- ObjectClass Statistics -->
         <div
-          th:if="${analysisResult?.objectClassCount != null and !#maps.isEmpty(analysisResult.objectClassCount)}"
+          th:if="${summary?.objectClassCount != null and !#maps.isEmpty(summary.objectClassCount)}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="border-b border-gray-200 px-6 py-4">
@@ -301,7 +301,7 @@
           <div class="p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div
-                th:each="entry : ${analysisResult.objectClassCount}"
+                th:each="entry : ${summary.objectClassCount}"
                 class="space-y-2"
               >
                 <div class="flex items-center justify-between">
@@ -317,7 +317,7 @@
                 <div class="w-full bg-gray-200 rounded-full h-2">
                   <div
                     class="bg-blue-600 h-2 rounded-full transition-all duration-1000"
-                    th:style="'width: ' + ${entry.value * 100 / analysisResult.totalEntries} + '%'"
+                    th:style="'width: ' + ${entry.value * 100 / summary.totalEntries} + '%'"
                   ></div>
                 </div>
               </div>
@@ -327,7 +327,7 @@
 
         <!-- Save to LDAP Button -->
         <div
-          th:if="${analysisResult != null and !analysisResult.hasValidationErrors and analysisResult.totalEntries > 0}"
+          th:if="${summary != null and !summary.hasValidationErrors and summary.totalEntries > 0}"
           class="bg-white rounded-lg shadow-md mb-8 overflow-hidden"
         >
           <div class="bg-green-600 text-white px-6 py-4">
@@ -375,7 +375,7 @@
                   <span id="currentCount">0</span>
                   <span
                     >총
-                    <span th:text="${analysisResult.totalEntries}">0</span
+                    <span th:text="${summary.totalEntries}">0</span
                     >개</span
                   >
                 </div>

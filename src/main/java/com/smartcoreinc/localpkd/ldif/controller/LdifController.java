@@ -29,6 +29,7 @@ import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 
+import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -90,22 +91,26 @@ public class LdifController {
 
             String sessionId = generateSessionId();
             sessionTaskManager.getSessionResults().put(sessionId, analysisResult);
-            
-            log.info("Session {} created with {} entries", sessionId, analysisResult.getTotalEntries());
-            
+                        
             // 요약 정보만 뷰에 전달 - try-catch로 보호
-            LdifAnalysisSummary summary = null;
-            summary = createSummary(analysisResult);
-            model.addAttribute("analysisResult", summary);
+            LdifAnalysisSummary summary = analysisResult.getSummary();
+            if (summary == null) {
+                log.error("Summary does not exists");
+                throw new RuntimeException("Summary does not exists");
+            }
+            model.addAttribute("summary", summary);
             model.addAttribute("sessionId", sessionId);
             model.addAttribute("fileName", originalFilename);
-
-            if (analysisResult.isHasValidationErrors()) {
+            
+            if (summary.isHasValidationErrors()) {
                 model.addAttribute("warning", "LDIF 파일에 오류가 있습니다. 아래 오류를 확인해주세요.");
             } else {
                 model.addAttribute("success", "LDIF 파일이 성공적으로 분석되었습니다.");
             }
-
+            
+            log.info("Session {} created with {} entries", sessionId, analysisResult.getSummary().getTotalEntries());
+            // 1초 대기 후 Anlaysis Result 페이지로 리다렉트
+            // sleepQuietly(1000);
             return "ldif/analysis-result";
             
         } catch (StackOverflowError e) {
@@ -160,7 +165,7 @@ public class LdifController {
             CompletableFuture.supplyAsync(() -> {
                 return saveEntriesWithProgress(analysisResult.getEntries(), taskId);
             }).thenAccept(savedCount -> {
-                handleSaveCompletion(taskId, savedCount, analysisResult.getTotalEntries());
+                handleSaveCompletion(taskId, savedCount, analysisResult.getSummary().getTotalEntries());
             }).exceptionally(throwable -> {
                 handleSaveError(taskId, throwable);
                 return null;
@@ -174,24 +179,6 @@ public class LdifController {
             log.error("Error saving to LDAP: {}", e.getMessage(), e);
             response.put("success", false);
             response.put("message", "LDAP 저장 중 오류가 발생했습니다: " + e.getMessage());
-        }
-
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping(value = "/test-connection", produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public ResponseEntity<Map<String, Object>> testLdapConnection() {
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            boolean connected = ldapService.testConnection();
-            response.put("success", connected);
-            response.put("message", connected ? "LDAP 연결 성공" : "LDAP 연결 실패");
-        } catch (Exception e) {
-            log.error("Error testing LDAP connection: {}", e.getMessage(), e);
-            response.put("success", false);
-            response.put("message", "연결 테스트 중 오류 발생: " + e.getMessage());
         }
 
         return ResponseEntity.ok(response);
@@ -221,6 +208,13 @@ public class LdifController {
         }
 
         return ResponseEntity.ok(response);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public String handleException(Exception e, Model model) {
+        log.error("Unexpected error in LdifController: {}", e.getMessage(), e);
+        model.addAttribute("error", "예상치 못한 오류가 발생했습니다: " + e.getMessage());
+        return "error";
     }
 
     private int saveEntriesWithProgress(List<LdifEntryDto> entries, String taskId) {
@@ -286,147 +280,52 @@ public class LdifController {
     }
 
     private void handleSaveCompletion(String taskId, int savedCount, int totalCount) {
-        // try {
-        // SseEmitterWrapper wrapper = activeEmitters.get(taskId);
-        // if (wrapper != null && wrapper.isConnected()) {
-        // Map<String, Object> completeData = new HashMap<>();
-        // completeData.put("type", "complete");
-        // completeData.put("savedCount", savedCount);
-        // completeData.put("totalCount", totalCount);
-
-        // if (wrapper.sendSafely(completeData)) {
-        // log.info("Save process completed: {}/{} entries saved", savedCount,
-        // totalCount);
-        // }
-        // wrapper.completeSafely();
-        // }
-        // } catch (Exception e) {
-        // log.error("Error in save completion handling: {}", e.getMessage(), e);
-        // } finally {
-        // cleanupTask(taskId);
-        // }
+        try {
+            if (progressPublisher.getProgressListeners().isEmpty()) {
+                log.warn("Currently, There is no subscripted listeners");
+                return;
+            } else {
+                Map<String, Object> completeData = new HashMap<>();
+                completeData.put("type", "complete");
+                completeData.put("savedCount", savedCount);
+                completeData.put("totalCount", totalCount);
+                progressPublisher.notifyProgressListeners(null);
+                log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
+            }
+        } catch (Exception e) {
+            log.error("Error in save completion handling: {}", e.getMessage(), e);
+        } finally {
+            cleanupTask(taskId);
+        }
     }
 
     private void handleSaveError(String taskId, Throwable throwable) {
         log.error("Error during save process for task {}: {}", taskId, throwable.getMessage(), throwable);
 
-        // try {
-        // SseEmitterWrapper wrapper = activeEmitters.get(taskId);
-        // if (wrapper != null && wrapper.isConnected()) {
-        // Map<String, Object> errorData = new HashMap<>();
-        // errorData.put("type", "error");
-        // errorData.put("message", "저장 중 오류가 발생했습니다: " + throwable.getMessage());
-
-        // wrapper.sendSafely(errorData);
-        // wrapper.completeSafely();
-        // }
-        // } catch (Exception e) {
-        // log.error("Error in save error handling: {}", e.getMessage(), e);
-        // } finally {
-        // cleanupTask(taskId);
-        // }
+        try {
+            if (progressPublisher.getProgressListeners().isEmpty()) {
+                log.warn("Currently, There is no subscripted listeners");
+                return;
+            } else {
+                Map<String, Object> errorData = new HashMap<>();
+                errorData.put("type", "error");
+                errorData.put("message", "저장 중 오류가 발생했습니다: " + throwable.getMessage());
+                progressPublisher.notifyProgressListeners(null);
+            }
+        } catch (Exception e) {
+            log.error("Error in save error handling: {}", e.getMessage(), e);
+        } finally {
+            cleanupTask(taskId);
+        }
     }
 
     private void cleanupTask(String taskId) {
-        // try {
-        // SseEmitterWrapper wrapper = activeEmitters.remove(taskId);
-        // if (wrapper != null) {
-        // wrapper.disconnect();
-        // }
-        // sessionTaskManager.getRunningTasks().remove(taskId);
-        // log.debug("Cleaned up resources for task: {}", taskId);
-        // } catch (Exception e) {
-        // log.error("Error during task cleanup for {}: {}", taskId, e.getMessage(), e);
-        // }
-    }
-
-    private LdifAnalysisSummary createSummary(LdifAnalysisResult result) {
-        LdifAnalysisSummary summary = new LdifAnalysisSummary();
-
-        summary.setTotalEntries(result.getTotalEntries());
-        summary.setAddEntries(result.getAddEntries());
-        summary.setModifyEntries(result.getModifyEntries());
-        summary.setDeleteEntries(result.getDeleteEntries());
-        summary.setHasValidationErrors(result.isHasValidationErrors());
-
-        // ObjectClass 카운트 - null 체크 후 안전하게 복사
-        if (result.getObjectClassCount() != null) {
-            try {
-                Map<String, Integer> safeObjectClassCount = new HashMap<>();
-                for (Map.Entry<String, Integer> entry : result.getObjectClassCount().entrySet()) {
-                    if (entry.getKey() != null && entry.getValue() != null) {
-                        safeObjectClassCount.put(entry.getKey(), entry.getValue());
-                    }
-                }
-                summary.setObjectClassCount(safeObjectClassCount);
-            } catch (Exception e) {
-                log.warn("Error copying objectClassCount: {}", e.getMessage());
-                summary.setObjectClassCount(new HashMap<>());
-            }
+        try {
+            sessionTaskManager.getRunningTasks().remove(taskId);
+            log.debug("Cleaned up resources for task: {}", taskId);
+        } catch (Exception e) {
+            log.error("Error during task cleanup for {}: {}", taskId, e.getMessage(), e);
         }
-
-        // 인증서 검증 통계 - null 체크 후 안전하게 복사
-        if (result.getCertificateValidationStats() != null) {
-            try {
-                Map<String, Integer> safeCertStats = new HashMap<>();
-                for (Map.Entry<String, Integer> entry : result.getCertificateValidationStats().entrySet()) {
-                    if (entry.getKey() != null && entry.getValue() != null) {
-                        safeCertStats.put(entry.getKey(), entry.getValue());
-                    }
-                }
-                summary.setCertificateValidationStats(safeCertStats);
-            } catch (Exception e) {
-                log.warn("Error copying certificateValidationStats: {}", e.getMessage());
-                summary.setCertificateValidationStats(new HashMap<>());
-            }
-        }
-
-        // 에러와 경고는 처음 10개만 포함 - 안전하게 복사
-        if (result.getErrors() != null) {
-            try {
-                List<String> safeErrors = new ArrayList<>();
-                int errorCount = 0;
-                for (String error : result.getErrors()) {
-                    if (error != null && errorCount < 10) {
-                        safeErrors.add(error);
-                        errorCount++;
-                    }
-                }
-                summary.setErrors(safeErrors);
-                summary.setTotalErrors(result.getErrors().size());
-            } catch (Exception e) {
-                log.warn("Error copying errors: {}", e.getMessage());
-                summary.setErrors(new ArrayList<>());
-                summary.setTotalErrors(0);
-            }
-        } else {
-            summary.setErrors(new ArrayList<>());
-            summary.setTotalErrors(0);
-        }
-
-        if (result.getWarnings() != null) {
-            try {
-                List<String> safeWarnings = new ArrayList<>();
-                int warningCount = 0;
-                for (String warning : result.getWarnings()) {
-                    if (warning != null && warningCount < 10) {
-                        safeWarnings.add(warning);
-                        warningCount++;
-                    }
-                }
-                summary.setWarnings(safeWarnings);
-                summary.setTotalWarnings(result.getWarnings().size());
-            } catch (Exception e) {
-                log.warn("Error copying warnings: {}", e.getMessage());
-                summary.setWarnings(new ArrayList<>());
-                summary.setTotalWarnings(0);
-            }
-        } else {
-            summary.setWarnings(new ArrayList<>());
-            summary.setTotalWarnings(0);
-        }
-
-        return summary;
     }
 
     private String generateSessionId() {
@@ -437,10 +336,11 @@ public class LdifController {
         return "task_" + System.currentTimeMillis() + "_" + (int) (Math.random() * 1000);
     }
 
-    @ExceptionHandler(Exception.class)
-    public String handleException(Exception e, Model model) {
-        log.error("Unexpected error in controller: {}", e.getMessage(), e);
-        model.addAttribute("error", "예상치 못한 오류가 발생했습니다: " + e.getMessage());
-        return "error";
+    private void sleepQuietly(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
