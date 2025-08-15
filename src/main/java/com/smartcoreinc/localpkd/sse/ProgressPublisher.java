@@ -1,6 +1,7 @@
 package com.smartcoreinc.localpkd.sse;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Component;
@@ -18,6 +19,10 @@ public class ProgressPublisher {
 
     }
 
+    public Set<ProgressListener> getProgressListeners() {
+        return progressListeners;
+    }
+
     public void addProgressListener(ProgressListener progressListener) {
         progressListeners.add(progressListener);
     }
@@ -27,6 +32,11 @@ public class ProgressPublisher {
     }
 
     public void notifyProgressListeners(ProgressEvent progressEvent) {
+        if (progressListeners.size() < 1) {
+            log.warn("Currently, There is no subscripted listeners");
+            return;
+        }
+
         for (ProgressListener progressListener : progressListeners) {
             log.debug(
                 "type: {}, current progress: {}/{} ({}%)",

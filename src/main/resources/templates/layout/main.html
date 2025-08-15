@@ -1,29 +1,51 @@
 <!DOCTYPE html>
-<html th:lang="|${#locale.language}-${#locale.country}|"
-      xmlns:th="http://www.thymeleaf.org"
-      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<html
+  th:lang="|${#locale.language}-${#locale.country}|"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title></title>
-    <link rel="stylesheet" th:href="@{/css/application.css}">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body>
+    <link rel="stylesheet" th:href="@{/css/application.css}" />
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/css/all.min.css}" />
+  </head>
+  <body>
     <div class="container mx-auto max-w-4xl mt-4">
-      <div id="connectionAlert"
-        class="alert alert-warning mb-4 hidden">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-        <span>Warning: No connection with server anymore. Live updates are disabled.</span>
+      <!-- SSE Connection Alert Section -->
+      <div id="connectionAlert" class="alert alert-warning mb-4 hidden">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="stroke-current shrink-0 h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+        <span
+          >Warning: No connection with server anymore. Live updates are
+          disabled.</span
+        >
       </div>
+      <!-- Page Content -->
       <main layout:fragment="content"></main>
     </div>
-</main>
 
-<script type="text/javascript" th:src="@{/webjars/alpinejs/dist/cdn.min.js}"></script>
-<script type="text/javascript" th:src="@{/webjars/htmx.org/dist/htmx.min.js}"></script>
-<th:block layout:fragment="script-content">
-
-</th:block>
-</body>
+    <script
+      type="text/javascript"
+      th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
+    ></script>
+    <script
+      type="text/javascript"
+      th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
+    ></script>
+    <th:block layout:fragment="script-content">
+    </th:block>
+  </body>
 </html>

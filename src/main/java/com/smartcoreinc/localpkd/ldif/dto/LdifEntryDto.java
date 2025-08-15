@@ -5,6 +5,9 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+/**
+ * LDIF 레코드 (Entry) Dto
+ */ 
 public class LdifEntryDto {
     private String dn;
     private String entryType;   // ADD, MODIFY, DELETE
