@@ -38,13 +38,13 @@ public class ProgressPublisher {
         }
 
         for (ProgressListener progressListener : progressListeners) {
-            log.debug(
-                "type: {}, current progress: {}/{} ({}%)",
-                progressEvent.progress().type(),
-                progressEvent.processedCount(),
-                progressEvent.totalCount(),
-                (int) (progressEvent.progress().value() * 100)
-            );
+            // log.debug(
+            //     "type: {}, current progress: {}/{} ({}%)",
+            //     progressEvent.progress().type(),
+            //     progressEvent.processedCount(),
+            //     progressEvent.totalCount(),
+            //     (int) (progressEvent.progress().value() * 100)
+            // );
             progressListener.onProgress(
                 progressEvent.progress(),
                 progressEvent.processedCount(),
