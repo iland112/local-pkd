@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.security.NoSuchProviderException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -15,6 +16,10 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,9 +49,15 @@ public class LdifParser {
 
     static {
         try {
-            CERTIFICATE_FACTORY = CertificateFactory.getInstance("X.509");
-        } catch (CertificateException e) {
-            throw new RuntimeException("Failed to initialize X.509 CertificateFactory", e);
+            if (java.security.Security.getProvider("BC") == null) {
+                java.security.Security.addProvider(new BouncyCastleProvider());
+            }
+
+            CERTIFICATE_FACTORY = java.security.Security.getProvider("BC") != null ?
+                CertificateFactory.getInstance("X.509", "BC") :
+                CertificateFactory.getInstance("X.509");
+        } catch (CertificateException | NoSuchProviderException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -231,9 +242,10 @@ public class LdifParser {
     /**
      * 전달받은 문자열 (dn:으로 시작하고 빈 라인(개행[\n]) 이전 라인까지의 문자열 전체를 포함)
      * 을 입력 받아 LDAP Entry로 구문 파싱한 결과를 리턴
+     * 
      * @param String recordText : `dn:`으로 시작하는 라인부터 빈 라인(개행[\n]) 이전 라인까지의 문자열 전체
-     * @param int recordNumber : 현재 까지 분석된 레코드 넘버 
-     * @param int lineNumber : 현재 라인 넘버
+     * @param int    recordNumber : 현재 까지 분석된 레코드 넘버
+     * @param int    lineNumber : 현재 라인 넘버
      * @return ParseResult
      * @throws LDIFException
      * @throws IOException
@@ -371,7 +383,7 @@ public class LdifParser {
 
             // X.509 인증서 파싱 시도
             try (ByteArrayInputStream bis = new ByteArrayInputStream(certBytes)) {
-                X509Certificate certificate = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bis);
+                 X509Certificate certificate = parseX509Certificate(certBytes);
 
                 // 인증서 기본 정보 추출
                 String subject = certificate.getSubjectX500Principal().getName();
@@ -395,6 +407,23 @@ public class LdifParser {
         } catch (Exception e) {
             return new CertificateValidationResult(false, "Unexpected error during validation: " + e.getMessage(),
                     null);
+        }
+    }
+
+    private X509Certificate parseX509Certificate(byte[] certBytes) throws CertificateException {
+        // First try BouncyCastle as it can handle explicit EC parameters better
+        try {
+            X509CertificateHolder holder = new X509CertificateHolder(certBytes);
+            return new JcaX509CertificateConverter().setProvider("BC").getCertificate(holder);
+        } catch (Exception ignored) {
+            // Fall back to default CertificateFactory
+        }
+        try (InputStream bis = new ByteArrayInputStream(certBytes)) {
+            return (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bis);
+        } catch (CertificateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CertificateException("Failed to parse X.509 certificate: " + e.getMessage(), e);
         }
     }
 
