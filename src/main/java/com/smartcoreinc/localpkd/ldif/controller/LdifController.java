@@ -1,6 +1,5 @@
 package com.smartcoreinc.localpkd.ldif.controller;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +28,6 @@ import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 
-import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

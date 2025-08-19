@@ -19,8 +19,10 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSProcessable;
 import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.SignerId;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
+import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
@@ -321,14 +323,18 @@ public class CscaMasterListParser {
     private void verifyBySignerCerts(CMSSignedData signedData) throws Exception {
         // 서명자 인증서 검증
         log.debug("서명자 검증 시작!");
-        SignerInformationStore signers = signedData.getSignerInfos();
         Store<X509CertificateHolder> certStore = signedData.getCertificates();
-        for (SignerInformation signer : signers.getSigners()) {
+        
+        SignerInformationStore signerInformationStore = signedData.getSignerInfos();
+        for (SignerInformation signerInformation : signerInformationStore.getSigners()) {
+            SignerId sid = signerInformation.getSID();
             @SuppressWarnings("unchecked")
-            X509CertificateHolder signerCert = (X509CertificateHolder) certStore.getMatches(signer.getSID()).iterator().next();
-            boolean valid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().build(signerCert));
+            X509CertificateHolder signerCertHolder = 
+                (X509CertificateHolder) certStore.getMatches(sid).iterator().next();
+            SignerInformationVerifier siv = new JcaSimpleSignerInfoVerifierBuilder().build(signerCertHolder);
+            boolean valid = signerInformation.verify(siv);
             if (!valid) {
-                log.error("서명자 {} 검증 실패", signer.getSID().toString());
+                log.error("서명자 {} 검증 실패", signerInformation.getSID().toString());
                 throw new SecurityException("서명자 검증 실패");
             }
         }
