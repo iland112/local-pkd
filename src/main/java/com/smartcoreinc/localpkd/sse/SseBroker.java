@@ -18,9 +18,7 @@ public class SseBroker {
     private final Sinks.Many<ProgressEvent> eventPublisher;
     private final ProgressPublisher progressPublisher;
     private ProgressListener progressListener;
-    private MessageListener messageListener;
-
-
+    
     public SseBroker(ProgressPublisher progressPublisher) {
         this.progressPublisher = progressPublisher;
 
