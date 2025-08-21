@@ -1,5 +1,7 @@
 package com.smartcoreinc.localpkd.icaomasterlist.service;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
@@ -26,6 +28,7 @@ import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
@@ -156,29 +159,38 @@ public class CscaMasterListParser {
         initializeParsingSession(fileName, fileSize);
 
         try {
-            // X.509 인증서 Converter Provider를 Bouncy Castle로 지정 
-            JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider("BC");
-            
             // PKCS7-signature message 처리 클래스 생성
             CMSSignedData signedData = new CMSSignedData(data);
-
-            // ICAO/UN 서명자 인증서 검증
-            verifyBySignerCerts(signedData);
-
+            
+            // ICAO/UN CSCA root 인증서로 Master List Trust Anchor 검증
+            ClassPathResource resource = new ClassPathResource("data/UN_CSCA_2.pem");
+            Path path = Paths.get(resource.getURI());
+            String filePath = path.toAbsolutePath().toString();
+            MasterListVerifier mlVerifier = new MasterListVerifier(filePath);
+            boolean isOk = mlVerifier.verify(signedData);
+            if (!isOk) {
+                log.error("Master List 신뢰 체인 검증 실패.");
+                throw new RuntimeException("Master List 신뢰 체인 검증 실패.");
+            }
+            log.debug("Master List 신뢰 체인 검증 성공!!.");
+                        
             // CSCA Master list 데이터 추출
             CMSProcessable signedContent = signedData.getSignedContent();
             byte[] contentBytes = (byte[]) signedContent.getContent();
-
-             // ASN.1 SET OF Certificate 추출
+            
+            // ASN.1 SET OF Certificate 추출
             ASN1InputStream asn1In = new ASN1InputStream(contentBytes);
             try {
                 ASN1Sequence masterListSeq = (ASN1Sequence) asn1In.readObject();
                 ASN1Set certSet = (ASN1Set) masterListSeq.getObjectAt(1);
                 numberOfCertsTotal = certSet.size();
-
+                
                 log.info("총 {}개의 CSCA 인증서 발견", numberOfCertsTotal);
                 publishProgress("분석 시작", 0);
-
+                
+                // X.509 인증서 Converter Provider를 Bouncy Castle로 지정 
+                JcaX509CertificateConverter converter = 
+                    new JcaX509CertificateConverter().setProvider("BC");
                 // 각 인증서 처리
                 processCertificates(certSet, converter, isAddLdap);
                 
@@ -312,33 +324,6 @@ public class CscaMasterListParser {
             log.error(errorMsg, e);
             errorMessages.add(errorMsg);
         }
-    }
-
-    /**
-     * ICAO/UN 서명자 인증서 검증
-     * 
-     * @param signedData: CMSSingedData
-     * @throws Exception
-     */
-    private void verifyBySignerCerts(CMSSignedData signedData) throws Exception {
-        // 서명자 인증서 검증
-        log.debug("서명자 검증 시작!");
-        Store<X509CertificateHolder> certStore = signedData.getCertificates();
-        
-        SignerInformationStore signerInformationStore = signedData.getSignerInfos();
-        for (SignerInformation signerInformation : signerInformationStore.getSigners()) {
-            SignerId sid = signerInformation.getSID();
-            @SuppressWarnings("unchecked")
-            X509CertificateHolder signerCertHolder = 
-                (X509CertificateHolder) certStore.getMatches(sid).iterator().next();
-            SignerInformationVerifier siv = new JcaSimpleSignerInfoVerifierBuilder().build(signerCertHolder);
-            boolean valid = signerInformation.verify(siv);
-            if (!valid) {
-                log.error("서명자 {} 검증 실패", signerInformation.getSID().toString());
-                throw new SecurityException("서명자 검증 실패");
-            }
-        }
-        log.debug("서명자 검증 성공!!");
     }
 
     /**

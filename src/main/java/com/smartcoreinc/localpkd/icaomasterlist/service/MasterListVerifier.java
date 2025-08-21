@@ -23,6 +23,7 @@ import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerId;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
+import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
@@ -93,6 +94,13 @@ public class MasterListVerifier {
         log.info("Starting Master List verification...");
 
         CMSSignedData signedData = new CMSSignedData(mlData);
+        return verify(signedData);
+        
+    }
+
+    public boolean verify(CMSSignedData signedData) throws Exception {
+        log.info("Starting Master List verification ...");
+
         Store<X509CertificateHolder> certStore = signedData.getCertificates();
         SignerInformationStore signerInfos = signedData.getSignerInfos();
 
@@ -135,9 +143,37 @@ public class MasterListVerifier {
             }
             log.info("✅ Signer certificate is trusted via Trust Anchor.");
         }
-
+        
         log.info("✅ Master List verification completed successfully.");
+        
         return true;
+    }
+
+    /**
+     * ICAO/UN 서명자 인증서 검증
+     * 
+     * @param signedData: CMSSingedData
+     * @throws Exception
+     */
+    private void verifyBySignerCerts(CMSSignedData signedData) throws Exception {
+        // 서명자 인증서 검증
+        log.debug("서명자 검증 시작!");
+        Store<X509CertificateHolder> certStore = signedData.getCertificates();
+        
+        SignerInformationStore signerInformationStore = signedData.getSignerInfos();
+        for (SignerInformation signerInformation : signerInformationStore.getSigners()) {
+            SignerId sid = signerInformation.getSID();
+            @SuppressWarnings("unchecked")
+            X509CertificateHolder signerCertHolder = 
+                (X509CertificateHolder) certStore.getMatches(sid).iterator().next();
+            SignerInformationVerifier siv = new JcaSimpleSignerInfoVerifierBuilder().build(signerCertHolder);
+            boolean valid = signerInformation.verify(siv);
+            if (!valid) {
+                log.error("서명자 {} 검증 실패", signerInformation.getSID().toString());
+                throw new SecurityException("서명자 검증 실패");
+            }
+        }
+        log.debug("서명자 검증 성공!!");
     }
 
     private void loadTrustAnchor(String pemPath) throws Exception {
