@@ -84,7 +84,7 @@
                   <form
                     class="space-y-4"
                     hx-encoding="multipart/form-data"
-                    hx:post="@{/icao/csca/upload}"
+                    hx:post="@{/icao/ml/upload}"
                     hx-disabled-elt=".disable-during-request"
                     hx-target="#results-container"
                     hx-swap="innerHTML"
@@ -504,7 +504,7 @@
 
         // 통계 다운로드 함수
         function downloadStatistics() {
-          fetch("/icao/csca/statistics")
+          fetch("/icao/ml/statistics")
             .then((response) => response.json())
             .then((data) => {
               const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -532,7 +532,7 @@
 
         // 상세 보고서 보기
         function viewDetailedReport() {
-          fetch("/icao/csca/statistics")
+          fetch("/icao/ml/statistics")
             .then((response) => response.json())
             .then((data) => {
               showDetailedReportModal(data);

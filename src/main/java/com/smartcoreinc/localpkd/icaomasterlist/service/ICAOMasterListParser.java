@@ -21,13 +21,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSProcessable;
 import org.bouncycastle.cms.CMSSignedData;
-import org.bouncycastle.cms.SignerId;
-import org.bouncycastle.cms.SignerInformation;
-import org.bouncycastle.cms.SignerInformationStore;
-import org.bouncycastle.cms.SignerInformationVerifier;
-import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.util.Store;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -45,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
-public class CscaMasterListParser {
+public class ICAOMasterListParser {
     static {
         Security.addProvider(new BouncyCastleProvider());
     }
@@ -71,7 +65,7 @@ public class CscaMasterListParser {
     private LocalDateTime analysisEndTime;
 
 
-    public CscaMasterListParser(X509CertificateValidator cscaCertificateValidator,
+    public ICAOMasterListParser(X509CertificateValidator cscaCertificateValidator,
                                 CscaLdapAddService cscaCertificateService,
                                 ProgressPublisher progressPublisher) {
         this.certificateValidator = cscaCertificateValidator;
@@ -166,7 +160,7 @@ public class CscaMasterListParser {
             ClassPathResource resource = new ClassPathResource("data/UN_CSCA_2.pem");
             Path path = Paths.get(resource.getURI());
             String filePath = path.toAbsolutePath().toString();
-            MasterListVerifier mlVerifier = new MasterListVerifier(filePath);
+            ICAOMasterListVerifier mlVerifier = new ICAOMasterListVerifier(filePath);
             boolean isOk = mlVerifier.verify(signedData);
             if (!isOk) {
                 log.error("Master List 신뢰 체인 검증 실패.");
@@ -179,8 +173,7 @@ public class CscaMasterListParser {
             byte[] contentBytes = (byte[]) signedContent.getContent();
             
             // ASN.1 SET OF Certificate 추출
-            ASN1InputStream asn1In = new ASN1InputStream(contentBytes);
-            try {
+            try (ASN1InputStream asn1In = new ASN1InputStream(contentBytes)) {
                 ASN1Sequence masterListSeq = (ASN1Sequence) asn1In.readObject();
                 ASN1Set certSet = (ASN1Set) masterListSeq.getObjectAt(1);
                 numberOfCertsTotal = certSet.size();
@@ -202,8 +195,6 @@ public class CscaMasterListParser {
                 publishProgress("분석 완료", 1.0);
             
                 return getValidCertificates();
-            } finally {
-                asn1In.close();
             }
         } catch (Exception e) {
             analysisEndTime = LocalDateTime.now();
@@ -385,7 +376,7 @@ public class CscaMasterListParser {
         
         summary.append(String.format("파일명: %s%n", currentFileName));
         summary.append(String.format("파일크기: %s%n", formatFileSize(currentFileSize)));
-        summary.append(String.format("분석 시작: %s%n", analysisStartTime.format(formatter)));
+        summary.append(String.format("분석시작: %s%n", analysisStartTime.format(formatter)));
         
         if (analysisEndTime != null) {
             summary.append(String.format("분석 완료: %s%n", analysisEndTime.format(formatter)));

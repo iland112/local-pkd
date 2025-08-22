@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.smartcoreinc.localpkd.icaomasterlist.dto.CscaStatistics;
-import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
+import com.smartcoreinc.localpkd.icaomasterlist.service.ICAOMasterListParser;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,9 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/icao/csca")
 public class StatisticsRestController {
 
-    private final CscaMasterListParser parser;
+    private final ICAOMasterListParser parser;
 
-    public StatisticsRestController(CscaMasterListParser parser) {
+    public StatisticsRestController(ICAOMasterListParser parser) {
         this.parser = parser;
     }
 

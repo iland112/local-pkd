@@ -16,17 +16,17 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.smartcoreinc.localpkd.icaomasterlist.dto.CscaStatistics;
-import com.smartcoreinc.localpkd.icaomasterlist.service.CscaMasterListParser;
+import com.smartcoreinc.localpkd.icaomasterlist.service.ICAOMasterListParser;
 import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Controller
-@RequestMapping("/icao/csca")
-public class CscaUploadController {
-    private final CscaMasterListParser parser;
+@RequestMapping("/icao/ml")
+public class ICAOMasterListUploadController {
+    private final ICAOMasterListParser parser;
     
-    public CscaUploadController(CscaMasterListParser parser) {
+    public ICAOMasterListUploadController(ICAOMasterListParser parser) {
         this.parser = parser;
     }
 

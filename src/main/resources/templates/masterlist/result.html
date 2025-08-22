@@ -30,7 +30,7 @@
     <ul>
         <li th:each="cert : ${certs}" th:text="${cert.result}"></li>
     </ul>
-    <a th:href="@{/icao/csca}">다시 업로드</a>
+    <a th:href="@{/icao/ml}">다시 업로드</a>
 </div>
 <th:block layout:fragment="script-content">
     <!-- Add additional scripts there that are only needed for this page (Application wide scripts should be added in layout/main.html) -->

@@ -23,15 +23,17 @@ import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerId;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
-import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * ICAO Master List Signer Cerificate Trust Chain Verifier
+ */
 @Slf4j
-public class MasterListVerifier {
+public class ICAOMasterListVerifier {
     static {
         //BouncyCastle 등록 (JVM 전역 1회)
         if (Security.getProperty("BC") == null) {
@@ -83,7 +85,7 @@ public class MasterListVerifier {
 
     private final Set<X509Certificate> trustAnchors = new HashSet<>();
 
-    public MasterListVerifier(String trustAnchorPemPath) throws Exception {
+    public ICAOMasterListVerifier(String trustAnchorPemPath) throws Exception {
         loadTrustAnchor(trustAnchorPemPath);
     }
 
@@ -98,6 +100,12 @@ public class MasterListVerifier {
         
     }
 
+    /**
+     * Master List Signer 인증서들을 추출하여 
+     * @param signedData
+     * @return
+     * @throws Exception
+     */
     public boolean verify(CMSSignedData signedData) throws Exception {
         log.info("Starting Master List verification ...");
 
@@ -105,12 +113,13 @@ public class MasterListVerifier {
         SignerInformationStore signerInfos = signedData.getSignerInfos();
 
         for (SignerInformation signer : signerInfos.getSigners()) {
-            log.info("Checking signer with SID: {}", signer.getSID());
+            SignerId sid = signer.getSID();
+            log.info("Checking signer with SID: {}", sid.toString());
 
             @SuppressWarnings("unchecked")
-            Collection<X509CertificateHolder> certCollection = certStore.getMatches(signer.getSID());
+            Collection<X509CertificateHolder> certCollection = certStore.getMatches(sid);
             if (certCollection.isEmpty()) {
-                log.warn("No certificate found in Master List for signer {}", signer.getSID());
+                log.warn("No certificate found in Master List for signer {}", sid.toString());
                 continue;
             }
 
@@ -123,7 +132,7 @@ public class MasterListVerifier {
                     signerCert.getSubjectX500Principal(),
                     signerCert.getIssuerX500Principal());
 
-            // 서명 검증
+            // 1) Signer 서명 검증
             boolean sigValid = signer.verify(
                     new JcaSimpleSignerInfoVerifierBuilder()
                             .setProvider("BC")
@@ -131,12 +140,12 @@ public class MasterListVerifier {
             );
 
             if (!sigValid) {
-                log.error("❌ Signature verification failed for signer {}", signer.getSID());
+                log.error("❌ Signature verification failed for signer {}", sid.toString());
                 return false;
             }
-            log.info("✅ Signature verification successful for signer {}", signer.getSID());
+            log.info("✅ Signature verification successful for signer {}", sid.toString());
 
-            // Trust Anchor 체인 검증
+            // 2) Trust Anchor 체인 검증
             if (!isCertTrusted(signerCert)) {
                 log.error("❌ Signer certificate is NOT trusted (no valid path to Trust Anchor).");
                 return false;
@@ -150,32 +159,9 @@ public class MasterListVerifier {
     }
 
     /**
-     * ICAO/UN 서명자 인증서 검증
-     * 
-     * @param signedData: CMSSingedData
-     * @throws Exception
+     * ICAO/UN Trust Anchor 인증서 PEM 파일을 X509 Certificate 객체로 변환하여
+     * Trust Anchor Collection(Set)에 저장한다.
      */
-    private void verifyBySignerCerts(CMSSignedData signedData) throws Exception {
-        // 서명자 인증서 검증
-        log.debug("서명자 검증 시작!");
-        Store<X509CertificateHolder> certStore = signedData.getCertificates();
-        
-        SignerInformationStore signerInformationStore = signedData.getSignerInfos();
-        for (SignerInformation signerInformation : signerInformationStore.getSigners()) {
-            SignerId sid = signerInformation.getSID();
-            @SuppressWarnings("unchecked")
-            X509CertificateHolder signerCertHolder = 
-                (X509CertificateHolder) certStore.getMatches(sid).iterator().next();
-            SignerInformationVerifier siv = new JcaSimpleSignerInfoVerifierBuilder().build(signerCertHolder);
-            boolean valid = signerInformation.verify(siv);
-            if (!valid) {
-                log.error("서명자 {} 검증 실패", signerInformation.getSID().toString());
-                throw new SecurityException("서명자 검증 실패");
-            }
-        }
-        log.debug("서명자 검증 성공!!");
-    }
-
     private void loadTrustAnchor(String pemPath) throws Exception {
         try (InputStream in = new FileInputStream(pemPath)) {
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
