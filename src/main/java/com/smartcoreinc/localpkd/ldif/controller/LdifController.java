@@ -69,15 +69,16 @@ public class LdifController {
             return "redirect:/ldif";
         }
 
+        // 파일 확장자 검증 .ldif 확장명을 가진 화일만 처리
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".ldif")) {
             redirectAttributes.addFlashAttribute("error", "LDIF 파일만 업로드 가능합니다.");
             return "redirect:/ldif";
         }
 
+        log.info("Start processing LDIF file: {}", originalFilename);
+        
         try {
-            log.info("Processing LDIF file: {}", originalFilename);
-
             // 분석 실행
             LdifAnalysisResult analysisResult = ldifParserService.parseLdifFile(file);
 
@@ -87,13 +88,14 @@ public class LdifController {
                 return "redirect:/ldif";
             }
 
+            // 세션을 생성하고 분석 결과를 Session Task Manager 컨테이너에 저장
             String sessionId = generateSessionId();
             sessionTaskManager.getSessionResults().put(sessionId, analysisResult);
                         
             // 요약 정보만 뷰에 전달 - try-catch로 보호
             LdifAnalysisSummary summary = analysisResult.getSummary();
             if (summary == null) {
-                log.error("Summary does not exists");
+                log.error("LDIF 처리 결과 요약 정보가 생성되지 않았습니다.");
                 throw new RuntimeException("Summary does not exists");
             }
 

@@ -129,7 +129,6 @@ public class LdifParser {
     private void processRecord(String recordText, int recordNumber, int lineNumber, ParsingContext context) {
         log.debug("Start processing record #{}", recordNumber);
         try {
-            
             ParseResult parseResult = parseRecord(recordText, recordNumber, lineNumber);
             if (parseResult.entry != null) {
                 context.addEntry(parseResult.entry);
