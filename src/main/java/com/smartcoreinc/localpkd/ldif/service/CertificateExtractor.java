@@ -10,6 +10,9 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSSignedData;
+import org.springframework.stereotype.Component;
+
+import com.smartcoreinc.localpkd.ldif.service.verification.CertificateParsingService;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,15 +20,12 @@ import lombok.extern.slf4j.Slf4j;
  * Master List Content에서 인증서 추출 전담 클래스
  */
 @Slf4j
+@Component
 public class CertificateExtractor {
-    private final CertificateVerifier certificateVerifier;
+    private final CertificateParsingService certificateParsingService;
 
-    public CertificateExtractor() {
-        this.certificateVerifier = new CertificateVerifier();
-    }
-
-    public CertificateExtractor(CertificateVerifier certificateVerifier) {
-        this.certificateVerifier = certificateVerifier;
+    public CertificateExtractor(CertificateParsingService certificateParsingService) {
+        this.certificateParsingService = certificateParsingService;
     }
 
     /**
@@ -92,7 +92,7 @@ public class CertificateExtractor {
                             Arrays.toString(Arrays.copyOf(elementBytes, Math.min(4, elementBytes.length))));
                         
                         if (isDerCertificate(elementBytes)) {
-                            X509Certificate cert = certificateVerifier.parseX509Certificate(elementBytes);
+                            X509Certificate cert = certificateParsingService.parseX509Certificate(elementBytes);
                             if (cert != null) {
                                 certificates.add(cert);
                                 log.debug("Extracted certificate {}: Subject={}", 
@@ -128,7 +128,7 @@ public class CertificateExtractor {
                         try {
                             byte[] certBytes = sequence.getObjectAt(i).toASN1Primitive().getEncoded();
                             if (isDerCertificate(certBytes)) {
-                                X509Certificate cert = certificateVerifier.parseX509Certificate(certBytes);
+                                X509Certificate cert = certificateParsingService.parseX509Certificate(certBytes);
                                 if (cert != null) {
                                     certificates.add(cert);
                                     log.debug("Extracted certificate from SET element {}", i);
@@ -171,7 +171,7 @@ public class CertificateExtractor {
                 
                 try {
                     byte[] certBytes = Arrays.copyOfRange(content, offset, offset + length);
-                    X509Certificate cert = certificateVerifier.parseX509Certificate(certBytes);
+                    X509Certificate cert = certificateParsingService.parseX509Certificate(certBytes);
                     if (cert != null) {
                         certificates.add(cert);
                         certCount++;
@@ -228,7 +228,7 @@ public class CertificateExtractor {
             List<X509Certificate> certificates = new ArrayList<>();
             
             if (isDerCertificate(content)) {
-                X509Certificate cert = certificateVerifier.parseX509Certificate(content);
+                X509Certificate cert = certificateParsingService.parseX509Certificate(content);
                 if (cert != null) {
                     certificates.add(cert);
                     log.debug("Extracted single certificate: {} bytes", content.length);

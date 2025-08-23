@@ -1,32 +1,35 @@
 package com.smartcoreinc.localpkd.ldif.service;
 
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 인증서 체인 검증 결과
  */
 public class CertificateChainValidationResult {
-    private final boolean isValid;
+    private final boolean valid;
     private final String message;
+    private final String errorMessage;
     private final List<X509Certificate> certificateChain;
-
-    private CertificateChainValidationResult(boolean isValid, String message, List<X509Certificate> certificateChain) {
-        this.isValid = isValid;
+    
+    private CertificateChainValidationResult(boolean valid, String message, String errorMessage, 
+                                            List<X509Certificate> certificateChain) {
+        this.valid = valid;
         this.message = message;
-        this.certificateChain = certificateChain != null ? certificateChain : new ArrayList<>();
+        this.errorMessage = errorMessage;
+        this.certificateChain = certificateChain;
     }
-
-    public static CertificateChainValidationResult valid(String message, List<X509Certificate> chain) {
-        return new CertificateChainValidationResult(true, message, chain);
+    
+    public static CertificateChainValidationResult valid(String message, List<X509Certificate> certificateChain) {
+        return new CertificateChainValidationResult(true, message, null, certificateChain);
     }
-
-    public static CertificateChainValidationResult invalid(String message) {
-        return new CertificateChainValidationResult(false, message, null);
+    
+    public static CertificateChainValidationResult invalid(String errorMessage) {
+        return new CertificateChainValidationResult(false, null, errorMessage, null);
     }
-
-    public boolean isValid() { return isValid; }
+    
+    public boolean isValid() { return valid; }
     public String getMessage() { return message; }
+    public String getErrorMessage() { return errorMessage; }
     public List<X509Certificate> getCertificateChain() { return certificateChain; }
 }

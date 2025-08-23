@@ -96,6 +96,22 @@ public class LdifController {
                 log.error("Summary does not exists");
                 throw new RuntimeException("Summary does not exists");
             }
+
+            // certificateValidationStats null 체크 및 안전한 처리
+            Map<String, Integer> certificateStats = summary.getCertificateValidationStats();
+            if (certificateStats == null) {
+                certificateStats = new HashMap<>();
+                summary.setCertificateValidationStats(certificateStats);
+            }
+
+            // null 값들을 0으로 초기화
+            certificateStats.putIfAbsent("total", 0);
+            certificateStats.putIfAbsent("valid", 0);
+            certificateStats.putIfAbsent("invalid", 0);
+            certificateStats.putIfAbsent("totalMasterLists", 0);
+            certificateStats.putIfAbsent("validMasterLists", 0);
+            certificateStats.putIfAbsent("invalidMasterLists", 0);
+
             model.addAttribute("summary", summary);
             model.addAttribute("sessionId", sessionId);
             model.addAttribute("fileName", originalFilename);
@@ -283,11 +299,10 @@ public class LdifController {
                 log.warn("Currently, There is no subscripted listeners");
                 return;
             } else {
-                Map<String, Object> completeData = new HashMap<>();
-                completeData.put("type", "complete");
-                completeData.put("savedCount", savedCount);
-                completeData.put("totalCount", totalCount);
-                progressPublisher.notifyProgressListeners(null);
+                Progress progress = new Progress(1.0, taskId);
+                ProgressEvent completionEvent = new ProgressEvent(progress, totalCount, totalCount, 
+                        "Completed: %d/%d saved".formatted(savedCount, totalCount));
+                progressPublisher.notifyProgressListeners(completionEvent);
                 log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
             }
         } catch (Exception e) {
@@ -305,10 +320,10 @@ public class LdifController {
                 log.warn("Currently, There is no subscripted listeners");
                 return;
             } else {
-                Map<String, Object> errorData = new HashMap<>();
-                errorData.put("type", "error");
-                errorData.put("message", "저장 중 오류가 발생했습니다: " + throwable.getMessage());
-                progressPublisher.notifyProgressListeners(null);
+                Progress errorProgress = new Progress(0.0, taskId);
+                ProgressEvent errorEvent = new ProgressEvent(errorProgress, 0, 0, 
+                        "Error: " + throwable.getMessage());
+                progressPublisher.notifyProgressListeners(errorEvent);
             }
         } catch (Exception e) {
             log.error("Error in save error handling: {}", e.getMessage(), e);
