@@ -9,9 +9,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
  * LDIF 레코드 (Entry) Dto
  */ 
 public class LdifEntryDto {
-    private String dn;
-    private String entryType;   // ADD, MODIFY, DELETE
-    private Map<String, List<String>> attributes;
+    private String dn;                              // DN(Distinguished Name)
+    private String entryType;                       // ADD, MODIFY, DELETE
+    private Map<String, List<String>> attributes;   // Entry 속성들
     
     @JsonIgnore
     private String originalLdif;

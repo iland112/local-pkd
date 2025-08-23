@@ -7,17 +7,17 @@ public class MasterListInfo {
     private final String countryCode;
     private final int certificateCount;
     private final boolean signatureValid;
-    private final long lastUpdated;
-
-    public MasterListInfo(String countryCode, int certificateCount, boolean signatureValid, long lastUpdated) {
+    private final long timestamp;
+    
+    public MasterListInfo(String countryCode, int certificateCount, boolean signatureValid, long timestamp) {
         this.countryCode = countryCode;
         this.certificateCount = certificateCount;
         this.signatureValid = signatureValid;
-        this.lastUpdated = lastUpdated;
+        this.timestamp = timestamp;
     }
-
+    
     public String getCountryCode() { return countryCode; }
     public int getCertificateCount() { return certificateCount; }
     public boolean isSignatureValid() { return signatureValid; }
-    public long getLastUpdated() { return lastUpdated; }
+    public long getTimestamp() { return timestamp; }
 }

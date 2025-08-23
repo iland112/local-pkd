@@ -11,16 +11,15 @@ public class CertificateInfo {
     private final String serialNumber;
     private final Date notBefore;
     private final Date notAfter;
-
-    public CertificateInfo(String subject, String issuer, String serialNumber, 
-            Date notBefore, Date notAfter) {
+    
+    public CertificateInfo(String subject, String issuer, String serialNumber, Date notBefore, Date notAfter) {
         this.subject = subject;
         this.issuer = issuer;
         this.serialNumber = serialNumber;
         this.notBefore = notBefore;
         this.notAfter = notAfter;
     }
-
+    
     public String getSubject() { return subject; }
     public String getIssuer() { return issuer; }
     public String getSerialNumber() { return serialNumber; }
