@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.smartcoreinc.localpkd.ldaphelper.NameDeserializer;
 import com.smartcoreinc.localpkd.ldaphelper.NameSerializer;
 
-@Entry(base = "dc=ml-data,dc=download,dc=pkd", objectClasses = {"top", "device", "cscaCertificateObject"})
+@Entry(base = "dc=ml-data,dc=download,dc=pkd", objectClasses = {"top", "device", "cscaCertificateObject", "pkiCA"})
 public final class CscaCertificate {
 
     @Id
@@ -43,7 +43,7 @@ public final class CscaCertificate {
     @Attribute(name = "description")
     private String valid;   // valid, expired, revoked
     
-    @Attribute(name = "cscaCertificate", type = Attribute.Type.BINARY)
+    @Attribute(name = "cACertificate;binary", type = Attribute.Type.BINARY)
     private byte[] certificate;
     
     public CscaCertificate() {}
