@@ -56,7 +56,7 @@ public class CscaLdapAddService {
 
             // 2. DirContextAdapter를 사용하여 항목의 속성을 설정합니다.
             DirContextAdapter context = new DirContextAdapter(dn);
-            context.setAttributeValues("objectClass", new String[]{"top", "device", "cscaCertificateObject"});
+            context.setAttributeValues("objectClass", new String[]{"top", "device", "cscaCertificateObject", "pkiCA"});
             context.setAttributeValue("cn", cnValue);
             context.setAttributeValue("countryCode", countryCode);
             String issuerDn = LdapDnUtil.getLdapCompatibleDn(certificate);
