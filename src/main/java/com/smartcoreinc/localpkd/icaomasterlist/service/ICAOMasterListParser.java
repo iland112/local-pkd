@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.x509.Certificate;
@@ -40,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 public class ICAOMasterListParser {
+
     static {
         Security.addProvider(new BouncyCastleProvider());
     }
@@ -119,36 +121,31 @@ public class ICAOMasterListParser {
      * CscaLdapAddService에 전달하여 LDAP(local PKD)등록한다.
      * 
      * @param data Master List 파일 데이터
-     * @param isAddLdap LDAP 저장 여부 플래그
      * @param fileName 파일명 (통계용)
-     * @return 파싱 결과, 유효한 CSCA 인증서들만 리턴
+     * @param isAddLdap LDAP 저장 여부 플래그
      * @throws Exception 파싱 중 발생한 예외
      */
-    public List<X509Certificate> parseMasterList(byte[] data, boolean isAddLdap, String fileName) throws Exception {
-        return parseMasterList(data, isAddLdap, fileName, data.length);
+    public void parseMasterList(byte[] data, String fileName, boolean isAddLdap) throws Exception {
+        parseMasterList(data, fileName, data.length, isAddLdap);
     }
 
     /**
      * ICAO Master List 파일 분석 (기존 호환성 유지)
      */
-    public List<X509Certificate> parseMasterList(byte[] data, boolean isAddLdap) throws Exception {
-        return parseMasterList(data, isAddLdap, "unknown.ml", data.length);
+    public void parseMasterList(byte[] data, boolean isAddLdap) throws Exception {
+        parseMasterList(data, "unknown.ml", data.length, isAddLdap);
     }
 
     /**
      * ICAO Master List 파일 분석 - 완전한 매개변수 버전
      * 
      * @param data Master List 파일 데이터
-     * @param isAddLdap LDAP 저장 여부 플래그
      * @param fileName 파일명
      * @param fileSize 파일 크기
-     * @return 유효한 인증서 리스트
+     * @param isAddLdap LDAP 저장 여부 플래그
      * @throws Exception 파싱 중 발생한 예외
      */
-    public List<X509Certificate> parseMasterList(byte[] data,
-                                                 boolean isAddLdap,
-                                                 String fileName,
-                                                 long fileSize) throws Exception {
+    public void parseMasterList(byte[] data, String fileName, long fileSize, boolean isAddLdap) throws Exception {
         // 초기화
         initializeParsingSession(fileName, fileSize);
 
@@ -167,6 +164,7 @@ public class ICAOMasterListParser {
                 throw new RuntimeException("Master List 신뢰 체인 검증 실패.");
             }
             log.debug("Master List 신뢰 체인 검증 성공!!.");
+            publishProgress("Master List 신뢰 체인 검증 성공", 0);
                         
             // CSCA Master list 데이터 추출
             CMSProcessable signedContent = signedData.getSignedContent();
@@ -174,8 +172,10 @@ public class ICAOMasterListParser {
             
             // ASN.1 SET OF Certificate 추출
             try (ASN1InputStream asn1In = new ASN1InputStream(contentBytes)) {
-                ASN1Sequence masterListSeq = (ASN1Sequence) asn1In.readObject();
-                ASN1Set certSet = (ASN1Set) masterListSeq.getObjectAt(1);
+                ASN1Primitive root = asn1In.readObject();
+                if (!(root instanceof ASN1Sequence seq) || seq.size() < 2 || !(seq.getObjectAt(1) instanceof ASN1Set certSet)) {
+                    throw new IllegalStateException("Unexpected ML content structure");
+                }
                 numberOfCertsTotal = certSet.size();
                 
                 log.info("총 {}개의 CSCA 인증서 발견", numberOfCertsTotal);
@@ -193,8 +193,6 @@ public class ICAOMasterListParser {
                     validCerts.size(), invalidCerts.size(), cscaCountByCountry.size());
             
                 publishProgress("분석 완료", 1.0);
-            
-                return getValidCertificates();
             }
         } catch (Exception e) {
             analysisEndTime = LocalDateTime.now();

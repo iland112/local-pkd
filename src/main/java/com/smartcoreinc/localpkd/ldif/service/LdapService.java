@@ -160,12 +160,11 @@ public class LdapService {
                 String dcValue = lastRdn.substring(3);
                 BasicAttribute dcAttr = new BasicAttribute("dc", dcValue);
                 BasicAttribute ocAttr = new BasicAttribute("objectClass");
-                ocAttr.add("dcObject");
-                ocAttr.add("organization");
+                ocAttr.add("top");
+                ocAttr.add("domain");
                 
                 attrs.put(dcAttr);
                 attrs.put(ocAttr);
-                attrs.put(new BasicAttribute("o", dcValue)); // organization attribute
             } else if (lastRdn.startsWith("ou=")) {
                 String ouValue = lastRdn.substring(3);
                 BasicAttribute ouAttr = new BasicAttribute("ou", ouValue);
@@ -178,6 +177,7 @@ public class LdapService {
                 String oValue = lastRdn.substring(2);
                 BasicAttribute oAttr = new BasicAttribute("o", oValue);
                 BasicAttribute ocAttr = new BasicAttribute("objectClass");
+                ocAttr.add("top");
                 ocAttr.add("organization");
                 
                 attrs.put(oAttr);
@@ -186,6 +186,7 @@ public class LdapService {
                 String cValue = lastRdn.substring(2);
                 BasicAttribute cAttr = new BasicAttribute("c", cValue);
                 BasicAttribute ocAttr = new BasicAttribute("objectClass");
+                ocAttr.add("top");
                 ocAttr.add("country");
                 
                 attrs.put(cAttr);

@@ -3,10 +3,10 @@ package com.smartcoreinc.localpkd.icaomasterlist.service;
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
 import java.util.HexFormat;
-
 import javax.naming.InvalidNameException;
 import javax.naming.Name;
 import javax.naming.ldap.LdapName;
+import javax.security.auth.x500.X500Principal;
 
 import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.ldap.core.LdapTemplate;
@@ -36,35 +36,42 @@ public class CscaLdapAddService {
     public CscaCertificate save(X509Certificate certificate, String valid) {
         CscaCertificate cscaCertificate = new CscaCertificate();
         try {
-            // 1.
+            // 1. Base DN 설정
             String baseDn = "dc=ml-data,dc=download,dc=pkd";
-            // createParentIfNotFound(baseDn);
             
             String subject = certificate.getSubjectX500Principal().getName();
-            String countryCode = extractCountryCode(subject);
-            // String countryDn = "c=%s,%s".formatted(countryCode, baseDn);
-            // createParentIfNotFound(countryDn);
+            String countryCode = extractCountryCodeFromDN(subject);
             
-            String organizationDn = "o=csca,c=%s,%s".formatted(countryCode, baseDn);
-            createParentIfNotFound(organizationDn);
+            String organizationalUnitDn = "ou=csca,c=%s,%s".formatted(countryCode, baseDn);
+            createParentIfNotFound(organizationalUnitDn);
            
             String fingerprint = getCertificateFingerprint(certificate);
             String cnValue = String.format("CSCA-%s-%s", countryCode, fingerprint);
             // String dn = String.format("cn=%s,%s", cnValue, cscaDn);
             
             // 2. DN을 직접 구성합니다.
-            Name dn = LdapNameBuilder.newInstance(organizationDn)
+            Name dn = LdapNameBuilder.newInstance(organizationalUnitDn)
                                      .add("cn", cnValue)
                                      .build();
 
             // 2. DirContextAdapter를 사용하여 항목의 속성을 설정합니다.
             DirContextAdapter context = new DirContextAdapter(dn);
-            context.setAttributeValues("objectClass", new String[]{"top", "person", "organizationalPerson", "inetOrgPerson", "pkiCA"});
-            context.setAttributeValue("gn", certificate.getSubjectX500Principal().getName());
-            context.setAttributeValue("ou", certificate.getIssuerX500Principal().getName());
-            context.setAttributeValue("sn", certificate.getSerialNumber().toString());
+            context.setAttributeValues("objectClass", new String[]{"top", "device", "cscaCertificateObject"});
+            context.setAttributeValue("cn", cnValue);
+            context.setAttributeValue("countryCode", countryCode);
+            String issuerDn = LdapDnUtil.getLdapCompatibleDn(certificate);
+            context.setAttributeValue("issuer", issuerDn);
+            context.setAttributeValue("serialNumber", certificate.getSerialNumber().toString());
+            context.setAttributeValue("cscaFingerprint", fingerprint);
+            // GeneralizedTime(UTC) 변환
+            java.text.SimpleDateFormat ldapTime = new java.text.SimpleDateFormat("yyyyMMddHHmmss'Z'");
+            ldapTime.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            context.setAttributeValue("notBefore", ldapTime.format(certificate.getNotBefore()));
+            context.setAttributeValue("notAfter",  ldapTime.format(certificate.getNotAfter()));
             context.setAttributeValue("description", valid);
-            context.setAttributeValue("cACertificate;binary", certificate.getEncoded());
+
+            // DER 바이너리 (스키마: cscaCertificate = OCTET STRING)
+            context.setAttributeValue("cscaCertificate", certificate.getEncoded());
 
             // 3. LdapTemplate의 bind() 메서드로 항목을 생성합니다.
             ldapTemplate.bind(dn, context, null);
@@ -85,7 +92,12 @@ public class CscaLdapAddService {
         return cscaCertificate;
     }
 
-    private String extractCountryCode(String dn) {
+    /**
+     * DN 값으로 부터 2자리 국가 코드 추출하여 리턴 
+     * @param dn : String
+     * @return String : 2자리 국가 코드
+     */
+    private String extractCountryCodeFromDN(String dn) {
         for (String part : dn.split(",")) {
             part = part.trim();
             if (part.startsWith("C=")) {
@@ -95,12 +107,19 @@ public class CscaLdapAddService {
         return "UNKNOWN";
     }
 
+    /**
+     * X.509 인증서 Fingerprint계산하여 16진수 문자열로 리턴
+     * 
+     * @param cert : java.security.cert.X509Certificate
+     * @return String (HexString)
+     * @throws Exception
+     */
     private String getCertificateFingerprint(X509Certificate cert) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
         byte[] encoded = cert.getEncoded();
         byte[] fingerprint = digest.digest(encoded);
 
-        return HexFormat.of().formatHex(fingerprint);
+        return HexFormat.of().formatHex(fingerprint).toUpperCase();
     }
 
     /**

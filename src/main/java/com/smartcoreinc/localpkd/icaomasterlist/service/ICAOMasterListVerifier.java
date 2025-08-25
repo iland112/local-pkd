@@ -10,12 +10,9 @@ import java.security.cert.PKIXBuilderParameters;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509CertSelector;
 import java.security.cert.X509Certificate;
-import java.time.Instant;
-import java.util.ArrayList;
+import java.text.SimpleDateFormat;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -23,9 +20,11 @@ import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerId;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
+import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
+import org.springframework.core.io.ClassPathResource;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,52 +40,15 @@ public class ICAOMasterListVerifier {
         }
     }
 
-    /** 검증 옵션 */
-    public static class VerifyOptions {
-        /** 신뢰 루트(TrustAnchor) 세트. (ICAO/UN 루트/중간 등 신뢰 앵커) */
-        public Set<TrustAnchor> trustAnchors = new HashSet<>();
-        /** 허용 정책 OID (예: ICAO/UN Master List 정책 OID들). 비워두면 정책 강제 미적용 */
-        public Set<String> requiredPolicyOids = new HashSet<>();
-        /** 정책 한정자 거부 여부 (일반적으로 false 권장) */
-        public boolean rejectPolicyQualifiers = false;
-        /** CRL/OCSP 사용 여부 (기본: false) */
-        public boolean enableRevocation = false;
-        /** OCSP soft-fail(네트워크 실패 시 통과) 여부 */
-        public boolean ocspSoftFail = true;
-        /** 검증 기준시각 (기본: now) */
-        public Date validationTime = Date.from(Instant.now());
-        /** 금지 해시/서명 알고리즘 (예: SHA1 등) */
-        public Set<String> bannedSigAlgs = Set.of("MD5withRSA", "SHA1withRSA", "SHA1withECDSA");
-        /** 서명시간(signingTime) 사용 시, 인증서 유효기간 안에 있어야 하는지 */
-        public boolean requiredSigningTimeInsideCertValidity = true;
-    }
-
-    /** 서명자별 검증 결과 */
-    public static class SingerReport {
-        public SignerId signerId;
-        public X509Certificate signerCert;
-        public boolean signatureValid;
-        public boolean pathValid;
-        public String policyMatched;    // 매칭된 정책 OID (있다면)
-        public List<String> notes = new ArrayList<>();
-    }
-
-    /** 전체 결과 */
-    public static class VerificationResult {
-        public byte[] eContent; // 포함 서명인 경우 원문
-        public List<SingerReport> singerReports = new ArrayList<>();
-        public boolean allSignaturesValid() {
-            return singerReports.stream().allMatch(r -> r.signatureValid);
-        }
-        public boolean allPathValid() {
-            return singerReports.stream().allMatch(r -> r.pathValid);
-        }
-    }
-
     private final Set<X509Certificate> trustAnchors = new HashSet<>();
 
     public ICAOMasterListVerifier(String trustAnchorPemPath) throws Exception {
-        loadTrustAnchor(trustAnchorPemPath);
+        try {
+            loadTrustAnchor(trustAnchorPemPath);
+        } catch (Exception e) {
+            log.error("ICAOMasterListVerifier 생성자 오류: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -114,16 +76,14 @@ public class ICAOMasterListVerifier {
 
         for (SignerInformation signer : signerInfos.getSigners()) {
             SignerId sid = signer.getSID();
-            log.info("Checking signer with SID: {}", sid.toString());
-
             @SuppressWarnings("unchecked")
             Collection<X509CertificateHolder> certCollection = certStore.getMatches(sid);
             if (certCollection.isEmpty()) {
                 log.warn("No certificate found in Master List for signer {}", sid.toString());
                 continue;
             }
-
             X509CertificateHolder holder = certCollection.iterator().next();
+            // JCA X.509 인증서로 변환
             X509Certificate signerCert = new JcaX509CertificateConverter()
                     .setProvider("BC")
                     .getCertificate(holder);
@@ -133,12 +93,10 @@ public class ICAOMasterListVerifier {
                     signerCert.getIssuerX500Principal());
 
             // 1) Signer 서명 검증
-            boolean sigValid = signer.verify(
-                    new JcaSimpleSignerInfoVerifierBuilder()
+            SignerInformationVerifier siv = new JcaSimpleSignerInfoVerifierBuilder()
                             .setProvider("BC")
-                            .build(holder)
-            );
-
+                            .build(holder);
+            boolean sigValid = signer.verify(siv);
             if (!sigValid) {
                 log.error("❌ Signature verification failed for signer {}", sid.toString());
                 return false;
@@ -163,14 +121,25 @@ public class ICAOMasterListVerifier {
      * Trust Anchor Collection(Set)에 저장한다.
      */
     private void loadTrustAnchor(String pemPath) throws Exception {
-        try (InputStream in = new FileInputStream(pemPath)) {
+        try (InputStream is = new FileInputStream(pemPath)) {
+            // JCA X.509 인증서로 변환
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
-            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(in);
+            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(is);
+            // 유효일 검사
+            cert.checkValidity();
+            // Trust Anchor 컨테이너에 저장
             trustAnchors.add(cert);
-            log.info("Loaded Trust Anchor: Subject={}, Issuer={}, Serial={}",
-                    cert.getSubjectX500Principal(),
-                    cert.getIssuerX500Principal(),
-                    cert.getSerialNumber());
+
+            // Debug Message
+            SimpleDateFormat sdFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            log.debug(
+                "Loaded Certificate to Trust Anchor: Subject={}, Serial={}, NotBefore={}, NotAfter={}",
+                cert.getSubjectX500Principal(),
+                cert.getIssuerX500Principal(),
+                cert.getSerialNumber(),
+                sdFormat.format(cert.getNotBefore()),
+                sdFormat.format(cert.getNotAfter())
+            );
         }
     }
 
