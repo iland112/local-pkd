@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.smartcoreinc.localpkd.ldaphelper.NameDeserializer;
 import com.smartcoreinc.localpkd.ldaphelper.NameSerializer;
 
-@Entry(base = "dc=ml-data,dc=download,dc=pkd", objectClasses = {"top", "person", "organizationalPerson", "inetOrgPerson", "pkiCA"})
+@Entry(base = "dc=ml-data,dc=download,dc=pkd", objectClasses = {"top", "device", "cscaCertificateObject"})
 public final class CscaCertificate {
 
     @Id
@@ -19,19 +19,31 @@ public final class CscaCertificate {
     @JsonDeserialize(using = NameDeserializer.class)
     private Name dn;
 
-    @Attribute(name = "gn")
-    private String subjectName;
+    @Attribute(name = "cn")
+    private String cn; // CSCA-[국가코드]-[인증서 SHA-1 지문]
 
-    @Attribute(name = "ou")
-    private String issuerName;
+    @Attribute(name = "countryConde")
+    private String countryCode; // 2자리 국가 코드
 
-    @Attribute(name = "sn")
-    private String seralNumber;
+    @Attribute(name = "issuer")
+    private String issuer; // 발급자 DN
+
+    @Attribute(name = "serialNumber")
+    private String serialNumber; // 인증서 시리얼 번호
+
+    @Attribute(name = "cscaFingerprint")
+    private String fingerprint; // 2자리 국가 코드
+
+    @Attribute(name = "notBefore")
+    private String notBefore;
+
+    @Attribute(name = "notAfter")
+    private String notAfter;
 
     @Attribute(name = "description")
-    private String valid;
+    private String valid;   // valid, expired, revoked
     
-    @Attribute(name = "cACertificate;binary", type = Attribute.Type.BINARY)
+    @Attribute(name = "cscaCertificate", type = Attribute.Type.BINARY)
     private byte[] certificate;
     
     public CscaCertificate() {}
@@ -44,28 +56,60 @@ public final class CscaCertificate {
         this.dn = dn;
     }
 
-    public String getSubjectName() {
-        return subjectName;
+    public String getCn() {
+        return cn;
     }
 
-    public void setSubjectName(String subjectName) {
-        this.subjectName = subjectName;
+    public void setCn(String cn) {
+        this.cn = cn;
     }
 
-    public String getIssuerName() {
-        return issuerName;
+    public String getCountryCode() {
+        return countryCode;
     }
 
-    public void setIssuerName(String issuerName) {
-        this.issuerName = issuerName;
+    public void setCountryCode(String countryCode) {
+        this.countryCode = countryCode;
     }
 
-    public String getSeralNumber() {
-        return seralNumber;
+    public String getIssuer() {
+        return issuer;
     }
 
-    public void setSeralNumber(String seralNumber) {
-        this.seralNumber = seralNumber;
+    public void setIssuer(String issuer) {
+        this.issuer = issuer;
+    }
+
+    public String getSerialNumber() {
+        return serialNumber;
+    }
+
+    public void setSerialNumber(String serialNumber) {
+        this.serialNumber = serialNumber;
+    }
+
+    public String getFingerprint() {
+        return fingerprint;
+    }
+
+    public void setFingerprint(String fingerprint) {
+        this.fingerprint = fingerprint;
+    }
+
+    public String getNotBefore() {
+        return notBefore;
+    }
+
+    public void setNotBefore(String notBefore) {
+        this.notBefore = notBefore;
+    }
+
+    public String getNotAfter() {
+        return notAfter;
+    }
+
+    public void setNotAfter(String notAfter) {
+        this.notAfter = notAfter;
     }
 
     public String getValid() {
@@ -83,7 +127,5 @@ public final class CscaCertificate {
     public void setCertificate(byte[] certificate) {
         this.certificate = certificate;
     }
-
-    
 
 }

@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd;
+package com.smartcoreinc.localpkd.validator;
 
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;

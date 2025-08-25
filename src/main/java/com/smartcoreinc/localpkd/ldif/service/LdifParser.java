@@ -37,12 +37,12 @@ public class LdifParser {
 
     private static final List<String> BINARY_ATTRIBUTES = Arrays.asList(
             "userCertificate", "caCertificate", "crossCertificatePair",
-            "certificateRevocationList", "authorityRevocationList", 
+            "certificateRevocationList", "authorityRevocationList",
             "pkdMasterListContent", "pkdDscCertificate");
 
     public LdifParser(ProgressPublisher progressPublisher,
-                      CertificateVerifier certificateVerifier,
-                      BinaryAttributeProcessor binaryAttributeProcessor) {
+            CertificateVerifier certificateVerifier,
+            BinaryAttributeProcessor binaryAttributeProcessor) {
         this.progressPublisher = progressPublisher;
         this.certificateVerifier = certificateVerifier;
         this.binaryAttributeProcessor = binaryAttributeProcessor;
@@ -56,7 +56,7 @@ public class LdifParser {
 
         ParsingContext context = new ParsingContext();
 
-        // UI의 Progress Bar 표시를 위해 파일의 전체 라인 수를 계산 
+        // UI의 Progress Bar 표시를 위해 파일의 전체 라인 수를 계산
         int totalLines = countLines(file);
         log.info("파일의 전체 라인 수: {}", totalLines);
 
@@ -76,7 +76,8 @@ public class LdifParser {
     /**
      * LDIF 파일 처리 (라인별 파싱)
      */
-    private void processLdifFile(BufferedReader bufferedReader, ParsingContext context, int totalLines) throws IOException {
+    private void processLdifFile(BufferedReader bufferedReader, ParsingContext context, int totalLines)
+            throws IOException {
         StringBuilder currentRecord = new StringBuilder();
         int processedLines = 0;
         int lineNumber = 0;
@@ -134,9 +135,15 @@ public class LdifParser {
                 context.addEntry(parseResult.entry);
                 context.updateStatistics(parseResult);
 
-                // 국가별 통계 업데이트
+                // 국가별 통계 업데이트 - 국가 코드가 있는 경우에만
                 String countryCode = extractCountryCodeFromDN(parseResult.entry.getDn());
-                context.addCountryStat(countryCode);
+                if (!"UNKNOWN".equals(countryCode)) {
+                    context.addCountryStat(countryCode);
+                    log.debug("Added country stat for: {} (DN: {})", countryCode, parseResult.entry.getDn());
+                } else {
+                    log.debug("Skipped country stat for entry without country code (DN: {})",
+                            parseResult.entry.getDn());
+                }
             }
         } catch (Exception e) {
             String error = String.format("Record %d (around line %d): %s", recordNumber, lineNumber, e.getMessage());
@@ -149,20 +156,37 @@ public class LdifParser {
     /**
      * 레코드 파싱
      */
-    private ParseResult parseRecord(String recordText, int recordNumber, int lineNumber) throws LDIFException, IOException {
-        // 커스텀 파싱으로 바이너리 속성 처리
-        BinaryAttributeProcessor.ProcessResult binaryResult = 
-            binaryAttributeProcessor.processBinaryAttributes(recordText, recordNumber);
+    private ParseResult parseRecord(String recordText, int recordNumber, int lineNumber)
+            throws LDIFException, IOException {
+        log.debug("Start processing record #{}", recordNumber);
+
+        // 1. 먼저 binary attribute 존재 여부를 빠르게 쳌,
+        boolean hasBinaryAttributes = hasBinaryAttributes(recordText);
+
+        BinaryAttributeProcessor.ProcessResult binaryResult;
+
+        if (hasBinaryAttributes) {
+            // Binary attribute가 있는 경우만 커스텀 파싱 실행
+            log.debug("Record {} contains binary attributes, using binary processor", recordNumber);
+            binaryResult = binaryAttributeProcessor.processBinaryAttributes(recordText, recordNumber);
+        } else {
+            // Binary attribute가 없는 경우 빈 결과 객체 생성
+            log.debug("Record {} has no binary attributes, skipping binary processing", recordNumber);
+            binaryResult = createEmptyProcessResult();
+        }
 
         // UnboundID LDIF 파서로 엔트리 파싱
         try (StringReader stringReader = new StringReader(recordText);
                 LDIFReader ldifReader = new LDIFReader(new BufferedReader(stringReader))) {
-            
+
             Entry entry = ldifReader.readEntry();
             log.debug("Parsed entry DN: {}", entry.getDN());
-            
+
             if (entry != null) {
-                LdifEntryDto entryDto = convertToEntryDto(entry, "ADD", binaryResult.getBinaryAttributes());
+                // Binary attribute 유무에 따라 다른 변환 방법 사용
+                LdifEntryDto entryDto = hasBinaryAttributes
+                        ? convertToEntryDto(entry, "ADD", binaryResult.getBinaryAttributes())
+                        : convertToEntryDtoSimple(entry, "ADD");
                 return new ParseResult(entryDto, binaryResult);
             } else {
                 return new ParseResult(null, binaryResult);
@@ -172,6 +196,67 @@ public class LdifParser {
                     "LDIF parsing error in record " + recordNumber + ": " + e.getMessage(),
                     lineNumber, true, e);
         }
+    }
+
+    private boolean hasBinaryAttributes(String recordText) {
+        // "::" 패턴이 있는지 체크 (Base64 인코딩된 값의 표시)
+        if (!recordText.contains("::")) {
+            return false;
+        }
+
+        // 실제 binary attribute인지 확인
+        String[] lines = recordText.split("\n");
+        for (String line : lines) {
+            line = line.trim();
+            if (line.contains("::")) {
+                String[] parts = line.split("::", 2);
+                if (parts.length == 2) {
+                    String attrName = parts[0].trim();
+                    if (isBinaryAttribute(attrName)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 더 최적화된 binary attribute 체크 (정규식 사용)
+     */
+    private static final java.util.regex.Pattern BINARY_ATTR_PATTERN = java.util.regex.Pattern.compile(
+            "^\\s*(userCertificate|caCertificate|crossCertificatePair|" +
+                    "certificateRevocationList|authorityRevocationList|" +
+                    "pkdMasterListContent|pkdDscCertificate)\\s*::",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.MULTILINE);
+
+    /**
+     * 정규식을 사용한 더 빠른 binary attribute 체크 (대안)
+     */
+    private boolean hasBinaryAttributesRegex(String recordText) {
+        return BINARY_ATTR_PATTERN.matcher(recordText).find();
+    }
+
+    /**
+     * Binary attribute가 없는 경우를 위한 빈 ProcessResult 생성
+     */
+    private BinaryAttributeProcessor.ProcessResult createEmptyProcessResult() {
+        return new BinaryAttributeProcessor.ProcessResult();
+    }
+
+    /**
+     * Binary attribute가 없는 단순한 엔트리를 위한 경량화된 변환 메서드
+     */
+    private LdifEntryDto convertToEntryDtoSimple(Entry entry, String entryType) {
+        Map<String, List<String>> attributes = new HashMap<>();
+
+        for (Attribute attribute : entry.getAttributes()) {
+            String attributeName = attribute.getName();
+            String[] values = attribute.getValues();
+            attributes.put(attributeName, Arrays.asList(values));
+        }
+
+        return new LdifEntryDto(entry.getDN(), entryType, attributes, entry.toLDIFString());
     }
 
     /**
@@ -210,7 +295,7 @@ public class LdifParser {
      */
     private LdifAnalysisResult buildAnalysisResult(ParsingContext context) {
         LdifAnalysisSummary summary = new LdifAnalysisSummary();
-        
+
         // 기본 통계
         summary.setErrors(context.getErrors());
         summary.setWarnings(context.getWarnings());
@@ -223,22 +308,19 @@ public class LdifParser {
 
         // PKD 통계 업데이트
         summary.updateCertificateStats(
-            context.getTotalCertificates(), 
-            context.getValidCertificates(), 
-            context.getInvalidCertificates()
-        );
-        
+                context.getTotalCertificates(),
+                context.getValidCertificates(),
+                context.getInvalidCertificates());
+
         summary.updateMasterListStats(
-            context.getTotalMasterLists(), 
-            context.getValidMasterLists(), 
-            context.getInvalidMasterLists()
-        );
-        
+                context.getTotalMasterLists(),
+                context.getValidMasterLists(),
+                context.getInvalidMasterLists());
+
         summary.updateCrlStats(
-            context.getTotalCrls(), 
-            context.getValidCrls(), 
-            context.getInvalidCrls()
-        );
+                context.getTotalCrls(),
+                context.getValidCrls(),
+                context.getInvalidCrls());
 
         // Trust Anchor 통계
         summary.updateTrustAnchorStats(certificateVerifier.getTrustAnchors().size());
@@ -258,7 +340,7 @@ public class LdifParser {
         certificateStats.put("validCrls", context.getValidCrls());
         certificateStats.put("invalidCrls", context.getInvalidCrls());
         certificateStats.put("totalTrustAnchors", certificateVerifier.getTrustAnchors().size());
-        
+
         summary.setCertificateValidationStats(certificateStats);
 
         LdifAnalysisResult result = new LdifAnalysisResult();
@@ -276,15 +358,15 @@ public class LdifParser {
         log.info("=== PKD LDIF Parsing Results ===");
         log.info("Total Entries: {}", context.getEntries().size());
         log.info("Errors: {}, Warnings: {}", context.getErrors().size(), context.getWarnings().size());
-        
+
         if (summary.hasPkdContent()) {
             log.info("=== PKD Content Analysis ===");
-            log.info("Certificates: {} (Valid: {}, Invalid: {})", 
-                context.getTotalCertificates(), context.getValidCertificates(), context.getInvalidCertificates());
-            log.info("Master Lists: {} (Valid: {}, Invalid: {})", 
-                context.getTotalMasterLists(), context.getValidMasterLists(), context.getInvalidMasterLists());
-            log.info("CRLs: {} (Valid: {}, Invalid: {})", 
-                context.getTotalCrls(), context.getValidCrls(), context.getInvalidCrls());
+            log.info("Certificates: {} (Valid: {}, Invalid: {})",
+                    context.getTotalCertificates(), context.getValidCertificates(), context.getInvalidCertificates());
+            log.info("Master Lists: {} (Valid: {}, Invalid: {})",
+                    context.getTotalMasterLists(), context.getValidMasterLists(), context.getInvalidMasterLists());
+            log.info("CRLs: {} (Valid: {}, Invalid: {})",
+                    context.getTotalCrls(), context.getValidCrls(), context.getInvalidCrls());
             log.info("Overall PKD Validity Rate: {:.2f}%", summary.getPkdValidityRate());
             log.info("Countries represented: {}", context.getCountryStats().size());
             log.info("Trust Anchors available: {}", certificateVerifier.getTrustAnchors().size());
@@ -321,8 +403,9 @@ public class LdifParser {
      * DN에서 국가 코드 추출
      */
     private String extractCountryCodeFromDN(String dn) {
-        if (dn == null) return "UNKNOWN";
-        
+        if (dn == null)
+            return "UNKNOWN";
+
         String[] parts = dn.split(",");
         for (String part : parts) {
             part = part.trim();
@@ -390,7 +473,8 @@ public class LdifParser {
     }
 
     // Delegate methods to CertificateVerifier
-    public CertificateChainValidationResult validateCertificateChain(java.security.cert.X509Certificate certificate, String issuerCountry) {
+    public CertificateChainValidationResult validateCertificateChain(java.security.cert.X509Certificate certificate,
+            String issuerCountry) {
         return certificateVerifier.validateCertificateChain(certificate, issuerCountry);
     }
 
@@ -420,7 +504,7 @@ public class LdifParser {
         private final Map<String, Integer> countryStats = new HashMap<>();
 
         private int addCount = 0;
-        
+
         // PKD 통계
         private int totalCertificates = 0;
         private int validCertificates = 0;
@@ -452,7 +536,7 @@ public class LdifParser {
 
         public void updateStatistics(ParseResult parseResult) {
             BinaryAttributeProcessor.ProcessResult result = parseResult.binaryResult;
-            
+
             // PKD 통계 업데이트
             totalCertificates += result.getTotalCertificates();
             validCertificates += result.getValidCertificates();
@@ -463,13 +547,12 @@ public class LdifParser {
             totalCrls += result.getTotalCrls();
             validCrls += result.getValidCrls();
             invalidCrls += result.getInvalidCrls();
-            
+
             // 경고 추가
             addWarnings(result.getWarnings());
-            
+
             // 국가별 통계 병합
-            result.getCountryStats().forEach((country, count) -> 
-                countryStats.merge(country, count, Integer::sum));
+            result.getCountryStats().forEach((country, count) -> countryStats.merge(country, count, Integer::sum));
         }
 
         private void countObjectClasses(LdifEntryDto entry) {
@@ -482,22 +565,65 @@ public class LdifParser {
         }
 
         // Getters
-        public List<LdifEntryDto> getEntries() { return entries; }
-        public List<String> getErrors() { return errors; }
-        public List<String> getWarnings() { return warnings; }
-        public Map<String, Integer> getObjectClassCount() { return objectClassCount; }
-        public Map<String, Integer> getCountryStats() { return countryStats; }
-        public int getAddCount() { return addCount; }
-        
+        public List<LdifEntryDto> getEntries() {
+            return entries;
+        }
+
+        public List<String> getErrors() {
+            return errors;
+        }
+
+        public List<String> getWarnings() {
+            return warnings;
+        }
+
+        public Map<String, Integer> getObjectClassCount() {
+            return objectClassCount;
+        }
+
+        public Map<String, Integer> getCountryStats() {
+            return countryStats;
+        }
+
+        public int getAddCount() {
+            return addCount;
+        }
+
         // PKD 통계 Getters
-        public int getTotalCertificates() { return totalCertificates; }
-        public int getValidCertificates() { return validCertificates; }
-        public int getInvalidCertificates() { return invalidCertificates; }
-        public int getTotalMasterLists() { return totalMasterLists; }
-        public int getValidMasterLists() { return validMasterLists; }
-        public int getInvalidMasterLists() { return invalidMasterLists; }
-        public int getTotalCrls() { return totalCrls; }
-        public int getValidCrls() { return validCrls; }
-        public int getInvalidCrls() { return invalidCrls; }
+        public int getTotalCertificates() {
+            return totalCertificates;
+        }
+
+        public int getValidCertificates() {
+            return validCertificates;
+        }
+
+        public int getInvalidCertificates() {
+            return invalidCertificates;
+        }
+
+        public int getTotalMasterLists() {
+            return totalMasterLists;
+        }
+
+        public int getValidMasterLists() {
+            return validMasterLists;
+        }
+
+        public int getInvalidMasterLists() {
+            return invalidMasterLists;
+        }
+
+        public int getTotalCrls() {
+            return totalCrls;
+        }
+
+        public int getValidCrls() {
+            return validCrls;
+        }
+
+        public int getInvalidCrls() {
+            return invalidCrls;
+        }
     }
 }
