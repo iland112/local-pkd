@@ -71,7 +71,7 @@ public class CscaLdapAddService {
             context.setAttributeValue("description", valid);
 
             // DER 바이너리 (스키마: cscaCertificate = OCTET STRING)
-            context.setAttributeValue("cscaCertificate", certificate.getEncoded());
+            context.setAttributeValue("cACertificate;binary", certificate.getEncoded());
 
             // 3. LdapTemplate의 bind() 메서드로 항목을 생성합니다.
             ldapTemplate.bind(dn, context, null);
