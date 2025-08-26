@@ -10,6 +10,8 @@ import javax.security.auth.x500.X500Principal;
 
 import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.ldap.core.LdapTemplate;
+import org.springframework.ldap.filter.AndFilter;
+import org.springframework.ldap.filter.EqualsFilter;
 import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +23,8 @@ import lombok.extern.slf4j.Slf4j;
  * CscaLdapAddService
  * 
  * 기능:
- *  ICAO Master list 내의 개별 CSCA 인증서를 국가 별로 나누어서 LDAP에 저장.
+ *  1. ICAO Master list 내의 개별 CSCA 인증서를 국가 별로 나누어서 LDAP에 저장.
+ *  2. CSCA 인증서 저장 전 이미 등록된 인증서가 있는 경우 별도의 duplicated-csca OU 하위에 저장
  */
 @Slf4j
 @Service
@@ -41,55 +44,92 @@ public class CscaLdapAddService {
             
             String subject = certificate.getSubjectX500Principal().getName();
             String countryCode = extractCountryCodeFromDN(subject);
-            
-            String organizationalUnitDn = "ou=csca,c=%s,%s".formatted(countryCode, baseDn);
-            createParentIfNotFound(organizationalUnitDn);
-           
             String fingerprint = getCertificateFingerprint(certificate);
             String cnValue = String.format("CSCA-%s-%s", countryCode, fingerprint);
-            // String dn = String.format("cn=%s,%s", cnValue, cscaDn);
             
-            // 2. DN을 직접 구성합니다.
-            Name dn = LdapNameBuilder.newInstance(organizationalUnitDn)
+            // 1. 중복 검사
+            if (isCertificateDuplicate(countryCode, fingerprint)) {
+                log.warn("이미 존재하는 인증서입니다. 중복 그룹에 저장합니다. Country: {}, Fingerprint: {}", countryCode, fingerprint);
+                // 중복된 인증서는 'ou=duplicates' 그룹에 저장
+                String dupOrganizationalUnitDn = "ou=duplicated-csca,c=%s,%s".formatted(countryCode, baseDn);
+                createParentIfNotFound(dupOrganizationalUnitDn);
+                Name dn = LdapNameBuilder.newInstance(dupOrganizationalUnitDn)
+                                         .add("cn", cnValue)
+                                         .build();
+                return bindCertificate(dn, certificate, cnValue, countryCode, valid);
+            }
+
+            // 2. 중복이 아닐 경우, ou=csca 하위에 저장
+            String cscaOrganizationalUnitDn = "ou=csca,c=%s,%s".formatted(countryCode, baseDn);
+            createParentIfNotFound(cscaOrganizationalUnitDn);
+            
+            Name dn = LdapNameBuilder.newInstance(cscaOrganizationalUnitDn)
                                      .add("cn", cnValue)
                                      .build();
 
-            // 2. DirContextAdapter를 사용하여 항목의 속성을 설정합니다.
-            DirContextAdapter context = new DirContextAdapter(dn);
-            context.setAttributeValues("objectClass", new String[]{"top", "device", "cscaCertificateObject", "pkiCA"});
-            context.setAttributeValue("cn", cnValue);
-            context.setAttributeValue("countryCode", countryCode);
-            String issuerDn = LdapDnUtil.getLdapCompatibleDn(certificate);
-            context.setAttributeValue("issuer", issuerDn);
-            context.setAttributeValue("serialNumber", certificate.getSerialNumber().toString());
-            context.setAttributeValue("cscaFingerprint", fingerprint);
-            // GeneralizedTime(UTC) 변환
-            java.text.SimpleDateFormat ldapTime = new java.text.SimpleDateFormat("yyyyMMddHHmmss'Z'");
-            ldapTime.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-            context.setAttributeValue("notBefore", ldapTime.format(certificate.getNotBefore()));
-            context.setAttributeValue("notAfter",  ldapTime.format(certificate.getNotAfter()));
-            context.setAttributeValue("description", valid);
-
-            // DER 바이너리 (스키마: cscaCertificate = OCTET STRING)
-            context.setAttributeValue("cACertificate;binary", certificate.getEncoded());
-
-            // 3. LdapTemplate의 bind() 메서드로 항목을 생성합니다.
-            ldapTemplate.bind(dn, context, null);
-
-            // 4. 새로 생성된 항목을 다시 조회하여 반환합니다.
-            cscaCertificate = ldapTemplate.findByDn(dn, CscaCertificate.class);
+            cscaCertificate = bindCertificate(dn, certificate, cnValue, countryCode, valid);
             log.debug("등록된 CSCA 인증서 DN: {}", cscaCertificate.getDn().toString());
-            // log.debug("certificate: {}", cscaCertificate.getCertificate());
-            // CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            // X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(cscaCertificate.getCertificate()));
-            // log.debug("{}", cert.getSubjectX500Principal().getName());
-            
+            return cscaCertificate;
         } catch (Exception e) {
             log.error("error: {}", e.getMessage());
             e.printStackTrace();
         }
 
         return cscaCertificate;
+    }
+
+    /**
+     * LDAP에 인증서를 바인딩하는 공통 로직
+     *
+     * @param dn 바인딩할 DN
+     * @param certificate X.509 인증서
+     * @param cnValue cn 속성 값
+     * @param countryCode 국가 코드
+     * @param valid 유효성 상태
+     * @return 저장된 CscaCertificate 객체
+     * @throws Exception
+     */
+    private CscaCertificate bindCertificate(Name dn, X509Certificate certificate, String cnValue, String countryCode, String valid) throws Exception {
+        DirContextAdapter context = new DirContextAdapter(dn);
+        context.setAttributeValues("objectClass", new String[]{"top", "device", "cscaCertificateObject", "pkiCA"});
+        context.setAttributeValue("cn", cnValue);
+        context.setAttributeValue("countryCode", countryCode);
+        String issuerDn = LdapDnUtil.getLdapCompatibleDn(certificate);
+        context.setAttributeValue("issuer", issuerDn);
+        context.setAttributeValue("serialNumber", certificate.getSerialNumber().toString());
+        context.setAttributeValue("cscaFingerprint", getCertificateFingerprint(certificate));
+        java.text.SimpleDateFormat ldapTime = new java.text.SimpleDateFormat("yyyyMMddHHmmss'Z'");
+        ldapTime.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        context.setAttributeValue("notBefore", ldapTime.format(certificate.getNotBefore()));
+        context.setAttributeValue("notAfter",  ldapTime.format(certificate.getNotAfter()));
+        context.setAttributeValue("description", valid);
+        context.setAttributeValue("cACertificate;binary", certificate.getEncoded());
+
+        ldapTemplate.bind(dn, context, null);
+        log.debug("등록된 CSCA 인증서 DN: {}", dn.toString());
+
+        return ldapTemplate.findByDn(dn, CscaCertificate.class);
+    }
+
+    /**
+     * 동일한 국가 코드와 지문(fingerprint)를 가진 인증서가 이미 존재하는지 확인
+     * @param countryCode 국가 코드
+     * @param fingerprint 인증서 지문
+     * @return boolean 중복 여부
+     */
+    private boolean isCertificateDuplicate(String countryCode, String fingerprint) {
+        AndFilter filter = new AndFilter();
+        filter.and(new EqualsFilter("countryCode", countryCode));
+        filter.and(new EqualsFilter("cscaFingerprint", fingerprint));
+
+        String searchBase = "dc=ml-data,dc=download,dc=pkd";
+
+        try {
+            return !ldapTemplate.search(searchBase, filter.encode(), (Object ctx) -> null).isEmpty();
+        } catch (Exception e) {
+            log.error("중복 인중서 확인 중 오류 발생: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**

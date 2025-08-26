@@ -147,8 +147,8 @@ public class ProgressController {
                         .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
                     return """
                         <div class="log-entry flex items-start gap-2 py-1 px-2 hover:bg-gray-50">
-                            <span class="text-xs text-gray-400 font-mono">%s</span>
-                            <span class="text-sm text-gray-700 flex-1">%s</span>
+                            <span class="text-xs text-gray-50 font-mono">%s</span>
+                            <span class="text-sm text-gray-100 flex-1">%s</span>
                         </div>
                         """.formatted(timestamp, replaceNewLines(progressEvent.message()));
                 })
