@@ -26,6 +26,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import com.smartcoreinc.localpkd.enums.X509ValidationResult;
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
 import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
@@ -154,6 +155,7 @@ public class ICAOMasterListParser {
             CMSSignedData signedData = new CMSSignedData(data);
             
             // ICAO/UN CSCA root 인증서로 Master List Trust Anchor 검증
+            // TODO: ICAO/UN ROOT 인증서 파일 경로를 외부에서 받을 수 있게 개선 필요
             ClassPathResource resource = new ClassPathResource("data/UN_CSCA_2.pem");
             Path path = Paths.get(resource.getURI());
             String filePath = path.toAbsolutePath().toString();
@@ -179,7 +181,7 @@ public class ICAOMasterListParser {
                 numberOfCertsTotal = certSet.size();
                 
                 log.info("총 {}개의 CSCA 인증서 발견", numberOfCertsTotal);
-                publishProgress("분석 시작", 0);
+                publishProgress("총 %d 개의 CSCA 인증서 분석 시작".formatted(numberOfCertsTotal), 0);
                 
                 // X.509 인증서 Converter Provider를 Bouncy Castle로 지정 
                 JcaX509CertificateConverter converter = 
@@ -189,10 +191,11 @@ public class ICAOMasterListParser {
                 
                 analysisEndTime = LocalDateTime.now();
                 log.info("=== Master List 분석 완료 ===");
-                log.info("유효 인증서: {}개, 무효 인증서: {}개, 총 국가: {}개", 
-                    validCerts.size(), invalidCerts.size(), cscaCountByCountry.size());
-            
-                publishProgress("분석 완료", 1.0);
+                String result = "유효 인증서: %d개, 무효 인증서: %d개, 총 국가: %d개".formatted(validCerts.size(), invalidCerts.size(), cscaCountByCountry.size());
+                log.info(result);
+                
+                publishProgress("=== Master List 분석 완료 ===", 1.0);
+                publishProgress(result, 1.0);
             }
         } catch (Exception e) {
             analysisEndTime = LocalDateTime.now();
@@ -225,8 +228,7 @@ public class ICAOMasterListParser {
     /**
      * 인증서 배치 처리
      */
-    private void processCertificates(ASN1Set certSet, JcaX509CertificateConverter converter, 
-                                   boolean isAddLdap) throws Exception {
+    private void processCertificates(ASN1Set certSet, JcaX509CertificateConverter converter, boolean isAddLdap) throws Exception {
         int processed = 0;
         
         for (ASN1Encodable encodable : certSet) {
@@ -271,8 +273,8 @@ public class ICAOMasterListParser {
     private void processSingleCertificate(X509Certificate x509Cert, boolean isAddLdap) {
         try {
             // CSCA(X.509) 인증서 검증 후 클래스 내부 멤버 변수에 저장
-            boolean isValid = certificateValidator.isCertificateValid(x509Cert);
-            if (isValid) {
+            X509ValidationResult validationResult = certificateValidator.validateCertificate(x509Cert);
+            if (validationResult == X509ValidationResult.SUCCESS) {
                 validCerts.add(x509Cert);
             } else {
                 invalidCerts.add(x509Cert);
@@ -285,7 +287,7 @@ public class ICAOMasterListParser {
             
             // LDAP 저장 (필요한 경우)
             if (isAddLdap) {
-                saveCertificateToLdap(x509Cert, isValid);
+                saveCertificateToLdap(x509Cert, validationResult);
             }
             
         } catch (Exception e) {
@@ -302,9 +304,9 @@ public class ICAOMasterListParser {
     /**
      * LDAP에 인증서 저장
      */
-    private void saveCertificateToLdap(X509Certificate x509Cert, boolean isValid) {
+    private void saveCertificateToLdap(X509Certificate x509Cert, X509ValidationResult validationResult) {
         try {
-            String validityStatus = isValid ? "Valid" : "Invalid";
+            String validityStatus = validationResult.name();
             CscaCertificate cscaCertificate = cscaCertificateService.save(x509Cert, validityStatus);
             log.debug("LDAP 저장 완료: {}", cscaCertificate.getDn().toString());
         } catch (Exception e) {
