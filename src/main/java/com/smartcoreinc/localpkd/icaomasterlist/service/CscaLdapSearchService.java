@@ -23,4 +23,14 @@ public class CscaLdapSearchService {
         return cscaCertificateRepository.findAll();
     }
 
+    /**
+     * 특정 국가 코드(countryCode)에 해당하는 모든 CSCA 인증서를 검색합니다.
+     * @param countryCode 검색할 국가 코드 (예: "AE")
+     * @return 해당 국가의 CSCA 인증서 리스트
+     */
+    public List<CscaCertificate> findCscaCertificatesByCountryCode(String countryCode) {
+        log.info("Searching for CSCA certificates for country: {}", countryCode);
+        return cscaCertificateRepository.findByCountryCode(countryCode);
+    }
+
 }

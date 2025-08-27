@@ -22,7 +22,7 @@ public final class CscaCertificate {
     @Attribute(name = "cn")
     private String cn; // CSCA-[국가코드]-[인증서 SHA-1 지문]
 
-    @Attribute(name = "countryConde")
+    @Attribute(name = "countryCode")
     private String countryCode; // 2자리 국가 코드
 
     @Attribute(name = "issuer")
