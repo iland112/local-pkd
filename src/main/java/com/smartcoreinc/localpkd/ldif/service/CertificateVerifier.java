@@ -7,6 +7,7 @@ import java.util.Map;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.stereotype.Component;
 
+import com.smartcoreinc.localpkd.enums.EntryType;
 import com.smartcoreinc.localpkd.ldif.service.verification.CertificateChainRequest;
 import com.smartcoreinc.localpkd.ldif.service.verification.CertificateChainVerificationStrategy;
 import com.smartcoreinc.localpkd.ldif.service.verification.CertificateParsingService;
@@ -51,16 +52,16 @@ public class CertificateVerifier {
     /**
      * X.509 인증서 검증
      */
-    public CertificateValidationResult validateX509Certificate(byte[] certBytes, int recordNumber) {
-        VerificationContext context = new VerificationContext(recordNumber, "UNKNOWN");
+    public CertificateValidationResult validateX509Certificate(byte[] certBytes, int recordNumber, EntryType entryType) {
+        VerificationContext context = new VerificationContext(recordNumber, "UNKNOWN", entryType);
         return x509Strategy.verify(certBytes, context);
     }
     
     /**
      * Master List 검증 및 CSCA 인증서 추출
      */
-    public MasterListValidationResult validateAndExtractMasterList(byte[] masterListData, int recordNumber, String countryCode) {
-        VerificationContext context = new VerificationContext(recordNumber, countryCode);
+    public MasterListValidationResult validateAndExtractMasterList(byte[] masterListData, int recordNumber, String countryCode, EntryType entryType) {
+        VerificationContext context = new VerificationContext(recordNumber, countryCode, entryType);
         MasterListValidationResult result = masterListStrategy.verify(masterListData, context);
         
         // Trust Anchors 저장
@@ -78,8 +79,8 @@ public class CertificateVerifier {
     /**
      * 인증서 체인 검증
      */
-    public CertificateChainValidationResult validateCertificateChain(X509Certificate certificate, String issuerCountry) {
-        VerificationContext context = new VerificationContext(0, issuerCountry);
+    public CertificateChainValidationResult validateCertificateChain(X509Certificate certificate, String issuerCountry, EntryType entryType) {
+        VerificationContext context = new VerificationContext(0, issuerCountry, entryType);
         CertificateChainRequest request = 
             new CertificateChainRequest(certificate, issuerCountry);
         

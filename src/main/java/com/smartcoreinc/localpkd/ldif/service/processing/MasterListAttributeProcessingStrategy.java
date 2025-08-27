@@ -28,7 +28,8 @@ public class MasterListAttributeProcessingStrategy implements BinaryAttributePro
         try {
             VerificationContext verificationContext = new VerificationContext(
                 context.getRecordNumber(), 
-                context.getCountryCode()
+                context.getCountryCode(),
+                context.getEntryType()
             );
 
             MasterListValidationResult masterListResult = masterListVerificationStrategy.verify(
