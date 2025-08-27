@@ -14,6 +14,7 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.smartcoreinc.localpkd.enums.EntryType;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
@@ -22,6 +23,7 @@ import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 import com.unboundid.ldap.sdk.Attribute;
 import com.unboundid.ldap.sdk.Entry;
+import com.unboundid.ldap.sdk.LDAPException;
 import com.unboundid.ldif.LDIFException;
 import com.unboundid.ldif.LDIFReader;
 
@@ -137,12 +139,13 @@ public class LdifParser {
 
                 // 국가별 통계 업데이트 - 국가 코드가 있는 경우에만
                 String countryCode = extractCountryCodeFromDN(parseResult.entry.getDn());
-                if (!"UNKNOWN".equals(countryCode)) {
+                boolean isBinary = Arrays.asList(EntryType.CRL, EntryType.DSC, EntryType.ML).contains(parseResult.entry.getEntryType());
+                if (!"UNKNOWN".equals(countryCode) && isBinary) {
                     context.addCountryStat(countryCode);
                     log.debug("Added country stat for: {} (DN: {})", countryCode, parseResult.entry.getDn());
                 } else {
-                    log.debug("Skipped country stat for entry without country code (DN: {})",
-                            parseResult.entry.getDn());
+                    log.debug("Skipped country stat for entry without country code (DN: {}) and Simple Entry: {}",
+                            parseResult.entry.getDn(), parseResult.entry.getEntryType().name());
                 }
             }
         } catch (Exception e) {
@@ -160,7 +163,9 @@ public class LdifParser {
             throws LDIFException, IOException {
         log.debug("Start processing record #{}", recordNumber);
 
-        // 1. 먼저 binary attribute 존재 여부를 빠르게 쳌,
+        // log.debug("recordText: {}", recordText);
+
+        // 1. 먼저 binary attribute 존재 여부를 빠르게 체크
         boolean hasBinaryAttributes = hasBinaryAttributes(recordText);
 
         BinaryAttributeProcessor.ProcessResult binaryResult;
@@ -181,17 +186,14 @@ public class LdifParser {
 
             Entry entry = ldifReader.readEntry();
             log.debug("Parsed entry DN: {}", entry.getDN());
-
-            if (entry != null) {
-                // Binary attribute 유무에 따라 다른 변환 방법 사용
-                LdifEntryDto entryDto = hasBinaryAttributes
-                        ? convertToEntryDto(entry, "ADD", binaryResult.getBinaryAttributes())
-                        : convertToEntryDtoSimple(entry, "ADD");
-                return new ParseResult(entryDto, binaryResult);
-            } else {
-                return new ParseResult(null, binaryResult);
-            }
-        } catch (LDIFException e) {
+            EntryType entryType = EntryTypeResolver.resolveEntryType(entry);
+            log.debug("EntryType: {} => {}", entryType.name(), entryType.getDescription());
+                
+            LdifEntryDto entryDto = hasBinaryAttributes
+                    ? convertToEntryDto(entry, entryType, binaryResult.getBinaryAttributes())
+                    : convertToEntryDtoSimple(entry, entryType);
+            return new ParseResult(entryDto, binaryResult);
+        } catch (LDIFException | LDAPException e) {
             throw new LDIFException(
                     "LDIF parsing error in record " + recordNumber + ": " + e.getMessage(),
                     lineNumber, true, e);
@@ -247,7 +249,7 @@ public class LdifParser {
     /**
      * Binary attribute가 없는 단순한 엔트리를 위한 경량화된 변환 메서드
      */
-    private LdifEntryDto convertToEntryDtoSimple(Entry entry, String entryType) {
+    private LdifEntryDto convertToEntryDtoSimple(Entry entry, EntryType entryType) {
         Map<String, List<String>> attributes = new HashMap<>();
 
         for (Attribute attribute : entry.getAttributes()) {
@@ -262,7 +264,7 @@ public class LdifParser {
     /**
      * Entry를 DTO로 변환
      */
-    private LdifEntryDto convertToEntryDto(Entry entry, String entryType, Map<String, Object> customParsedAttributes) {
+    private LdifEntryDto convertToEntryDto(Entry entry, EntryType entryType, Map<String, Object> customParsedAttributes) {
         Map<String, List<String>> attributes = new HashMap<>();
 
         for (Attribute attribute : entry.getAttributes()) {
@@ -474,8 +476,8 @@ public class LdifParser {
 
     // Delegate methods to CertificateVerifier
     public CertificateChainValidationResult validateCertificateChain(java.security.cert.X509Certificate certificate,
-            String issuerCountry) {
-        return certificateVerifier.validateCertificateChain(certificate, issuerCountry);
+            String issuerCountry, EntryType entryType) {
+        return certificateVerifier.validateCertificateChain(certificate, issuerCountry, entryType);
     }
 
     public Map<String, TrustAnchorInfo> getTrustAnchorsSummary() {

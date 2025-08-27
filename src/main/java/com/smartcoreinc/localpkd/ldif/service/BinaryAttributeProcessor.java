@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import com.smartcoreinc.localpkd.enums.EntryType;
 import com.smartcoreinc.localpkd.ldif.service.processing.BinaryAttributeProcessingStrategy;
 import com.smartcoreinc.localpkd.ldif.service.processing.ProcessingContext;
 import com.smartcoreinc.localpkd.ldif.service.processing.ProcessingResult;
@@ -39,12 +40,18 @@ public class BinaryAttributeProcessor {
      */
     public ProcessResult processBinaryAttributes(String recordText, int recordNumber) {
         ProcessResult result = new ProcessResult();
+        
+        // recordText(멀티 라인 문자열)
+        String dn = extractDNFromRecordText(recordText);
+        // DN 문자열에서 국가 코드 추출
+        String countryCode = extractCountryFromDN(dn);
+        // DN 문자열에서 EntryType enum 추출
+        EntryType entryType = extractEntryTypeFromDN(dn);
+        
+        ProcessingContext context = new ProcessingContext(recordNumber, countryCode, entryType);
+        
+        // 인증서(binary attribute) 처리
         String[] lines = recordText.split("\n");
-
-        // DN에서 국가 코드 추출
-        String countryCode = extractCountryCodeFromDN(recordText);
-        ProcessingContext context = new ProcessingContext(recordNumber, countryCode);
-
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();
             if (shouldSkipLine(line)) {
@@ -211,10 +218,10 @@ public class BinaryAttributeProcessor {
     }
 
     /**
-     * DN에서 국가 코드 추출
+     * RecordText에서 DN 추출 (DN 이 여러 라인으로 나누어져 있는 경우도 포함)
      */
-    private String extractCountryCodeFromDN(String recordText) {
-        if (recordText == null) return "UNKNOWN";
+    private String extractDNFromRecordText(String recordText) {
+        if (recordText == null) return "UNKNOWN DN";
 
         String[] lines = recordText.split("\n");
         for (int i = 0; i < lines.length; i++) {
@@ -231,10 +238,41 @@ public class BinaryAttributeProcessor {
                 }
 
                 String completeDN = dnBuilder.toString();
-                return extractCountryFromDN(completeDN);
+                return completeDN;
             }
         }
         return "UNKNOWN";
+    }
+
+    private EntryType extractEntryTypeFromDN(String dn) {
+        
+        if (dn == null || dn.isEmpty()) return EntryType.UNKNOWN;
+
+        EntryType entryType;
+        // DN에서 "o="를 찾는 여러 패턴 시도
+        String[] parts = dn.split(",");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.toLowerCase().startsWith("o=")) {
+                String o = part.substring(2).trim();
+                switch (o) {
+                    case "dsc":
+                        entryType = EntryType.DSC;
+                        break;
+                    case "crl":
+                        entryType = EntryType.CRL;
+                        break;
+                    case "ml":
+                        entryType = EntryType.ML;
+                    default:
+                        entryType = EntryType.UNKNOWN;
+                        break;
+                }
+                return entryType;
+            }
+        }
+        
+        return EntryType.UNKNOWN;
     }
 
     /**
@@ -283,7 +321,7 @@ public class BinaryAttributeProcessor {
         private final Map<String, Object> binaryAttributes = new HashMap<>();
         private final List<String> warnings = new ArrayList<>();
 
-        // 인증서 관련 통계
+        // DSC 인증서 관련 통계
         private int totalCertificates = 0;
         private int validCertificates = 0;
         private int invalidCertificates = 0;
