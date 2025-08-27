@@ -4,21 +4,22 @@ import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.smartcoreinc.localpkd.enums.EntryType;
 
 /**
  * LDIF 레코드 (Entry) Dto
  */ 
 public class LdifEntryDto {
     private String dn;                              // DN(Distinguished Name)
-    private String entryType;                       // ADD, MODIFY, DELETE
-    private Map<String, List<String>> attributes;   // Entry 속성들
+    private EntryType entryType;                    // ML, DSC, CRL
+    private Map<String, List<String>> attributes;   // Entry 속성들을 담고 있는 맵컨테이너
     
     @JsonIgnore
-    private String originalLdif;
+    private String originalLdif;                    // Entry(Record) 전체 문자열
 
     public LdifEntryDto() {}
 
-    public LdifEntryDto(String dn, String entryType, Map<String, List<String>> attributes, String originalLdif) {
+    public LdifEntryDto(String dn, EntryType entryType, Map<String, List<String>> attributes, String originalLdif) {
         this.dn = dn;
         this.entryType = entryType;
         this.attributes = attributes;
@@ -33,11 +34,11 @@ public class LdifEntryDto {
         this.dn = dn;
     }
 
-    public String getEntryType() {
+    public EntryType getEntryType() {
         return entryType;
     }
 
-    public void setEntryType(String entryType) {
+    public void setEntryType(EntryType entryType) {
         this.entryType = entryType;
     }
 

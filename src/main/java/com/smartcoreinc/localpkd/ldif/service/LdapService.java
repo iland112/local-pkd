@@ -1,25 +1,12 @@
 package com.smartcoreinc.localpkd.ldif.service;
 
-import java.io.ByteArrayInputStream;
-import java.security.cert.CertPath;
-import java.security.cert.CertPathValidator;
-import java.security.cert.CertPathValidatorException;
-import java.security.cert.PKIXParameters;
-import java.security.cert.TrustAnchor;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import javax.naming.Name;
 import javax.naming.NamingException;
-import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.BasicAttribute;
 import javax.naming.directory.BasicAttributes;
@@ -32,13 +19,7 @@ import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.stereotype.Service;
 
-import com.smartcoreinc.localpkd.enums.X509ValidationResult;
-import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
-import com.smartcoreinc.localpkd.icaomasterlist.service.CscaLdapSearchService;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
-import com.smartcoreinc.localpkd.ldif.dto.TrustChainValidationResult;
-import com.smartcoreinc.localpkd.ldif.dto.ValidationResult;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

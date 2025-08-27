@@ -1,4 +1,4 @@
-package com.smartcoreinc.localpkd.ldif.service;
+package com.smartcoreinc.localpkd.validator;
 
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertPath;
@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 import javax.naming.Name;
 
+import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.stereotype.Service;
 
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
@@ -39,6 +40,9 @@ public class DSCTrustChainVerifier {
     }
 
     public ValidationResult verify(LdifEntryDto entryDto) {
+
+        ValidationResult validationResult = null;
+
         // LdifEntryDto에서 속성 맵을 가져옴
         Map<String, List<String>> attributes = entryDto.getAttributes();
 
@@ -51,16 +55,21 @@ public class DSCTrustChainVerifier {
             String validationResultMessage = null;
 
             try {
-                String countryCode = getCountryCodeFromDn(entryDto.getDn());
+                Name dn = LdapNameBuilder.newInstance(entryDto.getDn()).build();
+                String countryCode = getCountryCodeFromDn(dn);
                 if (countryCode == null) {
                     validationResultMessage = TrustChainValidationResult.FAILED.name()
                             + ": Country code not found in DN";
+                    validationResult = new ValidationResult(TrustChainValidationResult.FAILED, validationResultMessage);
+                    return validationResult;
                 } else {
                     List<CscaCertificate> cscaCerts = cscaLdapSearchService
                             .findCscaCertificatesByCountryCode(countryCode);
                     if (cscaCerts.isEmpty()) {
                         validationResultMessage = TrustChainValidationResult.FAILED.name()
                                 + ": No CSCA certificates found for country " + countryCode;
+                        validationResult = new ValidationResult(TrustChainValidationResult.FAILED, validationResultMessage);
+                        return validationResult;
                     } else {
                         List<String> dscCertValues = attributes.get("userCertificate;binary");
                         if (dscCertValues != null && !dscCertValues.isEmpty()) {
@@ -82,9 +91,13 @@ public class DSCTrustChainVerifier {
                             // DTO에서 상태와 메시지를 추출하여 LDAP 저장용 문자열 생성
                             if (result.getStatus() == TrustChainValidationResult.SUCCESS) {
                                 validationResultMessage = TrustChainValidationResult.SUCCESS.name();
+                                validationResult = new ValidationResult(TrustChainValidationResult.SUCCESS, "");
+                                return validationResult;
                             } else {
                                 validationResultMessage = TrustChainValidationResult.FAILED.name()
                                         + ": userCertificate attribute not found";
+                                validationResult = new ValidationResult(TrustChainValidationResult.FAILED, validationResultMessage);
+                                return validationResult;
                             }
                         }
                     }
@@ -93,6 +106,8 @@ public class DSCTrustChainVerifier {
                 log.error("신뢰 체인 검증 중 예외 발생: {}", e.getMessage());
                 validationResultMessage = TrustChainValidationResult.FAILED.name() + ": Internal error - "
                         + e.getClass().getSimpleName();
+                validationResult = new ValidationResult(TrustChainValidationResult.FAILED, validationResultMessage);
+                return validationResult;
             }
 
             // 검증 결과를 entryDto의 속성에 추가
@@ -100,6 +115,8 @@ public class DSCTrustChainVerifier {
                 attributes.put("validationResult", Collections.singletonList(validationResultMessage));
             }
         }
+        validationResult = new ValidationResult(TrustChainValidationResult.FAILED, "DSC 인증서가 아님.");
+        return validationResult;
     }
 
     /**
