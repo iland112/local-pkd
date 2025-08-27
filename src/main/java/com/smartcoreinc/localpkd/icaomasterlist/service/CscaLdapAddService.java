@@ -51,12 +51,13 @@ public class CscaLdapAddService {
             if (isCertificateDuplicate(countryCode, fingerprint)) {
                 log.warn("이미 존재하는 인증서입니다. 중복 그룹에 저장합니다. Country: {}, Fingerprint: {}", countryCode, fingerprint);
                 // 중복된 인증서는 'ou=duplicates' 그룹에 저장
-                String dupOrganizationalUnitDn = "ou=duplicated-csca,c=%s,%s".formatted(countryCode, baseDn);
-                createParentIfNotFound(dupOrganizationalUnitDn);
-                Name dn = LdapNameBuilder.newInstance(dupOrganizationalUnitDn)
-                                         .add("cn", cnValue)
-                                         .build();
-                return bindCertificate(dn, certificate, cnValue, countryCode, valid);
+                // String dupOrganizationalUnitDn = "ou=duplicated-csca,c=%s,%s".formatted(countryCode, baseDn);
+                // createParentIfNotFound(dupOrganizationalUnitDn);
+                // Name dn = LdapNameBuilder.newInstance(dupOrganizationalUnitDn)
+                //                          .add("cn", cnValue)
+                //                          .build();
+                // return bindCertificate(dn, certificate, cnValue, countryCode, valid);
+                return null;
             }
 
             // 2. 중복이 아닐 경우, ou=csca 하위에 저장
