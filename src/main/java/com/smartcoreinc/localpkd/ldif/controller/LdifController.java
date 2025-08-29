@@ -22,6 +22,7 @@ import com.smartcoreinc.localpkd.SessionTaskManager;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
+import com.smartcoreinc.localpkd.ldif.service.LDIFParser;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
 import com.smartcoreinc.localpkd.ldif.service.LdifParser;
 import com.smartcoreinc.localpkd.sse.Progress;
@@ -36,13 +37,13 @@ import lombok.extern.slf4j.Slf4j;
 public class LdifController {
 
     // Dependencies
-    private final LdifParser ldifParserService;
+    private final LDIFParser ldifParserService;
     private final LdapService ldapService;
     // Session and Task Info Container
     private final SessionTaskManager sessionTaskManager;
     private final ProgressPublisher progressPublisher;
 
-    public LdifController(LdifParser ldifParserService,
+    public LdifController(LDIFParser ldifParserService,
             LdapService ldapService,
             SessionTaskManager sessionTaskManager,
             ProgressPublisher progressPublisher) {
