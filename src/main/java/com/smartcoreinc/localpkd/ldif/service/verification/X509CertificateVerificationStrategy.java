@@ -1,7 +1,6 @@
 package com.smartcoreinc.localpkd.ldif.service.verification;
 
 import java.security.cert.X509Certificate;
-
 import org.springframework.stereotype.Component;
 
 import com.smartcoreinc.localpkd.ldif.service.CertificateValidationResult;
@@ -42,7 +41,13 @@ public class X509CertificateVerificationStrategy
     public boolean supports(Class<?> dataType) {
         return byte[].class.equals(dataType);
     }
-        
+    
+    /**
+     * X509 인증서 유효 기간 검증
+     * @param X509Certificate
+     * @param VerificationContext
+     * @return CertificateValidationResult
+     */
     private CertificateValidationResult validateCertificateValidity(X509Certificate certificate, VerificationContext context) {
         try {
             String subject = certificate.getSubjectX500Principal().getName();
@@ -61,9 +66,12 @@ public class X509CertificateVerificationStrategy
             String subject = certificate.getSubjectX500Principal().getName();
             String issuer = certificate.getIssuerX500Principal().getName();
             String serialNumber = certificate.getSerialNumber().toString();
+            String notBefore = certificate.getNotBefore().toString();
+            String notAfter = certificate.getNotAfter().toString();
             
-            String details = String.format("Subject: %s, Issuer: %s, Serial: %s, Validity Error: %s",
-                    subject, issuer, serialNumber, validityException.getMessage());
+            String details = String.format("Subject: %s, Issuer: %s, Serial: %s, notBefore: %s, notAfter: %s, Validity Error: %s",
+                    subject, issuer, serialNumber, notBefore, notAfter, validityException.getMessage());
+            log.debug(details);
             return CertificateValidationResult.invalid("Certificate validity check failed", details);
         }
     }

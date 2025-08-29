@@ -28,10 +28,10 @@ public class EntryTypeResolver {
 
         // 미리 정의된 우선순위에 따라 EntryType을 결정합니다.
         // 예를 들어, cRLDistributionPoint가 가장 중요하다고 가정합니다.
-        if (objectClasses.contains("cRLDistributionPoint")) {
+        if (objectClasses.contains("cRLDistributionPoint") && objectClasses.contains("pkdDownload")) {
             return EntryType.CRL;
         }
-        if (objectClasses.contains("inetOrgPerson")) {
+        if (objectClasses.contains("inetOrgPerson") && objectClasses.contains("pkdDownload")) {
             return EntryType.DSC;
         }
         if (objectClasses.contains("organization")) {
@@ -43,8 +43,11 @@ public class EntryTypeResolver {
         if (objectClasses.contains("domain")) {
             return EntryType.DC;
         }
+        if (objectClasses.contains("pkdMasterList") && objectClasses.contains("pkdDownload")) {
+            return EntryType.ML;
+        }
         
         // 해당되는 타입이 없을 경우
-        return null;
+        return EntryType.UNKNOWN;
     }
 }

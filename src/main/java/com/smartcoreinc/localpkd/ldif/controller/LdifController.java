@@ -24,7 +24,6 @@ import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
 import com.smartcoreinc.localpkd.ldif.service.LDIFParser;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
-import com.smartcoreinc.localpkd.ldif.service.LdifParser;
 import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
@@ -42,6 +41,9 @@ public class LdifController {
     // Session and Task Info Container
     private final SessionTaskManager sessionTaskManager;
     private final ProgressPublisher progressPublisher;
+
+    // EntryType 통계를 위한 실시간 카운터
+    private final Map<String, Map<String, Integer>> sessionEntryTypeStats = new HashMap<>();
 
     public LdifController(LDIFParser ldifParserService,
             LdapService ldapService,
@@ -80,6 +82,10 @@ public class LdifController {
         log.info("Start processing LDIF file: {}", originalFilename);
         
         try {
+            // 세션 ID 미리 생성 (EntryType 통계 추적용)
+            String sessionId = generateSessionId();
+            sessionEntryTypeStats.put(sessionId, new HashMap<>());
+
             // 분석 실행
             LdifAnalysisResult analysisResult = ldifParserService.parseLdifFile(file);
 
@@ -89,8 +95,7 @@ public class LdifController {
                 return "redirect:/ldif";
             }
 
-            // 세션을 생성하고 분석 결과를 Session Task Manager 컨테이너에 저장
-            String sessionId = generateSessionId();
+            // 분석 결과를 Session Task Manager 컨테이너에 저장
             sessionTaskManager.getSessionResults().put(sessionId, analysisResult);
                         
             // 요약 정보만 뷰에 전달 - try-catch로 보호
@@ -114,6 +119,13 @@ public class LdifController {
             certificateStats.putIfAbsent("totalMasterLists", 0);
             certificateStats.putIfAbsent("validMasterLists", 0);
             certificateStats.putIfAbsent("invalidMasterLists", 0);
+
+            // EntryType 통계 null 체크 및 초기화
+            Map<String, Integer> entryTypeStats = summary.getEntryTypeCount();
+            if (entryTypeStats == null) {
+                entryTypeStats = new HashMap<>();
+                summary.setEntryTypeCount(entryTypeStats);
+            }
 
             model.addAttribute("summary", summary);
             model.addAttribute("sessionId", sessionId);
