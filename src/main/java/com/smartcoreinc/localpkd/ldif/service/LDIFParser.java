@@ -18,6 +18,11 @@ import com.smartcoreinc.localpkd.enums.EntryType;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
+import com.smartcoreinc.localpkd.ldif.service.processing.BinaryAttributeProcessingStrategy;
+import com.smartcoreinc.localpkd.ldif.service.processing.BinaryAttributeStrategyFactory;
+import com.smartcoreinc.localpkd.ldif.service.processing.CRLAttributeProcessingStrategy;
+import com.smartcoreinc.localpkd.ldif.service.processing.ProcessingContext;
+import com.smartcoreinc.localpkd.ldif.service.processing.ProcessingResult;
 import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
@@ -35,7 +40,7 @@ public class LDIFParser {
 
     private final ProgressPublisher progressPublisher;
     private final CertificateVerifier certificateVerifier;
-    private final BinaryAttributeProcessor binaryAttributeProcessor;
+    private final BinaryAttributeStrategyFactory strategyFactory;
 
     // 바이너리 속성 목록 (성능 최적화를 위해 Set 사용)
     private static final java.util.Set<String> BINARY_ATTRIBUTES = java.util.Set.of(
@@ -45,34 +50,35 @@ public class LDIFParser {
  
     public LDIFParser(ProgressPublisher progressPublisher,
                       CertificateVerifier certificateVerifier,
-                      BinaryAttributeProcessor binaryAttributeProcessor) {
+                      BinaryAttributeStrategyFactory strategyFactory) {
         this.progressPublisher = progressPublisher;
         this.certificateVerifier = certificateVerifier;
-        this.binaryAttributeProcessor = binaryAttributeProcessor;
+        this.strategyFactory = strategyFactory;
     }
 
     /**
      * LDIF 파일 파싱 - Entry 단위 직접 처리
      */
     public LdifAnalysisResult parseLdifFile(MultipartFile file) throws IOException {
-        log.info("Starting entry-based LDIF parsing for file: {}", file.getOriginalFilename());
-
-        ParsingContext context = new ParsingContext();
         long fileSize = file.getSize();
-        long processedBytes = 0;
-        int entryCount = 0;
+        log.info("Starting entry-based LDIF parsing for file: {}, {} bytes", file.getOriginalFilename(), fileSize);
+
+        // LDIF 파일 내의 Entry 총 개수 구하기
+        int totalEntryCount = getEntryCount(file);
+        log.debug("Total Entries in LDIF file: {}", totalEntryCount);        
         
+        ParsingContext context = new ParsingContext();
+        int entryCount = 0;
         try (InputStream inputStream = file.getInputStream();
              BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
              LDIFReader ldifReader = new LDIFReader(bufferedReader)) {
-
+            
             Entry entry;
             while ((entry = ldifReader.readEntry()) != null) {
                 entryCount++;
                 
-                // 진행률 계산 (대략적)
-                processedBytes = estimateProcessedBytes(fileSize, entryCount);
-                publishProgress(processedBytes, fileSize, entry.getDN());
+                // 진행률 발행 - Entry 기반
+                publishEntryProgress(totalEntryCount, entryCount, entry.getDN());
 
                 try {
                     processEntry(entry, entryCount, context);
@@ -95,6 +101,25 @@ public class LDIFParser {
         return buildAnalysisResult(context);
     }
 
+    private int getEntryCount(MultipartFile file) {
+        int entryCount = 0;
+        try (InputStream inputStream = file.getInputStream();
+             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+             LDIFReader ldifReader = new LDIFReader(bufferedReader)) {
+
+            while (ldifReader.readEntry() != null) {
+                entryCount++;
+            }
+
+        } catch (LDIFException e) {
+            log.error("LDIF format error: {}", e.getMessage());
+        } catch (IOException e) {
+            log.error("IO Error reading LDIF file: {}", e.getMessage());
+        }
+
+        return entryCount;
+    }
+
     /**
      * Entry 단위 처리 - 핵심 개선사항
      */
@@ -107,36 +132,143 @@ public class LDIFParser {
             entryType = EntryTypeResolver.resolveEntryType(entry);
         } catch (LDAPException e) {
             log.error("Cannot resolve entry type: {}", e.getDiagnosticMessage());
-            return;
+            entryType = EntryType.UNKNOWN;
         }
+        log.debug("Resolved Entry Type: {}({})", entryType.name(), entryType.getDescription());
         
         // 2. 바이너리 속성 존재 여부 체크
         Map<String, List<byte[]>> binaryData = extractBinaryAttributes(entry);
         
-        // 3. 바이너리 속성이 있는 경우에만 특별 처리
-        BinaryAttributeProcessor.ProcessResult binaryResult = null;
+        BinaryProcessingResult binaryResult = new BinaryProcessingResult();
         if (!binaryData.isEmpty()) {
-            // Entry를 다시 LDIF 문자열로 변환하여 기존 BinaryAttributeProcessor 활용
-            String entryLdifString = entry.toLDIFString();
-            binaryResult = binaryAttributeProcessor.processBinaryAttributes(entryLdifString, entryNumber);
-        } else {
-            binaryResult = new BinaryAttributeProcessor.ProcessResult(); // 빈 결과
+            // 3. 바이너리 속성을 전략 패턴으로 직접 처리
+            String countryCode = extractCountryCodeFromDN(entry.getDN());
+            ProcessingContext processingContext = new ProcessingContext(entryNumber, countryCode, entryType);
+            
+            processBinaryAttributesDirect(binaryData, processingContext, binaryResult);
         }
 
         // 4. DTO 변환
         LdifEntryDto entryDto = convertToEntryDto(entry, entryType, binaryData);
-        
+
         // 5. 컨텍스트 업데이트
         context.addEntry(entryDto);
         context.updateStatistics(binaryResult);
         
-        // 6. 국가별 통계 업데이트
+        // 6. EntryType 통계 업데이트
+        context.addEntryType(entryType);
+        
+        // 7. 국가별 통계 업데이트
         String countryCode = extractCountryCodeFromDN(entry.getDN());
         if (!"UNKNOWN".equals(countryCode) && isBinaryEntry(entryType)) {
             context.addCountryStat(countryCode);
         }
 
-        log.debug("Completed processing entry #{}: {}", entryNumber, entry.getDN());
+        // 8. SSE로 EntryType 업데이트 발행
+        // publishEntryTypeUpdate(entryType);
+
+        log.debug("Completed processing entry #{}:{} {}", entryNumber, entryType.name(), entry.getDN());
+    }
+
+    /**
+     * 바이너리 속성 직접 처리 - 전략 패턴 활용
+     */
+    private void processBinaryAttributesDirect(Map<String, List<byte[]>> binaryData, 
+                                               ProcessingContext processingContext, 
+                                               BinaryProcessingResult result) {
+        
+        for (Map.Entry<String, List<byte[]>> attrEntry : binaryData.entrySet()) {
+            String attributeName = attrEntry.getKey();
+            List<byte[]> values = attrEntry.getValue();
+            
+            // 속성에 맞는 전략 찾기
+            BinaryAttributeProcessingStrategy strategy = strategyFactory.getStrategy(attributeName);
+            if (strategy instanceof CRLAttributeProcessingStrategy) {
+                log.debug("전략 패턴 클래스 이름: {}", strategy.getClass().getName());
+            }
+            
+            if (strategy != null) {
+                log.debug("Using strategy {} for attribute '{}'", 
+                    strategy.getClass().getSimpleName(), attributeName);
+                
+                for (byte[] binaryValue : values) {
+                    try {
+                        ProcessingResult processingResult = strategy.process(
+                            attributeName, binaryValue, processingContext);
+                        
+                        // 결과를 종합 결과에 반영
+                        updateBinaryResult(result, processingResult, attributeName);
+                        
+                    } catch (Exception e) {
+                        String warning = String.format("Entry %d: Failed to process binary attribute '%s': %s",
+                            processingContext.getRecordNumber(), attributeName, e.getMessage());
+                        result.addWarning(warning);
+                        log.warn("Failed to process binary attribute '{}' in entry {}: {}",
+                            attributeName, processingContext.getRecordNumber(), e.getMessage());
+                    }
+                }
+            } else {
+                log.debug("No strategy found for attribute '{}', using default processing", attributeName);
+                String warning = String.format("Entry %d: No specific processor for attribute '%s'", 
+                    processingContext.getRecordNumber(), attributeName);
+                result.addWarning(warning);
+                
+                // 기본 통계 업데이트
+                updateDefaultStatistics(result, attributeName, values.size());
+            }
+        }
+        
+        // 바이너리 속성 데이터 저장 (DTO 변환에 사용)
+        for (Map.Entry<String, List<byte[]>> entry : binaryData.entrySet()) {
+            result.getBinaryAttributes().put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * 처리 결과를 종합 결과에 반영
+     */
+    private void updateBinaryResult(BinaryProcessingResult result, ProcessingResult processingResult, String attributeName) {
+        // 경고 추가
+        result.addWarnings(processingResult.getWarnings());
+        
+        // 메트릭 업데이트
+        ProcessingResult.ProcessingMetrics metrics = processingResult.getMetrics();
+        
+        if (isCertificateAttribute(attributeName)) {
+            result.totalCertificates += metrics.getProcessedItems();
+            result.validCertificates += metrics.getValidItems();
+            result.invalidCertificates += metrics.getInvalidItems();
+        } else if (isMasterListAttribute(attributeName)) {
+            result.totalMasterLists += metrics.getProcessedItems();
+            result.validMasterLists += metrics.getValidItems();
+            result.invalidMasterLists += metrics.getInvalidItems();
+        } else if (isCrlAttribute(attributeName)) {
+            result.totalCrls += metrics.getProcessedItems();
+            result.validCrls += metrics.getValidItems();
+            result.invalidCrls += metrics.getInvalidItems();
+        }
+        
+        if (!processingResult.isSuccess()) {
+            result.addWarning(String.format("Processing failed for attribute '%s': %s", 
+                attributeName, processingResult.getMessage()));
+        }
+    }
+
+    /**
+     * 전략이 없는 속성에 대한 기본 통계 처리
+     */
+    private void updateDefaultStatistics(BinaryProcessingResult result, String attributeName, int valueCount) {
+        if (isCertificateAttribute(attributeName)) {
+            result.totalCertificates += valueCount;
+            // 기본적으로 유효하다고 가정 (실제 검증은 전략에서 수행)
+            result.validCertificates += valueCount;
+        } else if (isMasterListAttribute(attributeName)) {
+            result.totalMasterLists += valueCount;
+            result.validMasterLists += valueCount;
+        } else if (isCrlAttribute(attributeName)) {
+            result.totalCrls += valueCount;
+            result.validCrls += valueCount;
+        }
     }
 
     /**
@@ -157,9 +289,9 @@ public class LDIFParser {
                 }
                 
                 if (!values.isEmpty()) {
-                    binaryData.put(attribute.getName(), values); // 원본 대소문자 유지
+                    binaryData.put(originalAttrName, values);
                     log.debug("Extracted {} binary values for attribute '{}'", 
-                        values.size(), attribute.getName());
+                        values.size(), originalAttrName);
                 }
             }
         }
@@ -168,15 +300,7 @@ public class LDIFParser {
     }
 
     /**
-     * 바이너리 속성 여부 확인
-     */
-    private boolean isBinaryAttribute(String attributeName) {
-        return BINARY_ATTRIBUTES.stream()
-                .anyMatch(binaryAttr -> attributeName.toLowerCase().contains(binaryAttr.toLowerCase()));
-    }
-
-    /**
-     * Entry를 DTO로 변환 (개선된 버전)
+     * Entry를 DTO로 변환
      */
     private LdifEntryDto convertToEntryDto(Entry entry, EntryType entryType, 
             Map<String, List<byte[]>> binaryData) {
@@ -203,29 +327,66 @@ public class LDIFParser {
     }
 
     /**
-     * 진행률 추정 (Entry 수 기반)
+     * 바이너리 속성 여부 확인 (기존 LdifParser와 동일한 로직)
      */
-    private long estimateProcessedBytes(long totalFileSize, int processedEntries) {
-        // 대략적인 추정: 엔트리당 평균 크기를 기반으로 계산
-        if (processedEntries < 10) return 0;
-        
-        long estimatedAvgEntrySize = totalFileSize / Math.max(processedEntries * 20, 1); // 추정치
-        return Math.min(processedEntries * estimatedAvgEntrySize, totalFileSize);
+    private boolean isBinaryAttribute(String attributeName) {
+        return BINARY_ATTRIBUTES.stream()
+                .anyMatch(binaryAttr -> attributeName.toLowerCase().contains(binaryAttr.toLowerCase()));
+    }
+
+    // 속성 타입 확인 메서드들
+    private boolean isCertificateAttribute(String attributeName) {
+        String lowerName = attributeName.toLowerCase();
+        return lowerName.contains("certificate") || 
+               lowerName.contains("usercertificate") || 
+               lowerName.contains("cacertificate");
+    }
+
+    private boolean isMasterListAttribute(String attributeName) {
+        return attributeName.contains("pkdMasterListContent") || 
+               attributeName.toLowerCase().contains("masterlist");
+    }
+
+    private boolean isCrlAttribute(String attributeName) {
+        String lowerName = attributeName.toLowerCase();
+        return lowerName.contains("certificaterevocationlist") || 
+               lowerName.contains("authorityrevocationlist") ||
+               lowerName.contains("crl");
     }
 
     /**
-     * 진행상태 발행
+     * Entry 기반 진행상태 발행
      */
-    private void publishProgress(long processedBytes, long totalBytes, String currentDN) {
-        double progressRatio = totalBytes > 0 ? (double) processedBytes / totalBytes : 0.0;
-        Progress progress = new Progress(progressRatio, "LDIF");
+    private void publishEntryProgress(int totalEntryCount, int processedEntries, String currentDN) {
+        double percentage = processedEntries / (double) totalEntryCount;
+        Progress progress = new Progress(percentage, "LDIF"); // Entry 기반이므로 비율 계산 없음
         ProgressEvent progressEvent = new ProgressEvent(progress, 
-            (int) processedBytes, (int) totalBytes, "Processing: " + currentDN);
+            processedEntries, totalEntryCount, "Processing Entry: " + currentDN);
         progressPublisher.notifyProgressListeners(progressEvent);
     }
 
-     /**
-     * 분석 결과 생성 (기존 로직 재사용)
+    /**
+     * EntryType 업데이트 발행 (SSE)
+     */
+    private void publishEntryTypeUpdate(EntryType entryType) {
+        try {
+            Map<String, Object> updateData = new HashMap<>();
+            updateData.put("type", "entryTypeUpdate");
+            updateData.put("entryType", entryType.name());
+            updateData.put("description", entryType.getDescription());
+            
+            Progress progress = new Progress(0.0, "entryType");
+            ProgressEvent event = new ProgressEvent(progress, 0, 0, 
+                "EntryType: " + entryType.name());
+            progressPublisher.notifyProgressListeners(event);
+            
+        } catch (Exception e) {
+            log.debug("Failed to publish entry type update: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 분석 결과 생성
      */
     private LdifAnalysisResult buildAnalysisResult(ParsingContext context) {
         LdifAnalysisSummary summary = new LdifAnalysisSummary();
@@ -237,7 +398,9 @@ public class LDIFParser {
         summary.setAddEntries(context.getAddCount());
         summary.setModifyEntries(0);
         summary.setDeleteEntries(0);
-        summary.setObjectClassCount(context.getObjectClassCount());
+
+        // EntryType 통계 설정 (ObjectClass 대신)
+        summary.setEntryTypeCount(context.getEntryTypeCount());
         summary.setHasValidationErrors(!context.getErrors().isEmpty());
 
         // PKD 통계 업데이트
@@ -256,7 +419,7 @@ public class LDIFParser {
                 context.getValidCrls(),
                 context.getInvalidCrls());
 
-        // Trust Anchor 통계 - CertificateVerifier의 실제 메서드 사용
+        // Trust Anchor 통계
         Map<String, TrustAnchorInfo> trustAnchors = getTrustAnchorsSummary();
         summary.updateTrustAnchorStats(trustAnchors.size());
 
@@ -287,9 +450,19 @@ public class LDIFParser {
     }
 
     private void logParsingResults(ParsingContext context, LdifAnalysisSummary summary) {
-        log.info("=== PKD LDIF Parsing Results (Entry-based) ===");
+        log.info("=== PKD LDIF Parsing Results (Entry-based with EntryType Statistics) ===");
         log.info("Total Entries: {}", context.getEntries().size());
         log.info("Errors: {}, Warnings: {}", context.getErrors().size(), context.getWarnings().size());
+
+        // EntryType별 통계 로깅
+        Map<String, Integer> entryTypeStats = context.getEntryTypeCount();
+        log.info("=== EntryType Distribution ===");
+        for (EntryType entryType : EntryType.values()) {
+            int count = entryTypeStats.getOrDefault(entryType.name(), 0);
+            if (count > 0) {
+                log.info("{}: {} entries ({})", entryType.name(), count, entryType.getDescription());
+            }
+        }
 
         if (summary.hasPkdContent()) {
             log.info("=== PKD Content Analysis ===");
@@ -333,14 +506,57 @@ public class LDIFParser {
         return certificateVerifier.getTrustAnchorsSummary();
     }
 
-     /**
-     * 파싱 컨텍스트 - 파싱 상태 관리
+    /**
+     * 바이너리 처리 결과 클래스 - BinaryAttributeProcessor.ProcessResult와 호환
+     */
+    private static class BinaryProcessingResult {
+        private final Map<String, Object> binaryAttributes = new HashMap<>();
+        private final List<String> warnings = new ArrayList<>();
+
+        // PKD 통계
+        private int totalCertificates = 0;
+        private int validCertificates = 0;
+        private int invalidCertificates = 0;
+        private int totalMasterLists = 0;
+        private int validMasterLists = 0;
+        private int invalidMasterLists = 0;
+        private int totalCrls = 0;
+        private int validCrls = 0;
+        private int invalidCrls = 0;
+
+        private final Map<String, Integer> countryStats = new HashMap<>();
+
+        public void addWarning(String warning) {
+            warnings.add(warning);
+        }
+        
+        public void addWarnings(List<String> warnings) {
+            this.warnings.addAll(warnings);
+        }
+
+        // Getters - BinaryAttributeProcessor.ProcessResult와 동일한 인터페이스
+        public Map<String, Object> getBinaryAttributes() { return binaryAttributes; }
+        public List<String> getWarnings() { return warnings; }
+        public int getTotalCertificates() { return totalCertificates; }
+        public int getValidCertificates() { return validCertificates; }
+        public int getInvalidCertificates() { return invalidCertificates; }
+        public int getTotalMasterLists() { return totalMasterLists; }
+        public int getValidMasterLists() { return validMasterLists; }
+        public int getInvalidMasterLists() { return invalidMasterLists; }
+        public int getTotalCrls() { return totalCrls; }
+        public int getValidCrls() { return validCrls; }
+        public int getInvalidCrls() { return invalidCrls; }
+        public Map<String, Integer> getCountryStats() { return countryStats; }
+    }
+
+    /**
+     * 파싱 컨텍스트 - ParsingContext와 BinaryProcessingResult 브릿지
      */
     private static class ParsingContext {
         private final List<LdifEntryDto> entries = new ArrayList<>();
         private final List<String> errors = new ArrayList<>();
         private final List<String> warnings = new ArrayList<>();
-        private final Map<String, Integer> objectClassCount = new HashMap<>();
+        private final Map<String, Integer> entryTypeCount = new HashMap<>();
         private final Map<String, Integer> countryStats = new HashMap<>();
 
         private int addCount = 0;
@@ -359,7 +575,6 @@ public class LDIFParser {
         public void addEntry(LdifEntryDto entry) {
             entries.add(entry);
             addCount++;
-            countObjectClasses(entry);
         }
 
         public void addError(String error) {
@@ -374,7 +589,11 @@ public class LDIFParser {
             countryStats.merge(countryCode, 1, Integer::sum);
         }
 
-        public void updateStatistics(BinaryAttributeProcessor.ProcessResult result) {
+        public void addEntryType(EntryType entryType) {
+            entryTypeCount.merge(entryType.name(), 1, Integer::sum);
+        }
+
+        public void updateStatistics(BinaryProcessingResult result) {
             // PKD 통계 업데이트
             totalCertificates += result.getTotalCertificates();
             validCertificates += result.getValidCertificates();
@@ -393,20 +612,11 @@ public class LDIFParser {
             result.getCountryStats().forEach((country, count) -> countryStats.merge(country, count, Integer::sum));
         }
 
-        private void countObjectClasses(LdifEntryDto entry) {
-            List<String> objectClasses = entry.getAttributes().get("objectClass");
-            if (objectClasses != null) {
-                for (String objectClass : objectClasses) {
-                    objectClassCount.merge(objectClass, 1, Integer::sum);
-                }
-            }
-        }
-
         // Getters
         public List<LdifEntryDto> getEntries() { return entries; }
         public List<String> getErrors() { return errors; }
         public List<String> getWarnings() { return warnings; }
-        public Map<String, Integer> getObjectClassCount() { return objectClassCount; }
+        public Map<String, Integer> getEntryTypeCount() { return entryTypeCount; }
         public Map<String, Integer> getCountryStats() { return countryStats; }
         public int getAddCount() { return addCount; }
 

@@ -53,7 +53,7 @@ public class ICAOMasterListUploadController {
         try {
             // Master List 파싱 실행 (LDAP 저장 포함)
             // TODO: 개발 완료 후 isAddLdap 파라미터 제거할 것
-            parser.parseMasterList(file.getBytes(), file.getOriginalFilename(), true);
+            parser.parseMasterList(file.getBytes(), file.getOriginalFilename(), false);
             
             // 통계 정보 생성
             CscaStatistics statistics = generateStatistics();
