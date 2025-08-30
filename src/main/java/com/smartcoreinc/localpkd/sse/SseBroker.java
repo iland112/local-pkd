@@ -27,13 +27,12 @@ public class SseBroker {
 
     @PostConstruct
     void init() {
-        progressListener = (progress, processedCount, totalCount, message) -> {
+        progressListener = (progressEvent) -> {
             try {
-                ProgressEvent event = new ProgressEvent(progress, processedCount, totalCount, message);
-                Sinks.EmitResult result = eventPublisher.tryEmitNext(event);
+                Sinks.EmitResult result = eventPublisher.tryEmitNext(progressEvent);
 
                 if (result.isFailure()) {
-                    log.warn("Failed to emit progress event: {}, event: {}", result, event);
+                    log.warn("Failed to emit progress event: {}, event type: {}", result, progressEvent.progress().type());
                     // 실패 시 재 시도 로직
                     if (result == Sinks.EmitResult.FAIL_OVERFLOW) {
                         log.warn("Event buffer overflow, creating new sink");

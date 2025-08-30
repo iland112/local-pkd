@@ -14,24 +14,21 @@
   <body>
     <div class="container mx-auto max-w-4xl mt-4">
       <!-- SSE Connection Alert Section -->
-      <div id="connectionAlert" class="alert alert-warning mb-4 hidden">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="stroke-current shrink-0 h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
-        </svg>
-        <span
-          >Warning: No connection with server anymore. Live updates are
-          disabled.</span
-        >
+      <div
+        id="connectionAlert"
+        class="hidden mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-md"
+      >
+        <div class="flex items-center">
+          <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
+          <span class="text-yellow-700">
+            실시간 업데이트 연결이 끊어졌습니다. 페이지를 새로고침하여 다시 연결하세요.</span>
+          <button
+            onclick="location.reload()"
+            class="ml-4 px-3 py-1 bg-yellow-500 text-white rounded text-sm"
+          >
+            새로고침
+          </button>
+        </div>
       </div>
       <!-- Page Content -->
       <main layout:fragment="content"></main>
@@ -45,7 +42,6 @@
       type="text/javascript"
       th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
     ></script>
-    <th:block layout:fragment="script-content">
-    </th:block>
+    <th:block layout:fragment="script-content"> </th:block>
   </body>
 </html>

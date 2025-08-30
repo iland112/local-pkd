@@ -361,7 +361,7 @@ public class LDIFParser {
         double percentage = processedEntries / (double) totalEntryCount;
         Progress progress = new Progress(percentage, "LDIF"); // Entry 기반이므로 비율 계산 없음
         ProgressEvent progressEvent = new ProgressEvent(progress, 
-            processedEntries, totalEntryCount, "Processing Entry: " + currentDN);
+            processedEntries, totalEntryCount, "Processing Entry: " + currentDN, null);
         progressPublisher.notifyProgressListeners(progressEvent);
     }
 
@@ -377,7 +377,7 @@ public class LDIFParser {
             
             Progress progress = new Progress(0.0, "entryType");
             ProgressEvent event = new ProgressEvent(progress, 0, 0, 
-                "EntryType: " + entryType.name());
+                "EntryType: " + entryType.name(), null);
             progressPublisher.notifyProgressListeners(event);
             
         } catch (Exception e) {
