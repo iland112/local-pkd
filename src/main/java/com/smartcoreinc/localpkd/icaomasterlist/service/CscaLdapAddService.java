@@ -6,8 +6,6 @@ import java.util.HexFormat;
 import javax.naming.InvalidNameException;
 import javax.naming.Name;
 import javax.naming.ldap.LdapName;
-import javax.security.auth.x500.X500Principal;
-
 import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.ldap.filter.AndFilter;

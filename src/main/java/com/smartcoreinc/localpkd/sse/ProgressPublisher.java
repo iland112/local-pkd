@@ -44,12 +44,7 @@ public class ProgressPublisher {
                 progressEvent.totalCount(),
                 (int) (progressEvent.progress().value() * 100)
             );
-            progressListener.onProgress(
-                progressEvent.progress(),
-                progressEvent.processedCount(),
-                progressEvent.totalCount(),
-                "Current Processing Subject: " + progressEvent.message()
-            );
+            progressListener.onProgress(progressEvent);
         }
     }
 

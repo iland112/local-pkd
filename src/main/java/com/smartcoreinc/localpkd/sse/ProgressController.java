@@ -30,10 +30,10 @@ public class ProgressController {
         // HTMX SSE extension을 위한 하트비트 (연결 유지)
         Flux<ServerSentEvent<String>> heartbeat = Flux.interval(Duration.ofSeconds(30))
                 .map(sequence -> ServerSentEvent.<String>builder()
-                    .id(String.valueOf(sequence))
-                    .event("heartbeat")
-                    .data("ping")
-                    .build())
+                        .id(String.valueOf(sequence))
+                        .event("heartbeat")
+                        .data("ping")
+                        .build())
                 .onErrorResume(throwable -> {
                     log.debug("Heartbeat error: {}", throwable.getMessage());
                     return Flux.empty();
@@ -41,50 +41,50 @@ public class ProgressController {
 
         // 프로그레스 업데이트 스트림
         Flux<ServerSentEvent<String>> progressUpdates = sseBroker.subscribeToUpdates()
-            .flatMap(events -> {
-                try {
-                    // HTMX는 여러 이벤트를 동시에 처리할 수 있으므로 개별 이벤트로 방출
-                    return Flux.fromIterable(List.of(
-                        createProgressEvent(events),
-                        createLogEvent(events),
-                        createStatusEvent(events)  // 추가: 상태 업데이트용
-                    )).filter(Objects::nonNull);
-                } catch (Exception e) {
-                    log.error("Error creating events: {}", e.getMessage(), e);
-                    return createErrorEvent(e.getMessage());
-                }
-            })
-            .onErrorResume(throwable -> {
-                log.error("Progress updates error: {}", throwable.getMessage(), throwable);
-                return createErrorEvent("Progress update failed");
-            });
-        
+                .flatMap(events -> {
+                    try {
+                        // HTMX는 여러 이벤트를 동시에 처리할 수 있으므로 개별 이벤트로 방출
+                        return Flux.fromIterable(List.of(
+                                createProgressEvent(events),
+                                createLogEvent(events),
+                                createStatusEvent(events) // 추가: 상태 업데이트용
+                        )).filter(Objects::nonNull);
+                    } catch (Exception e) {
+                        log.error("Error creating events: {}", e.getMessage(), e);
+                        return createErrorEvent(e.getMessage());
+                    }
+                })
+                .onErrorResume(throwable -> {
+                    log.error("Progress updates error: {}", throwable.getMessage(), throwable);
+                    return createErrorEvent("Progress update failed");
+                });
+
         return Flux.merge(heartbeat, progressUpdates)
-            .doOnSubscribe(subscription -> {
-                log.debug("New HTMX SSE subscription: {}", subscription);
-            })
-            .doOnCancel(() -> {
-                log.debug("HTMX SSE connection cancelled (normal client disconnect)");
-            })
-            .doOnError(throwable -> {
-                // Broken pipe 등은 정상적인 클라이언트 연결 종료
-                if (throwable.getMessage() != null && 
-                    (throwable.getMessage().contains("Broken pipe") || 
-                     throwable.getMessage().contains("AsyncRequestNotUsableException"))) {
-                    log.debug("Client disconnected: {}", throwable.getMessage());
-                } else {
-                    log.error("SSE error: {}", throwable.getMessage(), throwable);
-                }
-            })
-            .doFinally(signalType -> {
-                log.debug("SSE connection finished: {}", signalType);
-            })
-            // HTMX는 재연결을 자동 처리하므로 에러 시 스트림 종료
-            .onErrorResume(throwable -> {
-                log.debug("SSE stream error handled, letting HTMX handle reconnection: {}", 
-                         throwable.getMessage());
-                return Flux.empty();
-            });
+                .doOnSubscribe(subscription -> {
+                    log.debug("New HTMX SSE subscription: {}", subscription);
+                })
+                .doOnCancel(() -> {
+                    log.debug("HTMX SSE connection cancelled (normal client disconnect)");
+                })
+                .doOnError(throwable -> {
+                    // Broken pipe 등은 정상적인 클라이언트 연결 종료
+                    if (throwable.getMessage() != null &&
+                            (throwable.getMessage().contains("Broken pipe") ||
+                                    throwable.getMessage().contains("AsyncRequestNotUsableException"))) {
+                        log.debug("Client disconnected: {}", throwable.getMessage());
+                    } else {
+                        log.error("SSE error: {}", throwable.getMessage(), throwable);
+                    }
+                })
+                .doFinally(signalType -> {
+                    log.debug("SSE connection finished: {}", signalType);
+                })
+                // HTMX는 재연결을 자동 처리하므로 에러 시 스트림 종료
+                .onErrorResume(throwable -> {
+                    log.debug("SSE stream error handled, letting HTMX handle reconnection: {}",
+                            throwable.getMessage());
+                    return Flux.empty();
+                });
     }
 
     /**
@@ -94,41 +94,69 @@ public class ProgressController {
     private ServerSentEvent<String> createProgressEvent(List<ProgressEvent> events) {
         try {
             ProgressEvent latestEvent = events.stream()
-                .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
-                .orElse(null);
-                
+                    .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
+                    .orElse(null);
+
             if (latestEvent == null) {
                 return null;
             }
-            
-            String progressType = latestEvent.progress().type().toLowerCase();
-            int progressRate = (int) (latestEvent.progress().value() * 100);
-            
-            // HTMX가 직접 DOM에 삽입할 수 있는 HTML 형태
-            String progressHtml = """
-                <div id="progress-container">
-                    <progress class="progress w-full h-6" value="%d" max="100"></progress>
-                    <div class="flex justify-between mt-2">
-                        <span class="text-sm text-gray-600">%s</span>
-                        <span class="text-sm font-semibold text-gray-900">%d%%</span>
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1">
-                        처리됨: %d / %d
-                    </div>
-                </div>
-                """.formatted(
-                    progressRate, 
-                    progressType.toUpperCase(),
-                    progressRate,
-                    latestEvent.processedCount(),
-                    latestEvent.totalCount()
-                );
-            
+
+            String progressType = latestEvent.progress().type();
+            int progressRate = (int) Math.round(latestEvent.progress().value() * 100); // 백분율로 변환
+
+            // 성공률 계산
+            double successRate = latestEvent.processedCount() > 0
+                    ? (double) latestEvent.processedCount() / latestEvent.totalCount() * 100
+                    : 0;
+
+            // HTMX가 직접 DOM에 삽입할 수 있는 향상된 HTML 형태
+            String progressHtml = String.format(
+                    """
+                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                              <div class="flex items-center justify-between mb-3">
+                                <span class="text-blue-800 font-semibold text-lg">저장 진행률</span>
+                                <span id="progressText" class="text-blue-700 font-bold text-lg">%d%%</span>
+                              </div>
+                              <div class="w-full bg-blue-100 rounded-full h-6 overflow-hidden shadow-inner">
+                                <div
+                                  id="progressBar"
+                                  class="bg-gradient-to-r from-blue-500 to-blue-600 h-6 rounded-full transition-all duration-300 flex items-center justify-center text-sm text-white font-semibold shadow-sm"
+                                  style="width: %d%%"
+                                >
+                                  %d%%
+                                </div>
+                              </div>
+                              <div class="flex justify-between mt-3 text-sm">
+                                <div class="text-blue-700">
+                                  <span class="font-medium">처리됨:</span>
+                                  <span id="currentCount" class="font-bold">%d</span>
+                                </div>
+                                <div class="text-blue-700">
+                                  <span class="font-medium">총:</span>
+                                  <span class="font-bold">%d</span>개
+                                </div>
+                              </div>
+                              <div class="flex justify-between mt-2 text-xs">
+                                <div class="text-green-600">
+                                  <i class="fas fa-check-circle mr-1"></i>
+                                  <span class="font-medium">성공률:</span>
+                                  <span id="successRate" class="font-bold">%.1f%%</span>
+                                </div>
+                                <span class="text-gray-600">
+                                  <i class="fas fa-clock mr-1"></i> 작업 진행중...
+                                </span>
+                              </div>
+                            </div>
+                            """,
+                    progressRate, progressRate, progressRate,
+                    latestEvent.processedCount(), latestEvent.totalCount(),
+                    successRate);
+
             return ServerSentEvent.<String>builder()
-                .event("progress-update")  // HTMX에서 이 이벤트명으로 수신
-                .data(progressHtml)
-                .build();
-                
+                    .event("progress-update") // HTMX에서 이 이벤트명으로 수신
+                    .data(progressHtml)
+                    .build();
+
         } catch (Exception e) {
             log.error("Error creating progress event: {}", e.getMessage(), e);
             return null;
@@ -142,33 +170,33 @@ public class ProgressController {
     private ServerSentEvent<String> createLogEvent(List<ProgressEvent> events) {
         try {
             String logHtml = events.stream()
-                .map(progressEvent -> {
-                    String timestamp = java.time.LocalTime.now()
-                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                    return """
-                        <div class="log-entry flex items-start gap-2 py-1 px-2 hover:bg-gray-50">
-                            <span class="text-xs text-gray-50 font-mono">%s</span>
-                            <span class="text-sm text-gray-100 flex-1">%s</span>
-                        </div>
-                        """.formatted(timestamp, replaceNewLines(progressEvent.message()));
-                })
-                .collect(Collectors.joining());
-                
+                    .map(progressEvent -> {
+                        String timestamp = java.time.LocalTime.now()
+                                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+                        return """
+                                <div class="log-entry flex items-start gap-2 py-1 px-2 hover:bg-gray-50">
+                                    <span class="text-xs text-gray-50 font-mono">%s</span>
+                                    <span class="text-sm text-gray-100 flex-1">%s</span>
+                                </div>
+                                """.formatted(timestamp, replaceNewLines(progressEvent.message()));
+                    })
+                    .collect(Collectors.joining());
+
             if (logHtml.isEmpty()) {
                 return null;
             }
-                
+
             return ServerSentEvent.<String>builder()
-                .event("log-update")  // HTMX에서 이 이벤트명으로 수신
-                .data(logHtml)
-                .build();
-                
+                    .event("log-update") // HTMX에서 이 이벤트명으로 수신
+                    .data(logHtml)
+                    .build();
+
         } catch (Exception e) {
             log.error("Error creating log event: {}", e.getMessage(), e);
             return null;
         }
     }
-    
+
     /**
      * HTMX용 상태 업데이트 이벤트
      * 이벤트명: status-update
@@ -176,48 +204,48 @@ public class ProgressController {
     private ServerSentEvent<String> createStatusEvent(List<ProgressEvent> events) {
         try {
             ProgressEvent latestEvent = events.stream()
-                .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
-                .orElse(null);
-                
+                    .max(Comparator.comparing(progressEvent -> progressEvent.progress().value()))
+                    .orElse(null);
+
             if (latestEvent == null) {
                 return null;
             }
-            
+
             boolean isComplete = latestEvent.progress().value() >= 1.0;
             String statusClass = isComplete ? "text-green-600" : "text-blue-600";
             String statusText = isComplete ? "완료" : "진행중";
-            
+
             String statusHtml = """
-                <div class="status-indicator %s font-semibold">
-                    상태: %s
-                </div>
-                """.formatted(statusClass, statusText);
-            
+                    <div class="status-indicator %s font-semibold">
+                        상태: %s
+                    </div>
+                    """.formatted(statusClass, statusText);
+
             return ServerSentEvent.<String>builder()
-                .event("status-update")
-                .data(statusHtml)
-                .build();
-                
+                    .event("status-update")
+                    .data(statusHtml)
+                    .build();
+
         } catch (Exception e) {
             log.error("Error creating status event: {}", e.getMessage(), e);
             return null;
         }
     }
-    
+
     /**
      * 오류 발생 시 클라이언트에 알림
      */
     private Flux<ServerSentEvent<String>> createErrorEvent(String errorMessage) {
         String errorHtml = """
-            <div class="error-message bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">
-                <strong>오류:</strong> %s
-            </div>
-            """.formatted(errorMessage);
-            
+                <div class="error-message bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">
+                    <strong>오류:</strong> %s
+                </div>
+                """.formatted(errorMessage);
+
         return Flux.just(ServerSentEvent.<String>builder()
-            .event("error-update")
-            .data(errorHtml)
-            .build());
+                .event("error-update")
+                .data(errorHtml)
+                .build());
     }
 
     private String replaceNewLines(String message) {

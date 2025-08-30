@@ -12,6 +12,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,15 +20,17 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import com.smartcoreinc.localpkd.SessionTaskManager;
+import com.smartcoreinc.localpkd.enums.TaskType;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
-import com.smartcoreinc.localpkd.ldif.service.LDIFParser;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
+import com.smartcoreinc.localpkd.ldif.service.StreamlinedLDIFParser;
 import com.smartcoreinc.localpkd.sse.Progress;
 import com.smartcoreinc.localpkd.sse.ProgressEvent;
 import com.smartcoreinc.localpkd.sse.ProgressPublisher;
 
+import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -36,7 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 public class LdifController {
 
     // Dependencies
-    private final LDIFParser ldifParserService;
+    // private final LDIFParser ldifParserService;
+    private final StreamlinedLDIFParser ldifParserService;
     private final LdapService ldapService;
     // Session and Task Info Container
     private final SessionTaskManager sessionTaskManager;
@@ -45,7 +49,16 @@ public class LdifController {
     // EntryType 통계를 위한 실시간 카운터
     private final Map<String, Map<String, Integer>> sessionEntryTypeStats = new HashMap<>();
 
-    public LdifController(LDIFParser ldifParserService,
+    // public LdifController(LDIFParser ldifParserService,
+    // LdapService ldapService,
+    // SessionTaskManager sessionTaskManager,
+    // ProgressPublisher progressPublisher) {
+    // this.ldifParserService = ldifParserService;
+    // this.ldapService = ldapService;
+    // this.sessionTaskManager = sessionTaskManager;
+    // this.progressPublisher = progressPublisher;
+    // }
+    public LdifController(StreamlinedLDIFParser ldifParserService,
             LdapService ldapService,
             SessionTaskManager sessionTaskManager,
             ProgressPublisher progressPublisher) {
@@ -62,11 +75,11 @@ public class LdifController {
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public String uploadLdifFile(@RequestParam("file") MultipartFile file,
-                                RedirectAttributes redirectAttributes,
-                                Model model) {
+            RedirectAttributes redirectAttributes,
+            Model model) {
         log.info("=== File upload endpoint called ===");
-        
-        // Upload된 ldif 파일 유효성 검증 
+
+        // Upload된 ldif 파일 유효성 검증
         if (file == null || file.isEmpty()) {
             redirectAttributes.addFlashAttribute("error", "파일을 선택해주세요.");
             return "redirect:/ldif";
@@ -80,7 +93,7 @@ public class LdifController {
         }
 
         log.info("Start processing LDIF file: {}", originalFilename);
-        
+
         try {
             // 세션 ID 미리 생성 (EntryType 통계 추적용)
             String sessionId = generateSessionId();
@@ -97,7 +110,7 @@ public class LdifController {
 
             // 분석 결과를 Session Task Manager 컨테이너에 저장
             sessionTaskManager.getSessionResults().put(sessionId, analysisResult);
-                        
+
             // 요약 정보만 뷰에 전달 - try-catch로 보호
             LdifAnalysisSummary summary = analysisResult.getSummary();
             if (summary == null) {
@@ -130,18 +143,18 @@ public class LdifController {
             model.addAttribute("summary", summary);
             model.addAttribute("sessionId", sessionId);
             model.addAttribute("fileName", originalFilename);
-            
+
             if (summary.isHasValidationErrors()) {
                 model.addAttribute("warning", "LDIF 파일에 오류가 있습니다. 아래 오류를 확인해주세요.");
             } else {
                 model.addAttribute("success", "LDIF 파일이 성공적으로 분석되었습니다.");
             }
-            
+
             log.info("Session {} created with {} entries", sessionId, analysisResult.getSummary().getTotalEntries());
             // 1초 대기 후 Anlaysis Result 페이지로 리다렉트
             // sleepQuietly(1000);
             return "ldif/analysis-result";
-            
+
         } catch (StackOverflowError e) {
             log.error("StackOverflowError during file processing: {}", e.getMessage());
             redirectAttributes.addFlashAttribute("error", "파일이 너무 크거나 복잡합니다. 더 작은 파일로 시도해주세요.");
@@ -158,9 +171,10 @@ public class LdifController {
     }
 
     // LDAP 저장 엔드포인트 - GET 방식으로 통일
-    @GetMapping(value = "/save-to-ldap", produces = MediaType.APPLICATION_JSON_VALUE)
+    @HxRequest
+    @GetMapping(value = "/save-to-ldap/{sessionId}")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> saveToLdap(@RequestParam String sessionId) {
+    public ResponseEntity<Map<String, Object>> saveToLdap(@PathVariable String sessionId) {
         log.info("=== LDAP Save endpoint called with sessionId: {} ===", sessionId);
         Map<String, Object> response = new HashMap<>();
 
@@ -175,7 +189,8 @@ public class LdifController {
                 return ResponseEntity.badRequest().body(response);
             }
 
-            log.debug("Number of entries to save: {}", analysisResult.getEntries().size());
+            int totalEntryCount = analysisResult.getEntries().size();
+            log.debug("Number of entries to save: {}", totalEntryCount);
 
             // Test LDAP connection first
             if (!ldapService.testConnection()) {
@@ -265,12 +280,12 @@ public class LdifController {
                     successCount++;
                 }
 
-                // 진행률 업데이트 (매 10개마다 또는 마지막에)
-                if ((i + 1) % 10 == 0 || i == entries.size() - 1) {
+                // 진행률 업데이트 빈도 조정: 매 5개마다 또는 마지막에
+                if ((i + 1) % 5 == 0 || i == entries.size() - 1) {
                     sendProgressUpdate(taskId, i + 1, totalCount, successCount);
                 }
 
-                // Add small delay to avoid overwhelming LDAP server
+                // LDAP 서버 부하 방지를 위한 짧은 대기
                 Thread.sleep(50);
 
             } catch (InterruptedException e) {
@@ -287,25 +302,35 @@ public class LdifController {
     }
 
     private void sendProgressUpdate(String taskId, int current, int total, int successCount) {
-        // SseEmitterWrapper wrapper = activeEmitters.get(taskId);
-        // if (wrapper != null && wrapper.isConnected()) {
-        // Map<String, Object> progressData = new HashMap<>();
-        // progressData.put("type", "progress");
-        // progressData.put("current", current);
-        // progressData.put("total", total);
-        // progressData.put("percentage", Math.round((double) current / total * 100));
-        // progressData.put("successCount", successCount);
+        double value = (double) current / total; // 0.0 ~ 1.0 사이의 실제 진행률
 
-        // if (!wrapper.sendSafely(progressData)) {
-        // log.debug("Failed to send progress update for task: {}, client likely
-        // disconnected", taskId);
-        // }
-        // }
-        double value = Math.round((double) current / total);
-        Progress progress = new Progress(value, taskId);
-        ProgressEvent progressEvent = new ProgressEvent(progress, current, total,
-                "success count: %d".formatted(successCount));
-        progressPublisher.notifyProgressListeners(progressEvent);
+        Progress progress = new Progress(value, TaskType.BIND.name());
+        String message = String.format("작업[%s] 진행중: %d/%d 처리됨, 성공: %d개",
+                taskId, current, total, successCount);
+
+        // Add task ID to the progress event for better tracking
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("taskId", taskId);
+        metadata.put("sessionId", getCurrentSessionId()); // implement this method
+
+        ProgressEvent progressEvent = new ProgressEvent(progress, current, total, message, metadata);
+
+        log.debug(
+                "Sending progress update - Task: {}, Progress: {}%, Current: {}/{}, Success: {}",
+                taskId, (int) (value * 100), current, total, successCount);
+
+        try {
+            progressPublisher.notifyProgressListeners(progressEvent);
+            log.debug("Progress update sent successfully for task: {}", taskId);
+        } catch (Exception e) {
+            log.error("Failed to send progress update for task {}: {}", taskId, e.getMessage(), e);
+        }
+    }
+
+    // Helper method to get current session ID from the running task
+    private String getCurrentSessionId() {
+        // This is a simplified implementation - you may need to adjust based on your architecture
+        return sessionTaskManager.getSessionResults().keySet().stream().findFirst().orElse("unknown");
     }
 
     private void handleSaveCompletion(String taskId, int savedCount, int totalCount) {
@@ -313,13 +338,18 @@ public class LdifController {
             if (progressPublisher.getProgressListeners().isEmpty()) {
                 log.warn("Currently, There is no subscripted listeners");
                 return;
-            } else {
-                Progress progress = new Progress(1.0, taskId);
-                ProgressEvent completionEvent = new ProgressEvent(progress, totalCount, totalCount, 
-                        "Completed: %d/%d saved".formatted(savedCount, totalCount));
-                progressPublisher.notifyProgressListeners(completionEvent);
-                log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
             }
+
+            // 완료 시 진행률은 항상 1.0 (100%)
+            Progress progress = new Progress(1.0, TaskType.BIND.name());
+            String message = String.format("완료: %d/%d 저장됨 (성공률: %.1f%%)",
+                    savedCount, totalCount,
+                    (double) savedCount / totalCount * 100);
+
+            ProgressEvent completionEvent = new ProgressEvent(progress, savedCount, totalCount, message);
+            progressPublisher.notifyProgressListeners(completionEvent);
+
+            log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
         } catch (Exception e) {
             log.error("Error in save completion handling: {}", e.getMessage(), e);
         } finally {
@@ -335,9 +365,8 @@ public class LdifController {
                 log.warn("Currently, There is no subscripted listeners");
                 return;
             } else {
-                Progress errorProgress = new Progress(0.0, taskId);
-                ProgressEvent errorEvent = new ProgressEvent(errorProgress, 0, 0, 
-                        "Error: " + throwable.getMessage());
+                Progress errorProgress = new Progress(0.0, TaskType.BIND.name());
+                ProgressEvent errorEvent = new ProgressEvent(errorProgress, 0, 0, "Error: " + throwable.getMessage());
                 progressPublisher.notifyProgressListeners(errorEvent);
             }
         } catch (Exception e) {

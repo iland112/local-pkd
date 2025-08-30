@@ -7,7 +7,12 @@
 >
   <body>
     <div layout:fragment="content">
-      <div class="container mx-auto px-4 py-8 max-w-7xl">
+      <div class="container mx-auto px-4 py-8 max-w-7xl"
+        hx-ext="sse"
+        sse-connect="/progress"
+        hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
+        hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
+      >
         <!-- Header -->
         <div class="mb-6">
           <div class="flex items-center justify-between">
@@ -614,60 +619,54 @@
               </div>
             </div>
             
-            <div class="flex items-center space-x-4">
-              <button
-                id="saveToLdapBtn"
-                class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all duration-200 text-lg shadow-md hover:shadow-lg transform hover:scale-105"
-                th:data-session-id="${sessionId}"
-              >
-                <i class="fas fa-save mr-2"></i> LDAP에 저장하기
-              </button>
+            <form
+              hx:get="@{/ldif/save-to-ldap/{sessionId}(sessionId=${sessionId})}"
+              hx-swap="none"
+              hx-disabled-elt=".disable-during-request"
+              class="mb-4"
+            >
+              <div class="flex items-center space-x-4">
+                <button
+                  type="submit"
+                  id="saveToLdapBtn"
+                  class="disable-during-request inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all duration-200 text-lg shadow-md hover:shadow-lg transform hover:scale-105"
+                >
+                  <i class="fas fa-save mr-2"></i> LDAP에 저장하기
+                </button>
+  
+                <button
+                  id="cancelTaskBtn"
+                  class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+                >
+                  <i class="fas fa-times mr-2"></i> 작업 취소
+                </button>
+              </div>
+            </form>
 
-              <button
-                id="cancelTaskBtn"
-                class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-              >
-                <i class="fas fa-times mr-2"></i> 작업 취소
-              </button>
-            </div>
-
-            <div id="progressSection" class="mt-6 hidden">
+            <!-- 진행률 표시 섹션 -->
+            <div id="progressSection" 
+              class="mt-6 hidden"
+              sse-swap="progress-update">
+              <!-- 기본 템플릿 -->
               <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
                 <div class="flex items-center justify-between mb-3">
-                  <span class="text-blue-800 font-semibold text-lg">저장 진행률</span>
-                  <span id="progressText" class="text-blue-700 font-bold text-lg"
-                    >0%</span
-                  >
-                </div>
-                <div class="w-full bg-blue-100 rounded-full h-6 overflow-hidden shadow-inner">
-                  <div
-                    id="progressBar"
-                    class="bg-gradient-to-r from-blue-500 to-blue-600 h-6 rounded-full transition-all duration-300 flex items-center justify-center text-sm text-white font-semibold shadow-sm"
-                    style="width: 0%"
-                  ></div>
-                </div>
-                <div class="flex justify-between mt-3 text-sm">
-                  <div class="text-blue-700">
-                    <span class="font-medium">처리됨:</span>
-                    <span id="currentCount" class="font-bold">0</span>
-                  </div>
-                  <div class="text-blue-700">
-                    <span class="font-medium">총:</span>
-                    <span class="font-bold" th:text="${summary.totalEntries}">0</span>개
-                  </div>
-                </div>
-                <div class="flex justify-between mt-2 text-xs">
-                  <div class="text-green-600">
-                    <i class="fas fa-check-circle mr-1"></i>
-                    <span class="font-medium">성공:</span>
-                    <span id="successCount" class="font-bold">0</span>개
-                  </div>
-                  <span id="estimatedTime" class="text-gray-600 hidden">
-                    <i class="fas fa-clock mr-1"></i>
-                    예상 완료: --:--
-                  </span>
-                </div>
+                <span class="text-blue-800 font-semibold text-lg">저장 진행률</span>
+                <span class="text-blue-700 font-bold text-lg">준비 중...</span>
               </div>
+              <div class="w-full bg-blue-100 rounded-full h-6 overflow-hidden shadow-inner">
+                <div class="bg-gradient-to-r from-blue-500 to-blue-600 h-6 rounded-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <div class="text-sm text-blue-700 mt-3">
+                저장 작업을 시작하는 중입니다...
+              </div>
+            </div>
+          </div>
+
+            <!-- 로그 표시 섹션 (선택사항) -->
+            <div id="logSection" 
+              class="mt-4 hidden max-h-40 overflow-y-auto bg-gray-900 text-green-400 p-3 rounded font-mono text-sm"
+              sse-swap="log-update">
+              <!-- Log HTML will be inserted here -->
             </div>
 
             <div id="saveResult" class="mt-4"></div>
@@ -678,311 +677,244 @@
     <th:block layout:fragment="script-content">
       <script type="text/javascript" th:src="@{/webjars/htmx.org/dist/ext/sse.js}"></script>
       <script th:inline="javascript">
-        let currentPage = 0;
-        const pageSize = 20;
-        let totalPages = 0;
         const sessionId = /*[[${sessionId}]]*/ "";
         let currentTaskId = null;
-        let progressStartTime = null;
-        let eventSource = null;
-        let entriesLoaded = false;
+        let sseConnected = false;
 
-        // Load first page on document ready
         document.addEventListener("DOMContentLoaded", function () {
-          console.log("sessionId: ", sessionId);
+          console.log("Analysis result page loaded with sessionId: ", sessionId);
           setupEventListeners();
         });
 
         function setupEventListeners() {
-          // Save to LDAP button
-          const saveBtn = document.getElementById("saveToLdapBtn");
+          // SSE 연결 상태 핸들러
+          document.body.addEventListener('htmx:sseOpen', function(evt) {
+            console.log('SSE connection opened on analysis page:', evt.detail);
+            sseConnected = true;
+            hideConnectionAlert();
+          });
+
+          document.body.addEventListener('htmx:sseError', function(evt) {
+            console.error('SSE connection error on analysis page:', evt.detail);
+            sseConnected = false;
+            showConnectionAlert();
+          });
+
+          document.body.addEventListener('htmx:sseMessage', function(evt) {
+            console.log('SSE message received on analysis page:', evt.detail);
+            
+            // progress-update 이벤트 처리
+            if (evt.detail.type === 'progress-update') {
+              const progressSection = document.getElementById('progressSection');
+              if (progressSection && progressSection.classList.contains('hidden')) {
+                progressSection.classList.remove('hidden');
+                console.log('Progress section shown');
+              }
+              // progressSection의 내용을 업데이트
+              if (progressSection && evt.detail.data) {
+                progressSection.innerHTML = evt.detail.data;
+              }
+            }
+            
+            // log-update 이벤트 처리
+            if (evt.detail.type === 'log-update') {
+              const logSection = document.getElementById('logSection');
+              if (logSection && logSection.classList.contains('hidden')) {
+                logSection.classList.remove('hidden');
+                console.log('Log section shown');
+              }
+              // logSection에 로그 추가
+              if (logSection && evt.detail.data) {
+                logSection.innerHTML += evt.detail.data;
+                logSection.scrollTop = logSection.scrollHeight;
+              }
+            }
+          });
+
+          // Save 버튼 이벤트
+          const saveBtn = document.getElementById('saveToLdapBtn');
           if (saveBtn) {
-            saveBtn.addEventListener("click", function () {
-              startSaveProcess();
+            saveBtn.addEventListener('click', function() {
+              console.log('Save button clicked');
+              handleSaveButtonClick(this);
             });
           }
 
-          // Cancel task button
-          const cancelBtn = document.getElementById("cancelTaskBtn");
+          // Cancel 버튼 이벤트
+          const cancelBtn = document.getElementById('cancelTaskBtn');
           if (cancelBtn) {
-            cancelBtn.addEventListener("click", function () {
+            cancelBtn.addEventListener('click', function () {
               cancelSaveProcess();
             });
           }
 
-          // Handle beforeunload (user refreshing/closing page)
-          window.addEventListener("beforeunload", function () {
-            if (eventSource) {
-              eventSource.close();
+          // HTMX 요청 후 응답 처리
+          document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.status === 200 && evt.detail.pathInfo.requestPath.includes('/save-to-ldap')) {
+              try {
+                const response = JSON.parse(evt.detail.xhr.responseText);
+                if (response.success && response.taskId) {
+                  console.log('Save task started with ID:', response.taskId);
+                  currentTaskId = response.taskId;
+                  handleSaveTaskStarted();
+                } else {
+                  console.error('Save task failed to start:', response.message);
+                  handleSaveError(response.message || '저장 시작 실패');
+                }
+              } catch (e) {
+                console.error('Error parsing save response:', e);
+                handleSaveError('응답 파싱 오류');
+              }
             }
           });
         }
 
-        function startSaveProcess() {
-          const btn = document.getElementById("saveToLdapBtn");
-          const cancelBtn = document.getElementById("cancelTaskBtn");
-          const progressSection = document.getElementById("progressSection");
-          const saveResult = document.getElementById("saveResult");
-
-          btn.disabled = true;
-          btn.innerHTML =
-            '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 준비 중...';
-          btn.classList.add("opacity-75", "cursor-not-allowed", "transform-none");
-
-          cancelBtn.classList.remove("hidden");
-          progressSection.classList.remove("hidden");
-          saveResult.innerHTML = "";
-          progressStartTime = Date.now();
-
-          console.log("sessionId=", sessionId);
-
-          fetch(`/ldif/save-to-ldap?sessionId=${sessionId}`, {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-          })
-            .then((response) => {
-              if (!response.ok) {
-                throw new Error(
-                  `HTTP ${response.status}: ${response.statusText}`
-                );
-              }
-              return response.json();
-            })
-            .then((data) => {
-              if (data.success && data.taskId) {
-                currentTaskId = data.taskId;
-                startProgressTracking(data.taskId);
-                btn.innerHTML =
-                  '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
-              } else {
-                handleSaveError(data.message || "저장 시작 실패");
-              }
-            })
-            .catch((error) => {
-              console.error("Save request error:", error);
-              handleSaveError("저장 요청 실패: " + error.message);
-            });
-        }
-
-        function startProgressTracking(taskId) {
-          const eventSource = new EventSource(
-            `/ldif/progress?taskId=${taskId}`
-          );
-
-          eventSource.onmessage = function (event) {
-            try {
-              const data = JSON.parse(event.data);
-              handleProgressUpdate(data);
-            } catch (e) {
-              console.error("Error parsing progress data:", e);
-            }
-          };
-
-          eventSource.onerror = function (event) {
-            console.error("SSE connection error:", event);
-            eventSource.close();
-            handleSaveError("진행률 추적 연결이 끊어졌습니다.");
-          };
-
-          // 타임아웃 처리
-          setTimeout(() => {
-            if (eventSource.readyState === EventSource.OPEN) {
-              eventSource.close();
-              handleSaveError(
-                "저장 작업이 너무 오래 걸립니다. 다시 시도해주세요."
-              );
-            }
-          }, 300000); // 5분 타임아웃
-        }
-
-        function handleProgressUpdate(data) {
-          const progressBar = document.getElementById("progressBar");
-          const progressText = document.getElementById("progressText");
-          const currentCount = document.getElementById("currentCount");
-          const successCount = document.getElementById("successCount");
-          const saveResult = document.getElementById("saveResult");
-          const btn = document.getElementById("saveToLdapBtn");
-
-          switch (data.type) {
-            case "progress":
-              const percentage = data.percentage || 0;
-              progressBar.style.width = percentage + "%";
-              progressText.textContent = percentage + "%";
-              currentCount.textContent = data.current || 0;
-
-              // 성공 카운트 업데이트
-              if (data.successCount !== undefined) {
-                successCount.textContent = data.successCount;
-                const successRate = Math.round(
-                  (data.successCount / data.current) * 100
-                );
-                progressText.textContent = `${percentage}% (성공률: ${successRate}%)`;
-              }
-              break;
-
-            case "complete":
-              progressBar.style.width = "100%";
-              progressText.textContent = "100%";
-              currentCount.textContent = data.savedCount || 0;
-              successCount.textContent = data.savedCount || 0;
-
-              const isFullSuccess = data.savedCount === data.totalCount;
-              
-              saveResult.innerHTML = `
-                <div class="bg-${isFullSuccess ? 'green' : 'yellow'}-50 border border-${isFullSuccess ? 'green' : 'yellow'}-200 rounded-lg p-6 animate-fadeIn">
-                    <div class="flex items-start">
-                        <i class="fas fa-${isFullSuccess ? 'check-circle text-green-500' : 'exclamation-triangle text-yellow-500'} mr-3 text-2xl mt-1"></i>
-                        <div class="flex-1">
-                            <div class="text-${isFullSuccess ? 'green' : 'yellow'}-800 font-bold text-lg mb-2">
-                                ${isFullSuccess ? '저장 완료!' : '저장 부분 완료'}
-                            </div>
-                            <div class="text-${isFullSuccess ? 'green' : 'yellow'}-700 mb-3">
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div><strong>저장됨:</strong> ${data.savedCount}개</div>
-                                    <div><strong>전체:</strong> ${data.totalCount}개</div>
-                                    <div><strong>성공률:</strong> ${Math.round((data.savedCount / data.totalCount) * 100)}%</div>
-                                    <div><strong>소요시간:</strong> ${formatElapsedTime(Date.now() - progressStartTime)}</div>
-                                </div>
-                            </div>
-                            ${!isFullSuccess ? `
-                                <div class="bg-yellow-100 border border-yellow-300 rounded-md p-3 mt-3">
-                                    <div class="text-yellow-800 text-sm">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        일부 엔트리는 중복이거나 형식 오류로 인해 저장되지 않았을 수 있습니다.
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-              `;
-
-              btn.disabled = false;
-              btn.innerHTML = '<i class="fas fa-check mr-2"></i> 저장 완료';
-              btn.classList.remove("opacity-75", "cursor-not-allowed");
-              btn.classList.add("bg-gray-500", "cursor-default", "transform-none");
-              document.getElementById("cancelTaskBtn").classList.add("hidden");
-              break;
-
-            case "error":
-              handleSaveError(
-                data.message || "알 수 없는 오류가 발생했습니다."
-              );
-              break;
+        function handleSaveButtonClick(button) {
+          button.disabled = true;
+          button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 준비 중...';
+          
+          const cancelBtn = document.getElementById('cancelTaskBtn');
+          if (cancelBtn) {
+            cancelBtn.classList.remove('hidden');
           }
+          
+          const saveResult = document.getElementById('saveResult');
+          if (saveResult) {
+            saveResult.innerHTML = '';
+          }
+        }
+
+        function handleSaveTaskStarted() {
+          const saveBtn = document.getElementById('saveToLdapBtn');
+          if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 저장 중...';
+          }
+          console.log('Save task started, waiting for progress updates...');
         }
 
         function cancelSaveProcess() {
-          if (!currentTaskId) {
-            return;
+          console.log('Cancel save process requested');
+          
+          const cancelBtn = document.getElementById("cancelTaskBtn");
+          if (cancelBtn) {
+            cancelBtn.disabled = true;
+            cancelBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 취소 중...';
           }
 
-          const cancelBtn = document.getElementById("cancelTaskBtn");
-          cancelBtn.disabled = true;
-          cancelBtn.innerHTML =
-            '<i class="fas fa-spinner fa-spin mr-2"></i> 취소 중...';
+          if (currentTaskId) {
+            fetch(`/ldif/cancel-task?taskId=${currentTaskId}`, { method: 'GET' })
+              .then(response => response.json())
+              .then(data => {
+                console.log('Cancel response:', data);
+                if (data.success) {
+                  handleCancelSuccess();
+                } else {
+                  handleCancelError(data.message);
+                }
+              })
+              .catch(error => {
+                console.error('Cancel error:', error);
+                handleCancelError('취소 요청 실패');
+              });
+          }
+        }
 
-          fetch(`/ldif/cancel-task?taskId=${currentTaskId}`, {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              if (data.success) {
-                handleSaveError("작업이 사용자에 의해 취소되었습니다.");
-              } else {
-                console.error("Cancel failed:", data.message);
-              }
-            })
-            .catch((error) => {
-              console.error("Cancel request error:", error);
-            });
+        function handleCancelSuccess() {
+          resetUI();
+          showToast('작업이 취소되었습니다.', 'info');
+        }
+
+        function handleCancelError(message) {
+          const cancelBtn = document.getElementById("cancelTaskBtn");
+          if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-times mr-2"></i> 작업 취소';
+          }
+          showToast('취소 실패: ' + message, 'error');
         }
 
         function handleSaveError(message) {
           const saveResult = document.getElementById("saveResult");
-          const btn = document.getElementById("saveToLdapBtn");
-          const cancelBtn = document.getElementById("cancelTaskBtn");
-          const progressSection = document.getElementById("progressSection");
-          const estimatedTime = document.getElementById("estimatedTime");
-
-          saveResult.innerHTML = `
-            <div class="bg-red-50 border border-red-200 rounded-lg p-6 animate-fadeIn">
-              <div class="flex items-start">
-                <i class="fas fa-exclamation-triangle text-red-500 mr-3 text-2xl mt-1"></i>
-                <div class="flex-1">
-                  <div class="text-red-800 font-bold text-lg mb-2">저장 실패</div>
-                  <div class="text-red-700 mb-3">${message}</div>
-                  ${
-                    progressStartTime
-                      ? `
-                    <div class="text-red-600 text-sm bg-red-100 rounded-md p-2">
-                      <i class="fas fa-clock mr-1"></i>
-                      소요 시간: ${formatElapsedTime(
-                        Date.now() - progressStartTime
-                      )}
-                    </div>
-                  `
-                      : ""
-                  }
+          if (saveResult) {
+            saveResult.innerHTML = `
+              <div class="bg-red-50 border border-red-200 rounded-lg p-6 animate-fadeIn">
+                <div class="flex items-start">
+                  <i class="fas fa-exclamation-triangle text-red-500 mr-3 text-2xl mt-1"></i>
+                  <div class="flex-1">
+                    <div class="text-red-800 font-bold text-lg mb-2">저장 실패</div>
+                    <div class="text-red-700 mb-3">${message}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          `;
-
-          // 진행률 섹션 숨기기
-          progressSection.classList.add("hidden");
-          estimatedTime.classList.add("hidden");
-
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-redo mr-2"></i> 다시 시도';
-          btn.classList.remove("opacity-75", "cursor-not-allowed", "bg-gray-500", "cursor-default", "transform-none");
-          btn.classList.add("hover:scale-105");
-
-          cancelBtn.classList.add("hidden");
-          cancelBtn.disabled = false;
-          cancelBtn.innerHTML = '<i class="fas fa-times mr-2"></i> 작업 취소';
-
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
+            `;
           }
-
-          currentTaskId = null;
-          progressStartTime = null;
+          resetUI();
         }
 
-        function formatElapsedTime(milliseconds) {
-          const seconds = Math.floor(milliseconds / 1000);
-          const minutes = Math.floor(seconds / 60);
-          const hours = Math.floor(minutes / 60);
+        function resetUI() {
+          const saveBtn = document.getElementById('saveToLdapBtn');
+          const cancelBtn = document.getElementById('cancelTaskBtn');
+          const progressSection = document.getElementById('progressSection');
 
-          if (hours > 0) {
-            return `${hours}시간 ${minutes % 60}분 ${seconds % 60}초`;
-          } else if (minutes > 0) {
-            return `${minutes}분 ${seconds % 60}초`;
-          } else {
-            return `${seconds}초`;
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> LDAP에 저장하기';
           }
+          
+          if (cancelBtn) {
+            cancelBtn.classList.add('hidden');
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-times mr-2"></i> 작업 취소';
+          }
+          
+          if (progressSection) {
+            progressSection.classList.add('hidden');
+          }
+          
+          currentTaskId = null;
+        }
+
+        function showConnectionAlert() {
+          const alert = document.getElementById('connectionAlert');
+          if (alert) {
+            alert.classList.remove('hidden');
+          }
+        }
+
+        function hideConnectionAlert() {
+          const alert = document.getElementById('connectionAlert');
+          if (alert) {
+            alert.classList.add('hidden');
+          }
+        }
+
+        function handleSSEError() {
+          showConnectionAlert();
+        }
+
+        function handleSSEOpen() {
+          hideConnectionAlert();
+        }
+
+        function showToast(message, type = 'success') {
+          const event = new CustomEvent('show-toast', {
+            detail: { message, type }
+          });
+          document.dispatchEvent(event);
         }
 
         // Toast notification system
         document.addEventListener("show-toast", function (e) {
           const toast = document.createElement("div");
           toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white font-medium transform transition-all duration-300 translate-x-full ${
-            e.detail.type === "success" ? "bg-green-600" : "bg-red-600"
+            e.detail.type === "success" ? "bg-green-600" : 
+            e.detail.type === "info" ? "bg-blue-600" : "bg-red-600"
           }`;
           toast.innerHTML = `
             <div class="flex items-center">
               <i class="fas ${
-                e.detail.type === "success"
-                  ? "fa-check"
-                  : "fa-exclamation-triangle"
+                e.detail.type === "success" ? "fa-check" :
+                e.detail.type === "info" ? "fa-info-circle" : "fa-exclamation-triangle"
               } mr-2"></i>
               ${e.detail.message}
             </div>
@@ -999,9 +931,16 @@
           setTimeout(() => {
             toast.classList.add("translate-x-full");
             setTimeout(() => {
-              document.body.removeChild(toast);
+              if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+              }
             }, 300);
           }, 3000);
+        });
+
+        // Handle beforeunload (user refreshing/closing page)
+        window.addEventListener("beforeunload", function () {
+          console.log('Page unloading, SSE will be automatically closed by HTMX');
         });
       </script>
       <style>
@@ -1044,23 +983,6 @@
           background: #94a3b8;
         }
 
-        /* Progress bar animation */
-        #progressBar {
-          transition: width 0.5s ease-in-out;
-        }
-
-        /* Modal backdrop blur effect */
-        .fixed.inset-0.bg-black.bg-opacity-50 {
-          backdrop-filter: blur(2px);
-        }
-
-        /* Smooth transitions for all interactive elements */
-        button,
-        .transition-colors,
-        .transition-all {
-          transition: all 0.2s ease-in-out;
-        }
-
         /* Enhanced hover effects for cards */
         .hover\:shadow-xl:hover {
           transform: translateY(-2px);
@@ -1079,93 +1001,6 @@
 
         .animate-spin {
           animation: spin 1s linear infinite;
-        }
-
-        /* Gradient backgrounds */
-        .bg-gradient-to-br {
-          background: linear-gradient(to bottom right, var(--tw-gradient-stops));
-        }
-
-        .bg-gradient-to-r {
-          background: linear-gradient(to right, var(--tw-gradient-stops));
-        }
-
-        /* Progress bar enhanced styling */
-        #progressBar {
-          background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-          box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3);
-        }
-
-        /* Enhanced card styling */
-        .rounded-xl {
-          border-radius: 0.75rem;
-        }
-
-        /* Improved shadow system */
-        .shadow-lg {
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-
-        .shadow-xl {
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-
-        /* Modal slide-in animation */
-        .fixed.inset-0.z-50:not(.hidden) .relative.transform {
-          animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: scale(0.9) translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-
-        /* PKD specific styling */
-        .pkd-card {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .certificate-card {
-          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }
-
-        .masterlist-card {
-          background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        }
-
-        /* Enhanced animation for statistics cards */
-        .stats-card {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .stats-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        }
-
-        /* Progress section styling */
-        #progressSection {
-          background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-          border: 2px solid #bbdefb;
-        }
-
-        /* Success/Error result styling */
-        #saveResult .bg-green-50 {
-          background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
-        }
-
-        #saveResult .bg-red-50 {
-          background: linear-gradient(135deg, #ffeaea 0%, #fff5f5 100%);
-        }
-
-        #saveResult .bg-yellow-50 {
-          background: linear-gradient(135deg, #fffbeb 0%, #fefce8 100%);
         }
       </style>
     </th:block>
