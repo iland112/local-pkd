@@ -21,12 +21,14 @@
         <div class="flex items-center">
           <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
           <span class="text-yellow-700">
-            실시간 업데이트 연결이 끊어졌습니다. 페이지를 새로고침하여 다시 연결하세요.</span>
+            실시간 업데이트(SSE) 연결이 끊어졌습니다. 페이지를 새로고침하여 다시
+            연결하세요.
+          </span>
           <button
-            onclick="location.reload()"
+            onclick="reconnectSSE()"
             class="ml-4 px-3 py-1 bg-yellow-500 text-white rounded text-sm"
           >
-            새로고침
+            <i class="fas fa-sync-alt"></i>
           </button>
         </div>
       </div>
