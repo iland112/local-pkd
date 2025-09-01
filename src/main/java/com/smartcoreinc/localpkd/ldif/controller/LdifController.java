@@ -171,8 +171,7 @@ public class LdifController {
     }
 
     // LDAP 저장 엔드포인트 - GET 방식으로 통일
-    @HxRequest
-    @GetMapping(value = "/save-to-ldap/{sessionId}")
+    @PostMapping(value = "/save-to-ldap/{sessionId}")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> saveToLdap(@PathVariable String sessionId) {
         log.info("=== LDAP Save endpoint called with sessionId: {} ===", sessionId);
@@ -268,6 +267,9 @@ public class LdifController {
 
         log.info("Starting to save {} entries for task: {}", totalCount, taskId);
 
+        // 시작 시 초기 진행률 전송
+        sendProgressUpdate(taskId, 0, totalCount, 0);
+
         for (int i = 0; i < entries.size(); i++) {
             // 작업 취소 확인
             if (shouldContinue == null || !shouldContinue.get()) {
@@ -280,48 +282,69 @@ public class LdifController {
                     successCount++;
                 }
 
-                // 진행률 업데이트 빈도 조정: 매 5개마다 또는 마지막에
-                if ((i + 1) % 5 == 0 || i == entries.size() - 1) {
+                // 진행률 업데이트 빈도 조정: 매 3개마다, 처음 10개는 매번, 마지막은 반드시
+                boolean shouldSendUpdate = (i < 10) ||
+                        ((i + 1) % 3 == 0) ||
+                        (i == entries.size() - 1) ||
+                        (i > 0 && i % 50 == 0); // 50개마다는 반드시
+
+                if (shouldSendUpdate) {
                     sendProgressUpdate(taskId, i + 1, totalCount, successCount);
                 }
 
                 // LDAP 서버 부하 방지를 위한 짧은 대기
-                Thread.sleep(50);
+                Thread.sleep(30); // 50ms에서 30ms로 단축
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("Save operation interrupted for task: {}", taskId);
                 break;
             } catch (Exception e) {
-                log.error("Unexpected error saving entry {}: {}", entries.get(i).getDn(), e.getMessage(), e);
+                log.error("Error saving entry {}: {}", entries.get(i).getDn(), e.getMessage());
+                // 에러가 발생해도 진행률은 업데이트
+                if ((i + 1) % 5 == 0 || i == entries.size() - 1) {
+                    sendProgressUpdate(taskId, i + 1, totalCount, successCount);
+                }
             }
         }
+
+        // 완료 시 최종 진행률 전송
+        sendProgressUpdate(taskId, entries.size(), totalCount, successCount);
 
         log.info("Completed saving {}/{} entries to LDAP for task: {}", successCount, entries.size(), taskId);
         return successCount;
     }
 
     private void sendProgressUpdate(String taskId, int current, int total, int successCount) {
-        double value = (double) current / total; // 0.0 ~ 1.0 사이의 실제 진행률
-
-        Progress progress = new Progress(value, TaskType.BIND.name());
-        String message = String.format("작업[%s] 진행중: %d/%d 처리됨, 성공: %d개",
-                taskId, current, total, successCount);
-
-        // Add task ID to the progress event for better tracking
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("taskId", taskId);
-        metadata.put("sessionId", getCurrentSessionId()); // implement this method
-
-        ProgressEvent progressEvent = new ProgressEvent(progress, current, total, message, metadata);
-
-        log.debug(
-                "Sending progress update - Task: {}, Progress: {}%, Current: {}/{}, Success: {}",
-                taskId, (int) (value * 100), current, total, successCount);
-
         try {
+            double value = (double) current / total;
+            Progress progress = new Progress(value, TaskType.BIND.name());
+
+            String message = String.format("작업[%s] 진행중: %d/%d 처리됨, 성공: %d개",
+                    taskId, current, total, successCount);
+
+            // 메타데이터에 더 많은 정보 추가
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("taskId", taskId);
+            metadata.put("sessionId", getCurrentSessionId());
+            metadata.put("timestamp", System.currentTimeMillis());
+            metadata.put("successCount", successCount);
+            metadata.put("failureCount", current - successCount);
+
+            ProgressEvent progressEvent = new ProgressEvent(progress, current, total, message, metadata);
+
+            log.debug("Sending progress update - Task: {}, Progress: {}%, Current: {}/{}, Success: {}",
+                    taskId, (int) (value * 100), current, total, successCount);
+
+            // 구독자가 있는지 확인 후 전송
+            if (progressPublisher.getProgressListeners().isEmpty()) {
+                log.warn("No progress listeners available for task: {}", taskId);
+                return;
+            }
+
             progressPublisher.notifyProgressListeners(progressEvent);
             log.debug("Progress update sent successfully for task: {}", taskId);
+
         } catch (Exception e) {
             log.error("Failed to send progress update for task {}: {}", taskId, e.getMessage(), e);
         }
@@ -329,31 +352,43 @@ public class LdifController {
 
     // Helper method to get current session ID from the running task
     private String getCurrentSessionId() {
-        // This is a simplified implementation - you may need to adjust based on your architecture
+        // This is a simplified implementation - you may need to adjust based on your
+        // architecture
         return sessionTaskManager.getSessionResults().keySet().stream().findFirst().orElse("unknown");
     }
 
     private void handleSaveCompletion(String taskId, int savedCount, int totalCount) {
         try {
-            if (progressPublisher.getProgressListeners().isEmpty()) {
-                log.warn("Currently, There is no subscripted listeners");
-                return;
-            }
+            log.info("Save process completed for task {}: {}/{} entries saved", taskId, savedCount, totalCount);
 
-            // 완료 시 진행률은 항상 1.0 (100%)
+            // 최종 완료 이벤트 전송
             Progress progress = new Progress(1.0, TaskType.BIND.name());
             String message = String.format("완료: %d/%d 저장됨 (성공률: %.1f%%)",
-                    savedCount, totalCount,
-                    (double) savedCount / totalCount * 100);
+                    savedCount, totalCount, (double) savedCount / totalCount * 100);
 
-            ProgressEvent completionEvent = new ProgressEvent(progress, savedCount, totalCount, message);
-            progressPublisher.notifyProgressListeners(completionEvent);
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("taskId", taskId);
+            metadata.put("completed", true);
+            metadata.put("timestamp", System.currentTimeMillis());
 
-            log.info("Save process completed: {}/{} entries saved", savedCount, totalCount);
+            ProgressEvent completionEvent = new ProgressEvent(progress, savedCount, totalCount, message, metadata);
+
+            if (!progressPublisher.getProgressListeners().isEmpty()) {
+                progressPublisher.notifyProgressListeners(completionEvent);
+            }
+
         } catch (Exception e) {
-            log.error("Error in save completion handling: {}", e.getMessage(), e);
+            log.error("Error in save completion handling for task {}: {}", taskId, e.getMessage(), e);
         } finally {
-            cleanupTask(taskId);
+            // 작업 정리를 약간 지연시켜 클라이언트가 완료 메시지를 받을 시간을 확보
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(2000); // 2초 대기
+                    cleanupTask(taskId);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
         }
     }
 
