@@ -21,17 +21,13 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import com.smartcoreinc.localpkd.SessionTaskManager;
-import com.smartcoreinc.localpkd.enums.TaskType;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisResult;
 import com.smartcoreinc.localpkd.ldif.dto.LdifAnalysisSummary;
 import com.smartcoreinc.localpkd.ldif.dto.LdifEntryDto;
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
 import com.smartcoreinc.localpkd.ldif.service.LDIFParser;
 import com.smartcoreinc.localpkd.sse.broker.LdapProgressBroker;
-import com.smartcoreinc.localpkd.sse.broker.UploadProgressBroker;
 import com.smartcoreinc.localpkd.sse.event.LdapSaveEvent;
-import com.smartcoreinc.localpkd.sse.event.UploadEvent;
-
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,7 +48,6 @@ public class LdifController {
     public LdifController(LDIFParser ldifParserService,
             LdapService ldapService,
             SessionTaskManager sessionTaskManager,
-            UploadProgressBroker uploadProgressBroker,
             LdapProgressBroker ldapProgressBroker) {
         this.ldifParserService = ldifParserService;
         this.ldapService = ldapService;
