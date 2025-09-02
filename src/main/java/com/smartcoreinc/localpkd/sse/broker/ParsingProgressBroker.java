@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.stereotype.Component;
 
-import com.smartcoreinc.localpkd.sse.event.LdapSaveEvent;
 import com.smartcoreinc.localpkd.sse.event.ParsingEvent;
 
 import lombok.extern.slf4j.Slf4j;
@@ -144,5 +143,19 @@ public class ParsingProgressBroker {
         } catch (Exception e) {
             log.error("Error recreating LDIF parsing sink for task {}: {}", sessionId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * 활성 구독자 수 반환
+     */
+    public int getActiveSubscriberCount() {
+        return subscriberCount.get();
+    }
+    
+    /**
+     * 활성 저장 태스크 수 반환
+     */
+    public int getActiveTaskCount() {
+        return parsingSinks.size();
     }
 }

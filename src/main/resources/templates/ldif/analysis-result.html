@@ -765,7 +765,7 @@
           <div
             class="p-6"
             hx-ext="sse"
-            sse-connect="/progress"
+            sse-connect="/ldap-progress/{taskId}(taskId=${taskId})"
             hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
             hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
           >
