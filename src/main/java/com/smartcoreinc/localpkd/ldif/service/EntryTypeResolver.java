@@ -43,6 +43,9 @@ public class EntryTypeResolver {
         if (objectClasses.contains("domain")) {
             return EntryType.DC;
         }
+        if (objectClasses.contains("pkdMasterList") && objectClasses.contains("pkdDownload")) {
+            return EntryType.ML;
+        }
         
         // 해당되는 타입이 없을 경우
         return null;
