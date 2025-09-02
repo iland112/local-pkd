@@ -77,9 +77,9 @@
                 <div
                   class="mb-6"
                   hx-ext="sse"
-                  sse-connect="/progress"
-                  hx-on::sse-error="document.getElementById('connectionAlert').classList.remove('hidden')"
-                  hx-on::sse-open="document.getElementById('connectionAlert').classList.add('hidden')"
+                  th:attr="sse-connect='/parsing-progress/' + ${session?.id ?: 'default'}"
+                  hx-on::sse-error="handleParsingSSEError()"
+                  hx-on::sse-open="handleParsingSSEOpen()"
                 >
                   <form
                     enctype="multipart/form-data"
@@ -130,7 +130,12 @@
                   <div class="mt-4 card bg-base-100 card-lg shadow-sm">
                     <div class="card-body">
                       <h2 class="card-title">LDIF 분석 진행 상태</h2>
-                      <div sse-swap="progress-update"></div>
+                      <div id="parsingProgressSection" 
+                        sse-swap="parsing-progress" 
+                        class="hidden"
+                      >
+                        <!-- 파싱 진행률 HTML이 여기에 삽입됨 -->
+                      </div>
                     </div>
                   </div>
                 </div>
