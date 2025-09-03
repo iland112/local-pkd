@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,6 +45,11 @@ public class LDIFParser {
         "pkdmasterlistcontent", "pkddsccertificate"
     );
 
+    // 진행률 발행 최적화를 위한 상수
+    private static final int SMALL_FILE_THRESHOLD = 100;
+    private static final int MEDIUM_FILE_THRESHOLD = 1000;
+    private static final int PROGRESS_UPDATE_BATCH_SIZE = 50;
+
     public LDIFParser(
             CertificateVerifier certificateVerifier,
             BinaryAttributeStrategyFactory strategyFactory,
@@ -59,73 +65,89 @@ public class LDIFParser {
     public LdifAnalysisResult parseLdifFile(MultipartFile file, String sessionId) throws Exception {
         long fileSize = file.getSize();
         String fileName = file.getOriginalFilename();
-        log.info("Starting LDIF parsing for session: {}, file: {}, {} bytes", sessionId, fileName, fileSize);
+        log.info("Starting LDIF parsing for session: {}, file: {}, {} bytes",
+                sessionId, fileName, fileSize);
 
         // 파싱 세션 시작
         parsingProgressBroker.startParsingSession(sessionId);
 
         try {
             // 1단계: 파일 크기 확인 및 Entry 개수 계산
-            publishParsingProgress(sessionId, 0.05, "파일 크기 확인 중...", fileName, 0, 0);
+            publishParsingProgress(sessionId, 0.02, "파일 분석 중...", fileName, 0, 0);
             
-            int totalEntryCount = getEntryCount(file);
+            // 전체 Entry 개수 계산
+            int totalEntryCount = getTotalEntryCount(file);
             log.debug("Total Entries in LDIF file: {}", totalEntryCount);
             
-            if (totalEntryCount == 0) {
+            if (totalEntryCount <= 0) {
                 publishParsingError(sessionId, "LDIF 파일에 유효한 엔트리가 없습니다.", fileName);
                 throw new IllegalArgumentException("No valid entries found in LDIF file");
             }
 
             // 2단계: 실제 파싱 시작
-            publishParsingProgress(sessionId, 0.1, "LDIF 파싱 시작...", fileName, 0, totalEntryCount);
+            publishParsingProgress(sessionId, 0.05, "LDIF 파싱 시작...", fileName, 0, totalEntryCount);
 
             AnalysisStatistics stats = new AnalysisStatistics();
             List<ParsedLdifEntry> processedEntries = new ArrayList<>();
-            int entryCount = 0;
+            AtomicInteger entryCounter = new AtomicInteger(0);
+
+            // 진행률 발행 주기 결정
+            ProgressUpdateStrategy updateStrategy = determineUpdateStrategy(totalEntryCount);
 
             try (InputStream inputStream = file.getInputStream();
                  LDIFReader ldifReader = new LDIFReader(inputStream)) {
 
                 Entry entry;
                 while ((entry = ldifReader.readEntry()) != null) {
-                    entryCount++;
+                    int currentEntryNum = entryCounter.incrementAndGet();
                     
                     try {
                         // Entry 처리
-                        ParsedLdifEntry wrapper = processEntry(entry, entryCount);
+                        ParsedLdifEntry wrapper = processEntry(entry, currentEntryNum);
                         processedEntries.add(wrapper);
                         stats.updateFrom(wrapper);
-                        
-                        // 매 Entry 처리 후 진행률 업데이트
-                        publishEntryProgress(sessionId, entryCount, totalEntryCount, 
-                                           entry.getDN(), fileName, stats);
-                        
+
+                        // 최적화된 진행률 업데이트
+                        if (updateStrategy.shouldUpdateProgress(currentEntryNum)) {
+                            // 실제 엔트리 수가 예상과 다를 수 있으므로 동적 조정
+                            int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
+                            publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
+                                               entry.getDN(), fileName, stats);
+                        }
                     } catch (Exception e) {
                         String error = String.format("Entry %d (%s): %s", 
-                            entryCount, entry.getDN(), e.getMessage());
+                            currentEntryNum, entry.getDN(), e.getMessage());
                         stats.addError(error);
                         log.error("Error processing entry {}: {}", entry.getDN(), e.getMessage(), e);
                         
-                        // 에러가 발생해도 진행률은 업데이트
-                        publishEntryProgress(sessionId, entryCount, totalEntryCount, 
-                                           entry.getDN(), fileName, stats);
+                        // 에러가 발생해도 주기적으로 진행률 업데이트
+                        if (updateStrategy.shouldUpdateProgressOnError(currentEntryNum)) {
+                            int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
+                            publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
+                                               entry.getDN(), fileName, stats);
+                        }
                     }
                 }
 
-            } catch (LDIFException | IOException e) {
+                int finalEntryCount = entryCounter.get();
+                log.info("Parsing completed - totalEntryCount: {}, Actual: {}", totalEntryCount, finalEntryCount);
+
+            } catch (Exception e) {
                 log.error("LDIF processing error: {}", e.getMessage());
                 stats.addError("LDIF processing error: " + e.getMessage());
                 publishParsingError(sessionId, "LDIF 처리 오류: " + e.getMessage(), fileName);
                 throw e;
             }
 
+            int finalEntryCount = entryCounter.get();
+
             // 3단계: 분석 결과 생성
-            publishParsingProgress(sessionId, 0.95, "분석 결과 생성 중...", fileName, entryCount, totalEntryCount);
+            publishParsingProgress(sessionId, 0.95, "분석 결과 생성 중...", fileName, finalEntryCount, finalEntryCount);
             
             LdifAnalysisResult result = buildAnalysisResult(stats, processedEntries);
             
             // 4단계: 완료
-            publishParsingComplete(sessionId, fileName, entryCount, stats);
+            publishParsingComplete(sessionId, fileName, finalEntryCount, stats);
             
             return result;
 
@@ -133,7 +155,7 @@ public class LDIFParser {
             publishParsingError(sessionId, "파싱 중 오류: " + e.getMessage(), fileName);
             throw e;
         } finally {
-            // 파싱 세션 완료
+            // 파싱 세션 완료 (지연 정리로 변경)
             parsingProgressBroker.completeParsingSession(sessionId);
         }
     }
@@ -148,19 +170,71 @@ public class LDIFParser {
     }
 
     /**
+     * 파일 크기 기반 엔트리 수 추정 (메모리 효율적)
+     */
+    // private int estimateEntryCount(long fileSize) {
+    //     // LDIF 파일의 평균 엔트리 크기를 기반으로 추정 (경험적 값)
+    //     // PKD LDIF 파일의 경우 평균적으로 엔트리당 2-5KB 정도
+    //     long avgEntrySize = 3000; // 3KB
+        
+    //     // 최소값과 최대값 설정
+    //     int estimated = (int) Math.max(1, fileSize / avgEntrySize);
+    //     return Math.min(estimated, 100000); // 최대 10만개로 제한
+    // }
+
+    /**
+     * 진행률 업데이트 전략 결정
+     */
+    private ProgressUpdateStrategy determineUpdateStrategy(int totalEntryCount) {
+        if (totalEntryCount <= SMALL_FILE_THRESHOLD) {
+            // 작은 파일: 매 엔트리마다 업데이트
+            return new ProgressUpdateStrategy(1, 1);
+        } else if (totalEntryCount <= MEDIUM_FILE_THRESHOLD) {
+            // 중간 파일: 5개 마다 업데이트
+            return new ProgressUpdateStrategy(5, 3);
+        } else {
+            // 큰 파일: 50개 마다 업데이트
+            return new ProgressUpdateStrategy(PROGRESS_UPDATE_BATCH_SIZE, 20);
+        }
+    }
+
+    /**
+     * 진행률 업데이트 전략 클래스
+     */
+    private static class ProgressUpdateStrategy {
+        private final int normalInterval;
+        private final int errorInterval;
+
+        public ProgressUpdateStrategy(int normalInterval, int errorInterval) {
+            this.normalInterval = normalInterval;
+            this.errorInterval = errorInterval;
+        }
+
+        public boolean shouldUpdateProgress(int entryNumber) {
+            return entryNumber == 1 || entryNumber % normalInterval == 0;
+        }
+
+        public boolean shouldUpdateProgressOnError(int entryNumber) {
+            return entryNumber % errorInterval == 0;
+        }
+    }
+
+    /**
      * Entry별 진행률 발행
      */
     private void publishEntryProgress(String sessionId, int processedEntries, int totalEntries,
                                     String currentDN, String fileName, AnalysisStatistics stats) {
         try {
-            double progressValue = (double) processedEntries / totalEntries;
+            double progressValue = totalEntries > 0 ? (double) processedEntries / totalEntries : 0.0;
+            progressValue = Math.min(0.94, progressValue); // 분석 결과 생성을 위해 최대 94%까지만
             
             // 진행률 상세 정보
-            String progressMessage = String.format("Entry 처리 중: %d/%d (%.1f%%)", 
-                processedEntries, totalEntries, progressValue * 100);
+            String progressMessage = String.format("Entry 처리 중: %s/%s (%.1f%%)", 
+                formatNumber(processedEntries), formatNumber(totalEntries), progressValue * 100);
             
-            // 현재까지의 통계 정보
-            Map<String, Object> progressMetadata = createProgressMetadata(sessionId, fileName, stats, currentDN);
+            // 현재까지의 통계 정보 (간략화)
+            Map<String, Object> progressMetadata = createOptimizedProgressMetadata(
+                sessionId, fileName, stats, currentDN, processedEntries);
             
             ParsingEvent event = new ParsingEvent(
                 sessionId,
@@ -168,29 +242,72 @@ public class LDIFParser {
                 processedEntries,
                 totalEntries,
                 fileName,
-                currentDN,
+                truncateString(currentDN, 100),
                 progressMessage,
                 stats.getErrors().size(),
                 stats.getWarnings().size(),
-                new HashMap<>(stats.getEntryTypeCount()), // 복사본 생성
+                createCompactEntryTypeMap(stats.getEntryTypeCount()),
                 progressMetadata
             );
             
-            // 진행률 발행 빈도 조정: 처음 10개는 매번, 이후는 5개마다, 마지막은 반드시
-            boolean shouldPublish = (processedEntries <= 10) ||
-                                  (processedEntries % 5 == 0) ||
-                                  (processedEntries == totalEntries) ||
-                                  (processedEntries % 50 == 0); // 큰 파일의 경우 50개마다
-
-            if (shouldPublish) {
-                parsingProgressBroker.publishParsingProgress(sessionId, event);
-                log.debug("Parsing progress published - Session: {}, Entry: {}/{}, DN: {}", 
-                         sessionId, processedEntries, totalEntries, truncateString(currentDN, 50));
+            parsingProgressBroker.publishParsingProgress(sessionId, event);
+            
+            if (log.isDebugEnabled()) {
+                log.debug("Entry progress published - Session: {}, Entry: {}/{}, Progress: {}%", 
+                         sessionId, processedEntries, totalEntries, 
+                         String.format("%.1f", progressValue * 100));
             }
             
         } catch (Exception e) {
             log.error("Failed to publish entry progress for session {}: {}", sessionId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * 최적화된 진행률 메타데이터 생성 (메모리 사용량 감소)
+     */
+    private Map<String, Object> createOptimizedProgressMetadata(String sessionId, String fileName, 
+                                                              AnalysisStatistics stats, String currentDN,
+                                                              int processedEntries) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("sessionId", sessionId);
+        metadata.put("fileName", fileName);
+        metadata.put("currentDN", truncateString(currentDN, 80));
+        metadata.put("timestamp", System.currentTimeMillis());
+        metadata.put("processedEntries", processedEntries);
+        
+        // 통계 정보는 주기적으로만 포함 (메모리 절약)
+        if (processedEntries % 10 == 0 || processedEntries <= 5) {
+            metadata.put("certificateStats", Map.of(
+                "total", stats.getTotalCertificates(),
+                "valid", stats.getValidCertificates(),
+                "invalid", stats.getInvalidCertificates()
+            ));
+            metadata.put("entryTypeCount", createCompactEntryTypeMap(stats.getEntryTypeCount()));
+        }
+        
+        return metadata;
+    }
+
+     /**
+     * 압축된 엔트리 타입 맵 생성 (0이 아닌 값만 포함)
+     */
+    private Map<String, Integer> createCompactEntryTypeMap(Map<String, Integer> entryTypeCount) {
+        Map<String, Integer> compact = new HashMap<>();
+        entryTypeCount.entrySet().stream()
+            .filter(entry -> entry.getValue() > 0)
+            .forEach(entry -> compact.put(entry.getKey(), entry.getValue()));
+        return compact;
+    }
+
+    /**
+     * 숫자 포맷팅 유틸리티
+     */
+    private String formatNumber(int number) {
+        if (number >= 1000) {
+            return String.format("%.1fK", number / 1000.0);
+        }
+        return String.valueOf(number);
     }
 
     /**
@@ -228,10 +345,10 @@ public class LDIFParser {
     private void publishParsingComplete(String sessionId, String fileName, int totalProcessed, 
                                       AnalysisStatistics stats) {
         try {
-            String completionMessage = String.format("분석 완료: %d개 엔트리 처리됨 (오류: %d, 경고: %d)", 
-                totalProcessed, stats.getErrors().size(), stats.getWarnings().size());
+            String completionMessage = String.format("분석 완료: %s개 엔트리 처리됨 (오류: %d, 경고: %d)", 
+                formatNumber(totalProcessed), stats.getErrors().size(), stats.getWarnings().size());
             
-            Map<String, Object> completionMetadata = createProgressMetadata(sessionId, fileName, stats, "");
+            Map<String, Object> completionMetadata = createFinalProgressMetadata(sessionId, fileName, stats);
             completionMetadata.put("completed", true);
             completionMetadata.put("finalStats", createFinalStatsMap(stats));
             
@@ -245,7 +362,7 @@ public class LDIFParser {
                 completionMessage,
                 stats.getErrors().size(),
                 stats.getWarnings().size(),
-                new HashMap<>(stats.getEntryTypeCount()),
+                createCompactEntryTypeMap(stats.getEntryTypeCount()),
                 completionMetadata
             );
             
@@ -286,14 +403,13 @@ public class LDIFParser {
     }
 
     /**
-     * 진행률 메타데이터 생성
+     * 최종 진행률 메타데이터 생성
      */
-    private Map<String, Object> createProgressMetadata(String sessionId, String fileName, 
-                                                     AnalysisStatistics stats, String currentDN) {
+    private Map<String, Object> createFinalProgressMetadata(String sessionId, String fileName, 
+                                                          AnalysisStatistics stats) {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("sessionId", sessionId);
         metadata.put("fileName", fileName);
-        metadata.put("currentDN", currentDN);
         metadata.put("timestamp", System.currentTimeMillis());
         metadata.put("certificateStats", Map.of(
             "total", stats.getTotalCertificates(),
@@ -305,7 +421,7 @@ public class LDIFParser {
             "valid", stats.getValidMasterLists(),
             "invalid", stats.getInvalidMasterLists()
         ));
-        metadata.put("entryTypeCount", new HashMap<>(stats.getEntryTypeCount()));
+        metadata.put("entryTypeCount", createCompactEntryTypeMap(stats.getEntryTypeCount()));
         return metadata;
     }
 
@@ -315,7 +431,7 @@ public class LDIFParser {
     private Map<String, Object> createFinalStatsMap(AnalysisStatistics stats) {
         Map<String, Object> finalStats = new HashMap<>();
         finalStats.put("totalEntries", stats.getTotalEntries());
-        finalStats.put("entryTypes", new HashMap<>(stats.getEntryTypeCount()));
+        finalStats.put("entryTypes", createCompactEntryTypeMap(stats.getEntryTypeCount()));
         finalStats.put("countries", new HashMap<>(stats.getCountryStats()));
         finalStats.put("certificates", Map.of(
             "total", stats.getTotalCertificates(),
@@ -345,7 +461,10 @@ public class LDIFParser {
         return str.substring(0, maxLength) + "...";
     }
 
-    private int getEntryCount(MultipartFile file) {
+    /**
+     * LDIF 파일에 포함된 모든 Entry 개수를 카운팅.
+     */
+    private int getTotalEntryCount(MultipartFile file) {
         int entryCount = 0;
         try (InputStream inputStream = file.getInputStream();
              BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
@@ -558,22 +677,32 @@ public class LDIFParser {
                 countryStats.merge(wrapper.getCountryCode(), 1, Integer::sum);
             }
             
-            warnings.addAll(wrapper.getWarnings());
+            // 메모리 절약을 위해 warnings는 제한된 개수만 유지
+            List<String> wrapperWarnings = wrapper.getWarnings();
+            if (!wrapperWarnings.isEmpty()) {
+                int maxWarnings = 1000; // 최대 1000개 경고만 유지
+                if (warnings.size() < maxWarnings) {
+                    warnings.addAll(wrapperWarnings.stream()
+                        .limit(maxWarnings - warnings.size())
+                        .toList());
+                }
+            }
             
             // 처리 결과 통계 업데이트
             wrapper.getProcessingResults().forEach((attrName, results) -> {
                 for (ProcessingResult result : results) {
                     ProcessingResult.ProcessingMetrics metrics = result.getMetrics();
+                    String lowerAttrName = attrName.toLowerCase();
                     
-                    if (attrName.toLowerCase().contains("certificate")) {
+                    if (lowerAttrName.contains("certificate")) {
                         totalCertificates += metrics.getProcessedItems();
                         validCertificates += metrics.getValidItems();
                         invalidCertificates += metrics.getInvalidItems();
-                    } else if (attrName.toLowerCase().contains("masterlist")) {
+                    } else if (lowerAttrName.contains("masterlist")) {
                         totalMasterLists += metrics.getProcessedItems();
                         validMasterLists += metrics.getValidItems();
                         invalidMasterLists += metrics.getInvalidItems();
-                    } else if (attrName.toLowerCase().contains("crl") || attrName.toLowerCase().contains("revocation")) {
+                    } else if (lowerAttrName.contains("crl") || lowerAttrName.contains("revocation")) {
                         totalCrls += metrics.getProcessedItems();
                         validCrls += metrics.getValidItems();
                         invalidCrls += metrics.getInvalidItems();
@@ -583,7 +712,11 @@ public class LDIFParser {
         }
 
         public void addError(String error) {
-            errors.add(error);
+            // 메모리 절약을 위해 에러도 제한된 개수만 유지
+            int maxErrors = 1000;
+            if (errors.size() < maxErrors) {
+                errors.add(error);
+            }
         }
 
         // Getters
