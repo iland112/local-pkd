@@ -56,7 +56,11 @@ public class LdifController {
     }
 
     @GetMapping
-    public String index() {
+    public String index(HttpServletRequest request, Model model) {
+        // 세션 ID를 모델에 추가하여 Thymeleaf에서 사용 가능하게 함
+        String sessionId = request.getSession().getId();
+        model.addAttribute("sessionId", sessionId);
+        
         return "ldif/upload-ldif";
     }
 
