@@ -83,12 +83,9 @@
                   >
                     <form
                       id="uploadForm"
-                      enctype="multipart/form-data"
-                      th:action="@{/ldif/upload}"
-                      method="post"
+                      hx-encoding="multipart/form-data"
                       hx-post="/ldif/upload"
-                      hx-target="#uploadResult"
-                      hx-swap="innerHTML"
+                      hx-swap="none"
                       hx-disabled-elt="#uploadBtn, #file"
                       hx-on::before-request="handleUploadStart()"
                       hx-on::after-request="handleUploadComplete()"
@@ -111,7 +108,7 @@
                           accept=".ldif"
                           required
                         />
-
+                        <progress id="upload-progress" value="0" max="100"></progress>
                         <div
                           id="fileInfo"
                           class="mt-2 text-sm text-gray-600 hidden"
@@ -140,8 +137,6 @@
                         </button>
                       </div>
                     </form>
-                    <!-- 업로드 결과 영역 -->
-                    <div id="uploadResult" class="mt-4"></div>
 
                     <!-- 파싱 진행률 표시 영역 -->
                     <div
@@ -304,6 +299,12 @@
         type="text/javascript"
         th:src="@{/webjars/htmx.org/dist/ext/sse.js}"
       ></script>
+      <script>
+        htmx.on('#uploadForm', 'htmx:xhr:progress', function(evt) {
+          console.log("htmx xhr progress 이벤트 발생: ", evt, evt.detail, evt.detail.loaded, evt.detail.total);
+          htmx.find('#upload-progress').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
+        });
+      </script>
       <script th:inline="javascript" type="text/javascript">
         // 전역 변수 (개선된 상태 관리)
         let isParsingInProgress = false;
