@@ -71,6 +71,8 @@ public class LDIFParser {
         // 파싱 세션 시작
         parsingProgressBroker.startParsingSession(sessionId);
 
+        Thread.sleep(100);
+
         try {
             // 1단계: 파일 크기 확인 및 Entry 개수 계산
             publishParsingProgress(sessionId, 0.02, "파일 분석 중...", fileName, 0, 0);
