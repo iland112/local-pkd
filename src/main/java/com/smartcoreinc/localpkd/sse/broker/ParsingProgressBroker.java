@@ -64,8 +64,17 @@ public class ParsingProgressBroker implements DisposableBean {
      */
     public void startParsingSession(String sessionId) {
         try {
+            // 기존 세션이 있고 활성 상태면 중복 시작 방지
+            SessionState existingState = sessionStates.get(sessionId);
+            if (existingState != null && existingState.isActive()) {
+                log.debug("Parsing session {} already active - skipping start", sessionId);
+                return;
+            }
+
             // 기존 세션이 있다면 정리
-            cleanupSessionImmediate(sessionId);
+            if (existingState != null) {
+                cleanupSessionImmediate(sessionId);
+            }
             
             // 백프레셔 설정 개선
             Sinks.Many<ParsingEvent> sink = Sinks.many()
@@ -135,14 +144,66 @@ public class ParsingProgressBroker implements DisposableBean {
     }
 
     /**
+     * 세션이 없을 경우 자동 생성하는 개선된 메서드
+     */
+    private Sinks.Many<ParsingEvent> getOrCreateSink(String sessionId) {
+        Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
+
+        if (sink == null) {
+            synchronized (parsingSinks) {
+                // Double-checked locking으로 동시성 문제 방지
+                sink = parsingSinks.get(sessionId);
+                if (sink == null) {
+                    log.info("Creating sink for session {} (requested before session start)", sessionId);
+                    
+                    sink = Sinks.many()
+                        .multicast()
+                        .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE * 2, false);
+                    
+                    parsingSinks.put(sessionId, sink);
+                    
+                    // 세션 상태도 함께 생성 (비활성 상태로)
+                    SessionState state = new SessionState();
+                    state.setActive(false); // 아직 파싱이 시작되지 않은 상태
+                    sessionStates.put(sessionId, state);
+                    
+                    // 대기 중 이벤트 발송
+                    publishParsingProgressInternal(sessionId, createWaitingEvent(sessionId));
+                }
+            }
+        }
+        
+        return sink;
+    }
+
+    /**
+     * 대기 중 이벤트 생성
+     */
+    private ParsingEvent createWaitingEvent(String sessionId) {
+        return new ParsingEvent(
+            sessionId, 
+            0.0, 
+            0, 
+            0, 
+            "", 
+            "", 
+            "파싱 시작을 기다리는 중...", 
+            0, 
+            0, 
+            new HashMap<>(), 
+            Map.of(
+                "stage", "waiting",
+                "timestamp", System.currentTimeMillis(),
+                "status", "waiting_for_parsing"
+            )
+        );
+    }
+
+    /**
      * 내부 진행률 발생 메서드
      */
     private void publishParsingProgressInternal(String sessionId, ParsingEvent event) {
-        Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
-        if (sink == null) {
-            log.warn("No parsing sink found for session: {} - event ignored", sessionId);
-            return;
-        }
+        Sinks.Many<ParsingEvent> sink = getOrCreateSink(sessionId); // 개선된 메서드 사용
 
         try {
             Sinks.EmitResult result = sink.tryEmitNext(event);
@@ -157,7 +218,7 @@ public class ParsingProgressBroker implements DisposableBean {
         } catch (Exception e) {
             log.error("Exception while publishing parsing progress for session {}: {}",
                     sessionId, e.getMessage(), e);
-        }
+        };
     }
 
     /**
@@ -210,11 +271,9 @@ public class ParsingProgressBroker implements DisposableBean {
      * 파싱 세션 구독
      */
     public Flux<ParsingEvent> subscribeToParsingSession(String sessionId) {
-        Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
-        if (sink == null) {
-            log.warn("No parsing session found for session: {}", sessionId);
-            return Flux.empty();
-        }
+        Sinks.Many<ParsingEvent> sink = getOrCreateSink(sessionId); // 자동 생성 지원
+        
+        log.debug("Subscribing to parsing session: {}", sessionId);
 
         return sink.asFlux()
             .doOnSubscribe(sub -> {
@@ -233,7 +292,7 @@ public class ParsingProgressBroker implements DisposableBean {
             })
             .doOnTerminate(() -> {
                 subscriberCount.decrementAndGet();
-                log.debug("Parsing subscription", sessionId, sink);
+                log.debug("Parsing subscription terminated for session: {}", sessionId);
             })
             .doOnError(throwable -> {
                 subscriberCount.decrementAndGet();

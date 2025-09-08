@@ -73,7 +73,10 @@ public class ParsingProgressController {
         // LDAP 파싱 진행률 스트림
         Flux<ServerSentEvent<String>> parsingUpdates = parsingProgressBroker
                 .subscribeToParsingSession(sessionId)
-                .map(event -> createParsingProgressSSE(event, connectionId))
+                .map(event -> {
+                    log.debug("현재 진행률: {}", event.getProgressPercentage());
+                    return createParsingProgressSSE(event, connectionId);
+                })
                 .onErrorResume(throwable -> {
                     if (isClientDisconnection(throwable)) {
                         log.debug("Client #{} disconnected during parsing updates: {}", connectionId, throwable.getMessage());

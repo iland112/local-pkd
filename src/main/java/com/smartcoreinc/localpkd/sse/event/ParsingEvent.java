@@ -27,4 +27,5 @@ public record ParsingEvent(
     public String getProgressPercentage() {
         return String.format("%.1f%%", progress * 100);
     }
+
 }

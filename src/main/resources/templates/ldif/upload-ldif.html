@@ -108,7 +108,6 @@
                           accept=".ldif"
                           required
                         />
-                        <progress id="upload-progress" value="0" max="100"></progress>
                         <div
                           id="fileInfo"
                           class="mt-2 text-sm text-gray-600 hidden"
@@ -121,11 +120,12 @@
                         </div>
 
                         <p class="mt-2 text-sm text-gray-600">
-                          LDIF (LDAP Data Interchange Format) 파일만 업로드할 수
-                          있습니다.
-                          <br />최대 파일 크기:
+                          LDIF (LDAP Data Interchange Format) 파일만 업로드할 수 있습니다.
+                          <br/>최대 파일 크기:
                           <span class="font-semibold">100MB</span>
                         </p>
+                        <!-- 파일 업로드 상태 프로그래스 바 -->
+                        <progress id="upload-progress" value="0" max="100"></progress>
                       </div>
                       <div>
                         <button
@@ -154,7 +154,6 @@
                           sse-swap="parsing-progress"
                           hx-on::sse-parsing-progress="handleParsingProgress(event)"
                           hx-on::sse-parsing-error="handleParsingError(event)"
-                          hx-on::sse-connection-established="handleConnectionEstablished(event)"
                           class="min-h-16"
                         >
                           <div class="text-gray-500 text-center py-8">
@@ -295,16 +294,7 @@
       </div>
     </div>
     <th:block layout:fragment="script-content">
-      <script
-        type="text/javascript"
-        th:src="@{/webjars/htmx.org/dist/ext/sse.js}"
-      ></script>
-      <script>
-        htmx.on('#uploadForm', 'htmx:xhr:progress', function(evt) {
-          console.log("htmx xhr progress 이벤트 발생: ", evt, evt.detail, evt.detail.loaded, evt.detail.total);
-          htmx.find('#upload-progress').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
-        });
-      </script>
+      <script type="text/javascript" th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
       <script th:inline="javascript" type="text/javascript">
         // 전역 변수 (개선된 상태 관리)
         let isParsingInProgress = false;
