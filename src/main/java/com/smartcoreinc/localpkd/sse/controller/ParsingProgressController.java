@@ -74,7 +74,7 @@ public class ParsingProgressController {
         Flux<ServerSentEvent<String>> parsingUpdates = parsingProgressBroker
                 .subscribeToParsingSession(sessionId)
                 .map(event -> {
-                    log.debug("현재 진행률: {}", event.getProgressPercentage());
+                    // log.debug("현재 진행률: {}", event.getProgressPercentage());
                     return createParsingProgressSSE(event, connectionId);
                 })
                 .onErrorResume(throwable -> {

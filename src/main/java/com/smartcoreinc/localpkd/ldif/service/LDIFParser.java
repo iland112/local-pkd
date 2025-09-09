@@ -67,9 +67,11 @@ public class LDIFParser {
         String fileName = file.getOriginalFilename();
         log.info("Starting LDIF parsing for session: {}, file: {}, {} bytes",
                 sessionId, fileName, fileSize);
+        parsingProgressBroker.debugSessionState(sessionId);
 
         // 파싱 세션 시작
         parsingProgressBroker.startParsingSession(sessionId);
+        parsingProgressBroker.debugSessionState(sessionId);
 
         Thread.sleep(100);
 
@@ -335,6 +337,7 @@ public class LDIFParser {
             parsingProgressBroker.publishParsingProgress(sessionId, event);
             log.debug("Parsing stage progress - Session: {}, Progress: {}%, Message: {}", 
                      sessionId, (int)(progress * 100), message);
+            parsingProgressBroker.debugSessionState(sessionId);
                      
         } catch (Exception e) {
             log.error("Failed to publish parsing progress for session {}: {}", sessionId, e.getMessage(), e);
