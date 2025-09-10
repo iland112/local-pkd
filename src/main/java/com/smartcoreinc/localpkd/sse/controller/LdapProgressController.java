@@ -26,21 +26,21 @@ public class LdapProgressController {
         this.ldapProgressBroker = ldapProgressBroker;
     }
 
-    @GetMapping("/{taskId}")
+    @GetMapping("/{sessionId}")
     public Flux<ServerSentEvent<String>> ldapProgress(
-        @PathVariable String taskId,
+        @PathVariable String sessionId,
         HttpServletRequest request) {
         
         String clientIP = getClientIP(request);
-        log.info("LDAP save SSE connection requested - TaskID: {}, ClientIP: {}, Active tasks: {}", 
-                taskId, clientIP, ldapProgressBroker.getActiveTaskCount());
+        log.info("LDAP save SSE connection requested - SessionID: {}, ClientIP: {}, Active tasks: {}", 
+                sessionId, clientIP, ldapProgressBroker.getActiveTaskCount());
         
         // 연결 확인 이벤트
         Flux<ServerSentEvent<String>> connectionEvent = Flux.just(
             ServerSentEvent.<String>builder()
                 .id("connection-" + System.currentTimeMillis())
                 .event("connection-established")
-                .data("LDAP save SSE connection established for task: " + taskId)
+                .data("LDAP save SSE connection established for session: " + sessionId)
                 .build()
         );
 
@@ -62,36 +62,36 @@ public class LdapProgressController {
         
         // LDAP 저장 진행률 스트림
         Flux<ServerSentEvent<String>> ldapUpdates = ldapProgressBroker
-                .subscribeToTask(taskId)
+                .subscribeToTask(sessionId)
                 .map(this::createLdapProgressSSE)
                 .onErrorResume(throwable -> {
                     if (isClientDisconnection(throwable)) {
                         log.debug("Client disconnected during LDAP save updates: {}", throwable.getMessage());
                     } else {
-                        log.error("LDAP save updates error for task {}: {}", taskId, throwable.getMessage());
+                        log.error("LDAP save updates error for session {}: {}", sessionId, throwable.getMessage());
                     }
                     return Flux.empty();
                 });
 
         return Flux.merge(connectionEvent, heartbeat, ldapUpdates)
                 .doOnSubscribe(subscription -> {
-                    log.info("LDAP save SSE subscription started - Task: {}, Client: {}", taskId, clientIP);
+                    log.info("LDAP save SSE subscription started - Session: {}, Client: {}", sessionId, clientIP);
                 })
                 .doOnCancel(() -> {
-                    log.info("LDAP save SSE connection cancelled - Task: {}, Client: {}", taskId, clientIP);
+                    log.info("LDAP save SSE connection cancelled - Session: {}, Client: {}", sessionId, clientIP);
                 })
                 .doOnError(throwable -> {
                     if (isClientDisconnection(throwable)) {
-                        log.debug("LDAP save SSE client disconnected - Task: {}, Reason: {}", 
-                                taskId, throwable.getMessage());
+                        log.debug("LDAP save SSE client disconnected - Session: {}, Reason: {}", 
+                                sessionId, throwable.getMessage());
                     } else {
-                        log.error("LDAP save SSE connection error - Task: {}, Error: {}", 
-                                taskId, throwable.getMessage(), throwable);
+                        log.error("LDAP save SSE connection error - Session: {}, Error: {}", 
+                                sessionId, throwable.getMessage(), throwable);
                     }
                 })
                 .doFinally(signalType -> {
-                    log.info("LDAP save SSE connection finished - Task: {}, Signal: {}, Remaining subscribers: {}", 
-                            taskId, signalType, ldapProgressBroker.getActiveSubscriberCount());
+                    log.info("LDAP save SSE connection finished - Session: {}, Signal: {}, Remaining subscribers: {}", 
+                            sessionId, signalType, ldapProgressBroker.getActiveSubscriberCount());
                 })
                 .onErrorResume(throwable -> {
                     if (isClientDisconnection(throwable)) {
@@ -199,8 +199,8 @@ public class LdapProgressController {
                     .build();
 
         } catch (Exception e) {
-            log.error("Error creating LDAP save progress SSE for task {}: {}", event.taskId(), e.getMessage(), e);
-            return createErrorSSE(event.taskId(), e.getMessage());
+            log.error("Error creating LDAP save progress SSE for Session {}: {}", event.sessionId(), e.getMessage(), e);
+            return createErrorSSE(event.sessionId(), e.getMessage());
         }
     }
     

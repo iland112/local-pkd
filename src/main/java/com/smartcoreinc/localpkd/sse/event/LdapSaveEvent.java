@@ -3,7 +3,7 @@ package com.smartcoreinc.localpkd.sse.event;
 import java.util.Map;
 
 public record LdapSaveEvent(
-    String taskId,
+    String sessionId,
     double progress,
     int processedEntries,
     int totalEntries,

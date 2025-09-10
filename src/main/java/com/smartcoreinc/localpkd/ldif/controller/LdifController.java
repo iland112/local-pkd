@@ -7,7 +7,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -28,6 +29,8 @@ import com.smartcoreinc.localpkd.ldif.service.LdapService;
 import com.smartcoreinc.localpkd.ldif.service.LDIFParser;
 import com.smartcoreinc.localpkd.sse.broker.LdapProgressBroker;
 import com.smartcoreinc.localpkd.sse.event.LdapSaveEvent;
+
+import io.github.wimdeblauwe.htmx.spring.boot.mvc.HxRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 
@@ -64,8 +67,9 @@ public class LdifController {
         return "ldif/upload-ldif";
     }
 
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public String uploadLdifFile(
+    @HxRequest
+    @PostMapping("/upload")
+    public ResponseEntity<Void> uploadLdifFile(
             @RequestParam("file") MultipartFile file,
             RedirectAttributes redirectAttributes,
             HttpServletRequest request,
@@ -73,18 +77,22 @@ public class LdifController {
         String sessionId = request.getSession().getId();
         log.info("=== LDIF parsing request started for session: {} ===", sessionId);
 
+        // HTMX 응답 헤더 준비
+        HttpHeaders headers = new HttpHeaders();
         try {
             // 1. Upload된 ldif 파일 유효성 검증
             if (file == null || file.isEmpty()) {
                 redirectAttributes.addFlashAttribute("error", "파일을 선택해주세요.");
-                return "redirect:/ldif";
+                headers.add("HX-Redirect", "/ldif");
+                return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
             }
     
             // 파일 확장자 검증 .ldif 확장명을 가진 화일만 처리
             String originalFilename = file.getOriginalFilename();
             if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".ldif")) {
                 redirectAttributes.addFlashAttribute("error", "LDIF 파일만 업로드 가능합니다.");
-                return "redirect:/ldif";
+                headers.add("HX-Redirect", "/ldif");
+                return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
             }
     
             log.info("Starting LDIF parsing for file: {} (session: {})", originalFilename, sessionId);
@@ -95,10 +103,12 @@ public class LdifController {
             if (analysisResult == null) {
                 log.error("LDIF parsing returned null result for session: {}", sessionId);
                 redirectAttributes.addFlashAttribute("error", "파일 분석 결과를 얻을 수 없습니다.");
-                return "redirect:/ldif";
+                headers.add("HX-Redirect", "/ldif");
+                return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
             }
-
+            
             // 3. 분석 결과 후처리
+            analysisResult.setFileName(originalFilename);
             LdifAnalysisSummary summary = analysisResult.getSummary();
             if (summary == null) {
                 log.error("LDIF analysis summary is null for session: {}", sessionId);
@@ -112,9 +122,9 @@ public class LdifController {
             sessionTaskManager.getSessionResults().put(sessionId, analysisResult);
 
             // 6. 모델에 데이터 추가
-            model.addAttribute("summary", summary);
-            model.addAttribute("sessionId", sessionId);
-            model.addAttribute("fileName", originalFilename);
+            // model.addAttribute("summary", summary);
+            // model.addAttribute("sessionId", sessionId);
+            // model.addAttribute("fileName", originalFilename);
 
             // 7. 결과에 따른 메시지 설정
             if (summary.isHasValidationErrors()) {
@@ -130,27 +140,68 @@ public class LdifController {
             log.info("LDIF parsing completed successfully - Session: {}, Entries: {}, Errors: {}, Warnings: {}", 
                     sessionId, summary.getTotalEntries(), summary.getErrors().size(), summary.getWarnings().size());
 
-            return "ldif/analysis-result";
+            // Success case: Redirect to the analysis-result page.
+            headers.add("HX-Redirect", "/ldif/analysis-result");
+            return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
 
         } catch (StackOverflowError e) {
             log.error("StackOverflowError during LDIF parsing for session {}: {}", sessionId, e.getMessage());
             redirectAttributes.addFlashAttribute("error", "파일이 너무 크거나 복잡합니다. 더 작은 파일로 시도해주세요.");
-            return "redirect:/ldif";
+            // Error case: Redirect back to the upload page.
+            headers.add("HX-Redirect", "/ldif");
+            return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
         } catch (OutOfMemoryError e) {
             log.error("OutOfMemoryError during LDIF parsing for session {}: {}", sessionId, e.getMessage());
             redirectAttributes.addFlashAttribute("error", "메모리가 부족합니다. 더 작은 파일로 시도해주세요.");
-            return "redirect:/ldif";
+            // Error case: Redirect back to the upload page.
+            headers.add("HX-Redirect", "/ldif");
+            return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
         } catch (Exception e) {
             log.error("Error during LDIF parsing for session {}: {}", sessionId, e.getMessage(), e);
             redirectAttributes.addFlashAttribute("error", "파일 처리 중 오류가 발생했습니다: " + e.getMessage());
+            // Error case: Redirect back to the upload page.
+            headers.add("HX-Redirect", "/ldif");
+            return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
+        }
+    }
+
+    /**
+     * 분석 결과 페이지 리턴
+     */
+    @GetMapping("/analysis-result")
+    public String showAnalysisResult(HttpServletRequest request, Model model) {
+        String sessionId = request.getSession().getId();
+        log.info("세션 ID:[{}]에 대한 분석 결과 가져오기", sessionId);
+    
+        // 1. 세션에서 분석 결과 가져오기
+        LdifAnalysisResult analysisResult = sessionTaskManager.getSessionResults().get(sessionId);
+        if (analysisResult == null) {
+            log.warn("세션 ID:[{}]에 대한 분석 결과가 존재하지 하지 않음");
+            // 결과가 없으면 리다이렉트 (예: 세션 만료)
             return "redirect:/ldif";
         }
+
+        // 2. 분석 결과 요약 가져오기 
+        LdifAnalysisSummary summary = analysisResult.getSummary();
+        if (summary == null) {
+            log.error("LDIF analysis summary is null for session: {}", sessionId);
+            throw new RuntimeException("Analysis summary is missing");
+        }
+
+        // 3. 분석 결과 요약을 모델에 추가
+        model.addAttribute("summary", summary);
+        model.addAttribute("sessionId", sessionId);
+        model.addAttribute("fileName", analysisResult.getFileName());
+
+        // 결과 페이지로 이동
+        return "ldif/analysis-result";
     }
 
     /**
      * LDAP 저장 엔드포인트
      */
-    @PostMapping(value = "/save-to-ldap/{sessionId}")
+    @HxRequest
+    @PostMapping("/save-to-ldap/{sessionId}")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> saveToLdap(@PathVariable String sessionId) {
         log.info("=== LDAP Save endpoint called with sessionId: {} ===", sessionId);
@@ -182,30 +233,26 @@ public class LdifController {
                 response.put("message", "저장할 엔트리가 없습니다.");
                 return ResponseEntity.ok(response);
             }
-
-            // 4. 태스크 시작
-            String taskId = generateTaskId();
-            sessionTaskManager.getRunningTasks().put(taskId, new AtomicBoolean(true));
             
-            log.info("LDAP save task created - TaskID: {}, Session: {}, Entries: {}", 
-                    taskId, sessionId, entries.size());
+            log.info("LDAP save task created - Session: {}, Entries: {}", 
+                    sessionId, entries.size());
 
             // 5. LDAP 저장 브로커 세션 시작
-            ldapProgressBroker.startSaveTask(taskId);
+            ldapProgressBroker.startSaveTask(sessionId);
 
             // 6. 비동기 저장 작업 시작
             CompletableFuture.supplyAsync(() -> {
-                return saveEntriesWithProgress(entries, taskId, sessionId);
+                return saveEntriesWithProgress(entries, sessionId);
             }).thenAccept(savedCount -> {
-                handleSaveCompletion(taskId, savedCount, entries.size());
+                handleSaveCompletion(sessionId, savedCount, entries.size());
             }).exceptionally(throwable -> {
-                handleSaveError(taskId, throwable);
+                handleSaveError(sessionId, throwable);
                 return null;
             });
 
             // 7. 성공 응답
             response.put("success", true);
-            response.put("taskId", taskId);
+            response.put("sessionId", sessionId);
             response.put("totalEntries", entries.size());
             response.put("message", "LDAP 저장 작업이 시작되었습니다.");
 
@@ -219,59 +266,19 @@ public class LdifController {
     }
 
     /**
-     * 작업 취소
-     */
-    @GetMapping(value = "/cancel-task", produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public ResponseEntity<Map<String, Object>> cancelTask(@RequestParam String taskId) {
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            AtomicBoolean taskFlag = sessionTaskManager.getRunningTasks().get(taskId);
-            if (taskFlag != null) {
-                taskFlag.set(false);
-                cleanupTask(taskId);
-                ldapProgressBroker.completeSaveTask(taskId);
-                
-                response.put("success", true);
-                response.put("message", "작업이 취소되었습니다.");
-                log.info("LDAP save task cancelled by user - TaskID: {}", taskId);
-            } else {
-                response.put("success", false);
-                response.put("message", "취소할 작업을 찾을 수 없습니다.");
-                log.warn("Task not found for cancellation: {}", taskId);
-            }
-        } catch (Exception e) {
-            log.error("Error cancelling LDAP save task {}: {}", taskId, e.getMessage(), e);
-            response.put("success", false);
-            response.put("message", "작업 취소 중 오류가 발생했습니다.");
-        }
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
      * LDAP 엔트리 저장 (진행률 발행 포함)
      */
-    private int saveEntriesWithProgress(List<LdifEntryDto> entries, String taskId, String sessionId) {
+    private int saveEntriesWithProgress(List<LdifEntryDto> entries, String sessionId) {
         int successCount = 0;
         int failureCount = 0;
         int totalCount = entries.size();
-        AtomicBoolean shouldContinue = sessionTaskManager.getRunningTasks().get(taskId);
 
-        log.info("Starting LDAP save process - Task: {}, Session: {}, Entries: {}", taskId, sessionId, totalCount);
+        log.info("Starting LDAP save process - Session: {}, Entries: {}", sessionId, totalCount);
 
         // 시작 이벤트 발행
-        publishLdapSaveProgress(taskId, 0, totalCount, 0, 0, "LDAP 저장 시작...");
+        publishLdapSaveProgress(sessionId, 0, totalCount, 0, 0, "LDAP 저장 시작...");
 
         for (int i = 0; i < entries.size(); i++) {
-            // 작업 취소 확인
-            if (shouldContinue == null || !shouldContinue.get()) {
-                log.info("LDAP save task cancelled - Task: {}, Entry: {}/{}", taskId, i, totalCount);
-                publishLdapSaveProgress(taskId, i, totalCount, successCount, failureCount, "작업이 취소되었습니다.");
-                break;
-            }
-
             try {
                 LdifEntryDto currentEntry = entries.get(i);
                 boolean saveResult = ldapService.saveEntry(currentEntry);
@@ -291,7 +298,7 @@ public class LdifController {
                 if (shouldUpdateProgress) {
                     String progressMessage = String.format("Entry 저장 중: %s", 
                         truncateString(currentEntry.getDn(), 60));
-                    publishLdapSaveProgress(taskId, i + 1, totalCount, successCount, failureCount, progressMessage);
+                    publishLdapSaveProgress(sessionId, i + 1, totalCount, successCount, failureCount, progressMessage);
                 }
 
                 // LDAP 서버 부하 방지
@@ -299,8 +306,8 @@ public class LdifController {
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("LDAP save operation interrupted for task: {}", taskId);
-                publishLdapSaveProgress(taskId, i, totalCount, successCount, failureCount, "작업이 중단되었습니다.");
+                log.warn("LDAP save operation interrupted for session: {}", sessionId);
+                publishLdapSaveProgress(sessionId, i, totalCount, successCount, failureCount, "작업이 중단되었습니다.");
                 break;
             } catch (Exception e) {
                 failureCount++;
@@ -308,31 +315,30 @@ public class LdifController {
                 
                 // 에러가 발생해도 진행률 업데이트
                 if ((i + 1) % 5 == 0 || i == entries.size() - 1) {
-                    publishLdapSaveProgress(taskId, i + 1, totalCount, successCount, failureCount, 
-                        "저장 중 오류 발생: " + e.getMessage());
+                    publishLdapSaveProgress(sessionId, i + 1, totalCount, successCount, failureCount, "저장 중 오류 발생: " + e.getMessage());
                 }
             }
         }
         
         // 최종 완료 이벤트 발행
-        publishLdapSaveProgress(taskId, totalCount, totalCount, successCount, failureCount, 
+        publishLdapSaveProgress(sessionId, totalCount, totalCount, successCount, failureCount, 
             String.format("저장 완료: %d개 성공, %d개 실패", successCount, failureCount));
 
-        log.info("LDAP save completed - Task: {}, Success: {}/{}, Failure: {}", 
-                taskId, successCount, totalCount, failureCount);
+        log.info("LDAP save completed - Session: {}, Success: {}/{}, Failure: {}", 
+                sessionId, successCount, totalCount, failureCount);
         return successCount;
     }
 
     /**
      * LDAP 저장 진행률 발행
      */
-    private void publishLdapSaveProgress(String taskId, int processed, int total, 
+    private void publishLdapSaveProgress(String sessionId, int processed, int total, 
                                        int success, int failure, String message) {
         try {
             double progress = total > 0 ? (double) processed / total : 0.0;
             
             LdapSaveEvent event = new LdapSaveEvent(
-                taskId,
+                sessionId,
                 progress,
                 processed,
                 total,
@@ -346,22 +352,24 @@ public class LdifController {
                 )
             );
             
-            ldapProgressBroker.publishSaveProgress(taskId, event);
+            ldapProgressBroker.publishSaveProgress(sessionId, event);
             
-            log.debug("LDAP save progress published - Task: {}, Progress: {}%, Success: {}/{}", 
-                     taskId, (int)(progress * 100), success, processed);
+            log.debug(
+                "LDAP save progress published - Session: {}, Progress: {}%, Success: {}/{}", 
+                sessionId, (int)(progress * 100), success, processed
+            );
                      
         } catch (Exception e) {
-            log.error("Failed to publish LDAP save progress for task {}: {}", taskId, e.getMessage(), e);
+            log.error("Failed to publish LDAP save progress for session {}: {}", sessionId, e.getMessage(), e);
         }
     }
 
     /**
      * 저장 완료 처리
      */
-    private void handleSaveCompletion(String taskId, int savedCount, int totalCount) {
+    private void handleSaveCompletion(String sessionId, int savedCount, int totalCount) {
         try {
-            log.info("LDAP save process completed - Task: {}, Saved: {}/{}", taskId, savedCount, totalCount);
+            log.info("LDAP save process completed - Session: {}, Saved: {}/{}", sessionId, savedCount, totalCount);
 
             // 최종 완료 이벤트 (성공률 포함)
             double successRate = totalCount > 0 ? (double) savedCount / totalCount * 100 : 0.0;
@@ -369,7 +377,7 @@ public class LdifController {
                 savedCount, totalCount, successRate);
 
             LdapSaveEvent completionEvent = new LdapSaveEvent(
-                taskId,
+                sessionId,
                 1.0,
                 totalCount,
                 totalCount,
@@ -384,17 +392,17 @@ public class LdifController {
                 )
             );
 
-            ldapProgressBroker.publishSaveProgress(taskId, completionEvent);
+            ldapProgressBroker.publishSaveProgress(sessionId, completionEvent);
 
         } catch (Exception e) {
-            log.error("Error in LDAP save completion handling for task {}: {}", taskId, e.getMessage(), e);
+            log.error("Error in LDAP save completion handling for session {}: {}", sessionId, e.getMessage(), e);
         } finally {
             // 작업 정리를 지연시켜 클라이언트가 완료 메시지를 받을 시간 확보
             CompletableFuture.runAsync(() -> {
                 try {
                     Thread.sleep(3000); // 3초 대기
-                    cleanupTask(taskId);
-                    ldapProgressBroker.completeSaveTask(taskId);
+                    cleanupTask(sessionId);
+                    ldapProgressBroker.completeSaveTask(sessionId);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -405,12 +413,12 @@ public class LdifController {
     /**
      * 저장 오류 처리
      */
-    private void handleSaveError(String taskId, Throwable throwable) {
-        log.error("Error during LDAP save process for task {}: {}", taskId, throwable.getMessage(), throwable);
+    private void handleSaveError(String sessionId, Throwable throwable) {
+        log.error("Error during LDAP save process for session {}: {}", sessionId, throwable.getMessage(), throwable);
 
         try {
             LdapSaveEvent errorEvent = new LdapSaveEvent(
-                taskId,
+                sessionId,
                 0.0,
                 0,
                 0,
@@ -425,13 +433,13 @@ public class LdifController {
                 )
             );
             
-            ldapProgressBroker.publishSaveProgress(taskId, errorEvent);
+            ldapProgressBroker.publishSaveProgress(sessionId, errorEvent);
             
         } catch (Exception e) {
-            log.error("Error in LDAP save error handling for task {}: {}", taskId, e.getMessage(), e);
+            log.error("Error in LDAP save error handling for session {}: {}", sessionId, e.getMessage(), e);
         } finally {
-            cleanupTask(taskId);
-            ldapProgressBroker.completeSaveTask(taskId);
+            cleanupTask(sessionId);
+            ldapProgressBroker.completeSaveTask(sessionId);
         }
     }
 
@@ -473,12 +481,12 @@ public class LdifController {
     /**
      * 작업 정리
      */
-    private void cleanupTask(String taskId) {
+    private void cleanupTask(String sessionId) {
         try {
-            sessionTaskManager.getRunningTasks().remove(taskId);
-            log.debug("Task resources cleaned up: {}", taskId);
+            sessionTaskManager.getSessionResults().remove(sessionId);
+            log.debug("Task resources cleaned up: {}", sessionId);
         } catch (Exception e) {
-            log.error("Error during task cleanup for {}: {}", taskId, e.getMessage(), e);
+            log.error("Error during task cleanup for session[{}]: {}", sessionId, e.getMessage(), e);
         }
     }
 
@@ -490,13 +498,6 @@ public class LdifController {
             return str != null ? str : "";
         }
         return str.substring(0, maxLength) + "...";
-    }
-
-    /**
-     * 태스크 ID 생성
-     */
-    private String generateTaskId() {
-        return "ldap_task_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000);
     }
 
     /**
