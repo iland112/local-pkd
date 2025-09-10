@@ -45,15 +45,6 @@ public class ParsingProgressController {
         // 세션별 연결 시간 추적
         sessionConnections.put(sessionId, System.currentTimeMillis());
 
-        // 연결 확인 이벤트
-        Flux<ServerSentEvent<String>> connectionEvent = Flux.just(
-            ServerSentEvent.<String>builder()
-                .id("connection-" + connectionId)
-                .event("connection-established")
-                .data(createConnectionEstablishedHtml(sessionId, connectionId))
-                .build()
-        );
-
         // 하트비트
         Flux<ServerSentEvent<String>> heartbeat = Flux.interval(Duration.ofSeconds(30))
                 .map(sequence -> ServerSentEvent.<String>builder()
@@ -87,7 +78,16 @@ public class ParsingProgressController {
                     return Flux.empty();
                 });
         
-        return Flux.merge(connectionEvent, heartbeat, parsingUpdates)
+        // 연결 확인 이벤트를 파싱 스트림에 앞에 추가
+        Flux<ServerSentEvent<String>> connectionEvent = Flux.just(
+            ServerSentEvent.<String>builder()
+                .id("connection-" + connectionId)
+                .event("connection-established")
+                .data(createConnectionEstablishedHtml(sessionId, connectionId))
+                .build()
+        );
+
+        return Flux.concat(connectionEvent, Flux.merge(heartbeat, parsingUpdates))
                 .doOnSubscribe(subscription -> {
                     log.info("LDIF Parsing SSE subscription started - Session: {}, Connection: #{}, Client: {}", 
                             sessionId, connectionId, clientIP);

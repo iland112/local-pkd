@@ -27,6 +27,8 @@ public class ParsingProgressBroker implements DisposableBean {
     
     // 세션별 파싱 상태 추적
     private final Map<String, SessionState> sessionStates = new ConcurrentHashMap<>();
+    // 세션별 구독자 수 추적
+    private final Map<String, AtomicInteger> sessionSubscriberCounts = new ConcurrentHashMap<>();
 
     // 지연된 정리 작업을 위한 스케줄러
     private final ScheduledExecutorService scheduler = new ScheduledThreadPoolExecutor(2, r -> {
@@ -87,6 +89,10 @@ public class ParsingProgressBroker implements DisposableBean {
                         .multicast()
                         .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE * 2, false);
                 parsingSinks.put(sessionId, sink);
+
+                // 세션별 구독자 수 초기화
+                sessionSubscriberCounts.put(sessionId, new AtomicInteger(0));
+
                 log.debug("Created new sink for session: {}", sessionId);
             } else {
                 log.debug("Reusing existing sink for session: {}", sessionId);
@@ -101,7 +107,7 @@ public class ParsingProgressBroker implements DisposableBean {
                     sessionId, hadExistingSubscription);
 
             // 시작 이벤트 발생
-            publishParsingProgressForced(sessionId, createStartEvent(sessionId));
+            publishParsingProgressSafe(sessionId, createStartEvent(sessionId));
             
         } catch (Exception e) {
             log.error("Error starting parsing session {}: {}", sessionId, e.getMessage(), e);
@@ -126,14 +132,11 @@ public class ParsingProgressBroker implements DisposableBean {
                             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE * 2, false);
 
                     parsingSinks.put(sessionId, sink);
+                    sessionSubscriberCounts.put(sessionId, new AtomicInteger(0));
 
-                    // 세션 상태 생성 (구독됨 표시)
+                    // 세션 상태 생성 (아직 구독은 안됨 - doOnSubscribe에서 처리)
                     SessionState state = sessionStates.computeIfAbsent(sessionId, k -> new SessionState());
-                    state.setSubscribed(true);
                     state.updateActivity();
-
-                    // 대기 중 이벤트 발송
-                    publishParsingProgressForced(sessionId, createWaitingEvent(sessionId));
                 }
             }
         } else {
@@ -200,14 +203,10 @@ public class ParsingProgressBroker implements DisposableBean {
     public void publishParsingProgress(String sessionId, ParsingEvent event) {
         SessionState state = sessionStates.get(sessionId);
         if (state == null) {
-            log.warn("No Session stat found for {}, creating default state", sessionId);
-            // 기본 상태 생성하고 발행 진행
+            log.warn("No Session state found for {}, creating default state", sessionId);
             SessionState newState = new SessionState();
             newState.setActive(true);
             sessionStates.put(sessionId, newState);
-        } else if (!state.isActive() && !state.isSubscribed()) {
-            log.warn("Session {} is not active or subscribed - forcing event publication", sessionId);
-            // 비활성 상태여도 구독자가 있다면 발행 진행
         }
         
         // 진행률 발행 빈도 제어
@@ -216,7 +215,7 @@ public class ParsingProgressBroker implements DisposableBean {
         //     return;
         // }
 
-        publishParsingProgressInternal(sessionId, event);
+        publishParsingProgressSafe(sessionId, event);
         if (state != null) {
             state.updateActivity();
         }
@@ -226,35 +225,20 @@ public class ParsingProgressBroker implements DisposableBean {
     }
 
     /**
-     * 강제 이벤트 발행 (조건 체크 없이)
+     * 안전한 이벤트 발행 메서드 (FAIL_ZERO_SUBSCRIBER 처리)
      */
-    private void publishParsingProgressForced(String sessionId, ParsingEvent event) {
+    private void publishParsingProgressSafe(String sessionId, ParsingEvent event) {
         Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
         if (sink == null) {
-            log.warn("No sink found for forced publishing to session: {}", sessionId);
+            log.warn("No sink found for session: {} - event ignored", sessionId);
             return;
         }
 
-        try {
-            Sinks.EmitResult result = sink.tryEmitNext(event);
-            if (result.isFailure()) {
-                log.warn("Failed to force emit event for session {}: {}", sessionId, result);
-                handleEmitFailure(sessionId, event, result);
-            } else {
-                log.debug("Forece published event for session {}: {}", sessionId, event.message());
-            }
-        } catch (Exception e) {
-            log.error("Exception during forced publish for session {}: {}", sessionId, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 내부 진행률 발행 메서드
-     */
-    private void publishParsingProgressInternal(String sessionId, ParsingEvent event) {
-        Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
-        if (sink == null) {
-            log.warn("No parsing sink found for session: {} - event ignored", sessionId);
+        // 구독자 수 확인
+        AtomicInteger subscriberCount = sessionSubscriberCounts.get(sessionId);
+        if (subscriberCount == null || subscriberCount.get() == 0) {
+            log.debug("No subscribers for session {}, storing event for potential reconnection", sessionId);
+            // 구독자가 없어도 에러로 처리하지 않고 단순히 스킵
             return;
         }
 
@@ -271,7 +255,7 @@ public class ParsingProgressBroker implements DisposableBean {
         } catch (Exception e) {
             log.error("Exception while publishing parsing progress for session {}: {}",
                     sessionId, e.getMessage(), e);
-        };
+        }
     }
 
     /**
@@ -300,11 +284,13 @@ public class ParsingProgressBroker implements DisposableBean {
      * Emit 실패 처리
      */
     private void handleEmitFailure(String sessionId, ParsingEvent event, Sinks.EmitResult result) {
-        log.warn("Failed to emit parsing event for session {}: {} - attempting recovery", sessionId, result);
-
         switch (result) {
+            case FAIL_ZERO_SUBSCRIBER:
+                log.debug("No subscribers for session {} - ignoring event", sessionId);
+                // 구독자가 없으면 단순히 무시 (복구 시도 안함)
+                break;
             case FAIL_OVERFLOW:
-                // 백프레셔 오버플로우 시 재시도
+                log.warn("Buffer overflow for session {} - attempting recovery", sessionId);
                 scheduler.schedule(() -> recreateSinkAndRetry(sessionId, event), 100, TimeUnit.MILLISECONDS);
                 break;
             case FAIL_CANCELLED:
@@ -324,14 +310,20 @@ public class ParsingProgressBroker implements DisposableBean {
      * 파싱 세션 구독
      */
     public Flux<ParsingEvent> subscribeToParsingSession(String sessionId) {
-        log.info("Subcribing to parsing session: {}", sessionId);
+        log.info("Subscribing to parsing session: {}", sessionId);
 
         Sinks.Many<ParsingEvent> sink = getOrCreateSinkForSubscription(sessionId);
 
         return sink.asFlux()
             .doOnSubscribe(sub -> {
-                int count = subscriberCount.incrementAndGet();
-                log.debug("Parsing subscription added for session {}. Total subscribers: {}", sessionId, count);
+                int globalCount = subscriberCount.incrementAndGet();
+                
+                // 세션별 구독자 수 증가
+                AtomicInteger sessionCount = sessionSubscriberCounts.get(sessionId);
+                int currentSessionCount = sessionCount != null ? sessionCount.incrementAndGet() : 1;
+                
+                log.debug("Parsing subscription added for session {}. Session subscribers: {}, Total subscribers: {}", 
+                         sessionId, currentSessionCount, globalCount);
 
                 // 세션 상태 업데이트
                 SessionState state = sessionStates.get(sessionId);
@@ -343,21 +335,41 @@ public class ParsingProgressBroker implements DisposableBean {
                 }
             })
             .doOnCancel(() -> {
-                int count = subscriberCount.decrementAndGet();
-                log.debug("Parsing subscription cancelled for session {}. Remaining subscribers: {}", sessionId, count);
+                int globalCount = subscriberCount.decrementAndGet();
+                
+                // 세션별 구독자 수 감소
+                AtomicInteger sessionCount = sessionSubscriberCounts.get(sessionId);
+                int currentSessionCount = sessionCount != null ? sessionCount.decrementAndGet() : 0;
+                
+                log.debug("Parsing subscription cancelled for session {}. Session subscribers: {}, Remaining global: {}", 
+                         sessionId, currentSessionCount, globalCount);
 
                 // 구독 취소 시 상태 업데이트
                 SessionState state = sessionStates.get(sessionId);
-                if (state != null) {
+                if (state != null && currentSessionCount <= 0) {
                     state.setSubscribed(false);
                 }
             })
             .doOnTerminate(() -> {
                 subscriberCount.decrementAndGet();
+                
+                // 세션별 구독자 수 감소
+                AtomicInteger sessionCount = sessionSubscriberCounts.get(sessionId);
+                if (sessionCount != null) {
+                    sessionCount.decrementAndGet();
+                }
+                
                 log.debug("Parsing subscription terminated for session: {}", sessionId);
             })
             .doOnError(throwable -> {
                 subscriberCount.decrementAndGet();
+                
+                // 세션별 구독자 수 감소
+                AtomicInteger sessionCount = sessionSubscriberCounts.get(sessionId);
+                if (sessionCount != null) {
+                    sessionCount.decrementAndGet();
+                }
+                
                 if (isClientDisconnection(throwable)) {
                     log.debug("Client disconnected for parsing session {}: {}", sessionId, throwable.getMessage());
                 } else {
@@ -388,16 +400,15 @@ public class ParsingProgressBroker implements DisposableBean {
 
             log.info("LDIF Parsing session marked as completed: {} - scheduling cleanup", sessionId);
 
-            // 완료 이벤트 강제 발행
+            // 완료 이벤트 발행 (구독자가 있을 때만)
             ParsingEvent completionEvent = new ParsingEvent(
                 sessionId, 1.0, 0, 0, "", "", "파싱이 완료되었습니다.", 0, 0, 
                 new HashMap<>(), Map.of("stage", "completed", "status", "finished", 
                                       "timestamp", System.currentTimeMillis())
             );
-            publishParsingProgressForced(sessionId, completionEvent);
+            publishParsingProgressSafe(sessionId, completionEvent);
 
-
-            // 지연된 정리 (크라이언트가 최종 메시지를 받을 시간 제공)
+            // 지연된 정리 (클라이언트가 최종 메시지를 받을 시간 제공)
             scheduler.schedule(() -> {
                 cleanupSessionImmediate(sessionId);
                 log.info("Parsing session cleanup completed: {}", sessionId);
@@ -430,12 +441,7 @@ public class ParsingProgressBroker implements DisposableBean {
             parsingSinks.put(sessionId, newSink);
             
             // 재시도
-            Sinks.EmitResult retryResult = newSink.tryEmitNext(event);
-            if (retryResult.isFailure()) {
-                log.error("Failed to emit LDIF parsing event after sink recreation: {}", retryResult);
-            } else {
-                log.info("Successfully re-emitted LDIF parsing event after sink recreation for session: {}", sessionId);
-            }
+            publishParsingProgressSafe(sessionId, event);
         } catch (Exception e) {
             log.error("Error recreating LDIF parsing sink for task {}: {}", sessionId, e.getMessage(), e);
         }
@@ -457,6 +463,8 @@ public class ParsingProgressBroker implements DisposableBean {
 
             // 세션 상태 정리
             sessionStates.remove(sessionId);
+            sessionSubscriberCounts.remove(sessionId);
+            
             log.debug("Session resources cleaned up immediately: {}", sessionId);
         } catch (Exception e) {
             log.error("Error during immediate session cleanup for {}: {}", sessionId, e.getMessage(), e);
@@ -469,6 +477,7 @@ public class ParsingProgressBroker implements DisposableBean {
     public void debugSessionState(String sessionId) {
         SessionState state = sessionStates.get(sessionId);
         Sinks.Many<ParsingEvent> sink = parsingSinks.get(sessionId);
+        AtomicInteger sessionSubscriberCount = sessionSubscriberCounts.get(sessionId);
 
         log.info("=== Session Debug Info for {} ===", sessionId);
         log.info("SessionState exists: {}", state != null);
@@ -479,8 +488,9 @@ public class ParsingProgressBroker implements DisposableBean {
             log.info("  - Progress Updates: {}", state.getProgressUpdateCount());
         }
         log.info("Sink exists: {}", sink != null);
+        log.info("Session subscribers: {}", sessionSubscriberCount != null ? sessionSubscriberCount.get() : 0);
         log.info("Total active sessions: {}", parsingSinks.size());
-        log.info("Total subscribers: {}", subscriberCount.get());
+        log.info("Total global subscribers: {}", subscriberCount.get());
         log.info("===============================");
     }
 
@@ -529,8 +539,10 @@ public class ParsingProgressBroker implements DisposableBean {
     public Map<String, String> getSessionStatuses() {
         Map<String, String> statuses = new HashMap<>();
         sessionStates.forEach((sessionId, state) -> {
-            statuses.put(sessionId, String.format("Active: %s, Completed: %s, Updates: %s",
-                state.isActive(), state.isCompleted(), state.getProgressUpdateCount()));
+            AtomicInteger sessionSubscriberCount = sessionSubscriberCounts.get(sessionId);
+            statuses.put(sessionId, String.format("Active: %s, Completed: %s, Updates: %s, Subscribers: %s",
+                state.isActive(), state.isCompleted(), state.getProgressUpdateCount(),
+                sessionSubscriberCount != null ? sessionSubscriberCount.get() : 0));
         });
         return statuses;
     }

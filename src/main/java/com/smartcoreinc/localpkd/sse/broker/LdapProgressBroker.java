@@ -19,63 +19,63 @@ public class LdapProgressBroker {
     private final Map<String, Sinks.Many<LdapSaveEvent>> taskSinks = new ConcurrentHashMap<>();
     private final AtomicInteger subscriberCount = new AtomicInteger(0);
 
-    public void startSaveTask(String taskId) {
+    public void startSaveTask(String sessionId) {
         Sinks.Many<LdapSaveEvent> sink = Sinks.many()
             .multicast()
             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
-        taskSinks.put(taskId, sink);
-        log.info("LDAP save task started: {}", taskId);
+        taskSinks.put(sessionId, sink);
+        log.info("LDAP save task started: {}", sessionId);
 
         // 시작 이벤트 발행
-        publishSaveProgress(taskId, createStartEvent(taskId));
+        publishSaveProgress(sessionId, createStartEvent(sessionId));
     }
 
-    public void publishSaveProgress(String taskId, LdapSaveEvent event) {
-        Sinks.Many<LdapSaveEvent> sink = taskSinks.get(taskId);
+    public void publishSaveProgress(String sessionId, LdapSaveEvent event) {
+        Sinks.Many<LdapSaveEvent> sink = taskSinks.get(sessionId);
         if (sink != null) {
             Sinks.EmitResult result = sink.tryEmitNext(event);
             if (result.isFailure()) {
-                log.warn("Failed to emit LDAP save event for task {}: {}", taskId, result);
+                log.warn("Failed to emit LDAP save event for task {}: {}", sessionId, result);
                 
                 // 실패 시 재시도 로직
                 if (result == Sinks.EmitResult.FAIL_OVERFLOW) {
-                    recreateSinkAndRetry(taskId, event);
+                    recreateSinkAndRetry(sessionId, event);
                 }
             } else {
-                log.debug("LDAP save progress published - Task: {}, Progress: {}%, Success: {}/{}", 
-                         taskId, event.getProgressPercentage(), event.successCount(), event.processedEntries());
+                log.debug("LDAP save progress published - Session: {}, Progress: {}, Success: {}/{}", 
+                         sessionId, event.getProgressPercentage(), event.successCount(), event.processedEntries());
             }
         } else {
-            log.warn("No LDAP save sink found for task: {}", taskId);
+            log.warn("No LDAP save sink found for session: {}", sessionId);
         }
     }
 
     /**
      * LDAP 저장 태스크 구독
      */
-    public Flux<LdapSaveEvent> subscribeToTask(String taskId) {
-        Sinks.Many<LdapSaveEvent> sink = taskSinks.get(taskId);
+    public Flux<LdapSaveEvent> subscribeToTask(String sessionId) {
+        Sinks.Many<LdapSaveEvent> sink = taskSinks.get(sessionId);
         if (sink == null) {
-            log.warn("No LDAP save task found for task: {}", taskId);
+            log.warn("No LDAP save task found for session: {}", sessionId);
             return Flux.empty();
         }
         
         return sink.asFlux()
             .doOnSubscribe(sub -> {
                 int count = subscriberCount.incrementAndGet();
-                log.debug("LDAP save subscription added for task {}. Total subscribers: {}", taskId, count);
+                log.debug("LDAP save subscription added for session {}. Total subscribers: {}", sessionId, count);
             })
             .doOnCancel(() -> {
                 int count = subscriberCount.decrementAndGet();
-                log.debug("LDAP save subscription cancelled for task {}. Remaining subscribers: {}", taskId, count);
+                log.debug("LDAP save subscription cancelled for session {}. Remaining subscribers: {}", sessionId, count);
             })
             .doOnTerminate(() -> {
                 subscriberCount.decrementAndGet();
-                log.debug("LDAP save subscription terminated for task: {}", taskId);
+                log.debug("LDAP save subscription terminated for session: {}", sessionId);
             })
             .onErrorResume(throwable -> {
                 subscriberCount.decrementAndGet();
-                log.error("Error in LDAP save subscription for task {}: {}", taskId, throwable.getMessage());
+                log.error("Error in LDAP save subscription for session {}: {}", sessionId, throwable.getMessage());
                 return Flux.empty();
             });
     }
@@ -83,28 +83,28 @@ public class LdapProgressBroker {
     /**
      * LDAP 저장 태스크 완료
      */
-    public void completeSaveTask(String taskId) {
-        Sinks.Many<LdapSaveEvent> sink = taskSinks.remove(taskId);
+    public void completeSaveTask(String sessionId) {
+        Sinks.Many<LdapSaveEvent> sink = taskSinks.remove(sessionId);
         if (sink != null) {
             sink.tryEmitComplete();
-            log.info("LDAP save task completed and cleaned up: {}", taskId);
+            log.info("LDAP save task completed and cleaned up: {}", sessionId);
         } else {
-            log.warn("No LDAP save task found to complete: {}", taskId);
+            log.warn("No LDAP save task found to complete: {}", sessionId);
         }
     }
 
     /**
      * Sink 재생성 및 재시도
      */
-    private void recreateSinkAndRetry(String taskId, LdapSaveEvent event) {
+    private void recreateSinkAndRetry(String sessionId, LdapSaveEvent event) {
         try {
-            log.warn("Recreating LDAP save sink for task: {}", taskId);
+            log.warn("Recreating LDAP save sink for session: {}", sessionId);
             
             Sinks.Many<LdapSaveEvent> newSink = Sinks.many()
                 .multicast()
                 .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
                 
-            taskSinks.put(taskId, newSink);
+            taskSinks.put(sessionId, newSink);
             
             // 재시도
             Sinks.EmitResult retryResult = newSink.tryEmitNext(event);
@@ -113,16 +113,16 @@ public class LdapProgressBroker {
             }
             
         } catch (Exception e) {
-            log.error("Error recreating LDAP save sink for task {}: {}", taskId, e.getMessage(), e);
+            log.error("Error recreating LDAP save sink for session {}: {}", sessionId, e.getMessage(), e);
         }
     }
     
     /**
      * 시작 이벤트 생성
      */
-    private LdapSaveEvent createStartEvent(String taskId) {
+    private LdapSaveEvent createStartEvent(String sessionId) {
         return new LdapSaveEvent(
-            taskId,
+            sessionId,
             0.0,
             0,
             0,
