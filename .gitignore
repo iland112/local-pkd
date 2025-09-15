@@ -40,3 +40,5 @@ node
 *.log
 *.gz
 *.tmp
+localpkd.*.*
+/log/

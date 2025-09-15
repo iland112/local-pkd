@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
+import com.smartcoreinc.localpkd.webflux.MonoInstanceExam;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,13 +23,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class HomeController {
 
     private final LdapService ldapService;
+    private final MonoInstanceExam monoInstanceExam;
 
-    public HomeController(LdapService ldapService) {
+    public HomeController(LdapService ldapService, MonoInstanceExam monoInstanceExam) {
         this.ldapService = ldapService;
+        this.monoInstanceExam = monoInstanceExam;
     }
 
     @GetMapping
     public String index(Model model) {
+        monoInstanceExam.generatInstance();
         return "index";
     }
 
