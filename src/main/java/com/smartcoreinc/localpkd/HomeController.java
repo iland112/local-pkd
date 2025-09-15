@@ -23,16 +23,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class HomeController {
 
     private final LdapService ldapService;
-    private final MonoInstanceExam monoInstanceExam;
 
-    public HomeController(LdapService ldapService, MonoInstanceExam monoInstanceExam) {
+    public HomeController(LdapService ldapService) {
         this.ldapService = ldapService;
-        this.monoInstanceExam = monoInstanceExam;
     }
 
     @GetMapping
     public String index(Model model) {
-        monoInstanceExam.generatInstance();
         return "index";
     }
 
