@@ -33,14 +33,17 @@ public class LdifAnalysisSummary {
     private boolean hasValidationErrors = false;
 
     // PKD 관련 추가 필드들
+    // DSC
     private int totalCertificates = 0;
     private int validCertificates = 0;
     private int invalidCertificates = 0;
     
+    // Master List
     private int totalMasterLists = 0;
     private int validMasterLists = 0;
     private int invalidMasterLists = 0;
     
+    // CRL
     private int totalCrls = 0;
     private int validCrls = 0;
     private int invalidCrls = 0;

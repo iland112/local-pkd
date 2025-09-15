@@ -65,29 +65,30 @@ public class LDIFParser {
     public LdifAnalysisResult parseLdifFile(MultipartFile file, String sessionId) throws Exception {
         long fileSize = file.getSize();
         String fileName = file.getOriginalFilename();
-        log.info("Starting LDIF parsing for session: {}, file: {}, {} bytes",
-                sessionId, fileName, fileSize);
-        parsingProgressBroker.debugSessionState(sessionId);
-
+        log.info(
+            "Starting LDIF parsing for session: {}, file: {}, {} bytes",
+            sessionId, fileName, fileSize
+        );
         // 파싱 세션 시작
         parsingProgressBroker.startParsingSession(sessionId);
         parsingProgressBroker.debugSessionState(sessionId);
-
-        Thread.sleep(100);
 
         try {
             // 1단계: 파일 크기 확인 및 Entry 개수 계산
             publishParsingProgress(sessionId, 0.02, "파일 분석 중...", fileName, 0, 0);
             
             // 전체 Entry 개수 계산
-            int totalEntryCount = getTotalEntryCount(file);
+            List<Entry> entries = getTotalEntries(file);
+            if (entries == null || entries.isEmpty()) {
+                log.error("전달 받은 LDIF 파일에는 LDAP 엔트리가 존재하지 않습니다.");
+                
+                publishParsingError(sessionId, "LDIF 파일에 유효한 엔트리가 없습니다.", fileName);
+                throw new RuntimeException("전달 받은 LDIF 파일에는 LDAP 엔트리가 존재하지 않습니다.");
+            }
+            
+            int totalEntryCount = entries.size();             
             log.debug("Total Entries in LDIF file: {}", totalEntryCount);
             
-            if (totalEntryCount <= 0) {
-                publishParsingError(sessionId, "LDIF 파일에 유효한 엔트리가 없습니다.", fileName);
-                throw new IllegalArgumentException("No valid entries found in LDIF file");
-            }
-
             // 2단계: 실제 파싱 시작
             publishParsingProgress(sessionId, 0.05, "LDIF 파싱 시작...", fileName, 0, totalEntryCount);
 
@@ -98,52 +99,39 @@ public class LDIFParser {
             // 진행률 발행 주기 결정
             ProgressUpdateStrategy updateStrategy = determineUpdateStrategy(totalEntryCount);
 
-            try (InputStream inputStream = file.getInputStream();
-                 LDIFReader ldifReader = new LDIFReader(inputStream)) {
-
-                Entry entry;
-                while ((entry = ldifReader.readEntry()) != null) {
-                    int currentEntryNum = entryCounter.incrementAndGet();
+            for (Entry entry : entries) {
+                int currentEntryNum = entryCounter.incrementAndGet();
                     
-                    try {
-                        // Entry 처리
-                        ParsedLdifEntry wrapper = processEntry(entry, currentEntryNum);
-                        processedEntries.add(wrapper);
-                        stats.updateFrom(wrapper);
+                try {
+                    // Entry 처리
+                    ParsedLdifEntry wrapper = processEntry(entry, currentEntryNum);
+                    processedEntries.add(wrapper);
+                    stats.updateFrom(wrapper);
 
-                        // 최적화된 진행률 업데이트
-                        if (updateStrategy.shouldUpdateProgress(currentEntryNum)) {
-                            // 실제 엔트리 수가 예상과 다를 수 있으므로 동적 조정
-                            int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
-                            publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
-                                               entry.getDN(), fileName, stats);
-                        }
-                    } catch (Exception e) {
-                        String error = String.format("Entry %d (%s): %s", 
-                            currentEntryNum, entry.getDN(), e.getMessage());
-                        stats.addError(error);
-                        log.error("Error processing entry {}: {}", entry.getDN(), e.getMessage(), e);
+                    // 최적화된 진행률 업데이트
+                    if (updateStrategy.shouldUpdateProgress(currentEntryNum)) {
+                        // 실제 엔트리 수가 예상과 다를 수 있으므로 동적 조정
+                        int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
+                        publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
+                                            entry.getDN(), fileName, stats);
+                    }
+                } catch (Exception e) {
+                    String error = String.format("Entry %d (%s): %s", 
+                    currentEntryNum, entry.getDN(), e.getMessage());
+                    stats.addError(error);
+                    log.error("Error processing entry {}: {}", entry.getDN(), e.getMessage(), e);
                         
-                        // 에러가 발생해도 주기적으로 진행률 업데이트
-                        if (updateStrategy.shouldUpdateProgressOnError(currentEntryNum)) {
-                            int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
-                            publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
-                                               entry.getDN(), fileName, stats);
-                        }
+                    // 에러가 발생해도 주기적으로 진행률 업데이트
+                    if (updateStrategy.shouldUpdateProgressOnError(currentEntryNum)) {
+                        int adjustedTotal = Math.max(totalEntryCount, currentEntryNum);
+                        publishEntryProgress(sessionId, currentEntryNum, adjustedTotal, 
+                                            entry.getDN(), fileName, stats);
                     }
                 }
-
-                int finalEntryCount = entryCounter.get();
-                log.info("Parsing completed - totalEntryCount: {}, Actual: {}", totalEntryCount, finalEntryCount);
-
-            } catch (Exception e) {
-                log.error("LDIF processing error: {}", e.getMessage());
-                stats.addError("LDIF processing error: " + e.getMessage());
-                publishParsingError(sessionId, "LDIF 처리 오류: " + e.getMessage(), fileName);
-                throw e;
             }
 
             int finalEntryCount = entryCounter.get();
+            log.info("Parsing completed - totalEntryCount: {}, Actual: {}", totalEntryCount, finalEntryCount);
 
             // 3단계: 분석 결과 생성
             publishParsingProgress(sessionId, 0.95, "분석 결과 생성 중...", fileName, finalEntryCount, finalEntryCount);
@@ -467,25 +455,28 @@ public class LDIFParser {
     }
 
     /**
-     * LDIF 파일에 포함된 모든 Entry 개수를 카운팅.
+     * LDIF 파일에 포함된 모든 Entry들 을 ArrayList로 반환.
      */
-    private int getTotalEntryCount(MultipartFile file) {
-        int entryCount = 0;
+    private List<Entry> getTotalEntries(MultipartFile file) {
+        List<Entry> entries = new ArrayList<>();
+        // int entryCount = 0;
         try (InputStream inputStream = file.getInputStream();
-             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-             LDIFReader ldifReader = new LDIFReader(bufferedReader)) {
-
-            while (ldifReader.readEntry() != null) {
-                entryCount++;
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+            LDIFReader ldifReader = new LDIFReader(bufferedReader)) {
+            
+            Entry entry = null;
+            while ((entry = ldifReader.readEntry()) != null) {
+                entries.add(entry);
+                // entryCount++;
+                // log.debug("Entry #{} : {}", entryCount, entry.toLDIFString());
             }
-
         } catch (LDIFException e) {
             log.error("LDIF format error: {}", e.getMessage());
         } catch (IOException e) {
             log.error("IO Error reading LDIF file: {}", e.getMessage());
         }
 
-        return entryCount;
+        return entries;
     }
 
     /**
