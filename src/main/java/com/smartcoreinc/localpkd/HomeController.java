@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.smartcoreinc.localpkd.ldif.service.LdapService;
-import com.smartcoreinc.localpkd.webflux.MonoInstanceExam;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,6 +29,7 @@ public class HomeController {
 
     @GetMapping
     public String index(Model model) {
+        model.addAttribute("currentPage", "home");
         return "index";
     }
 
