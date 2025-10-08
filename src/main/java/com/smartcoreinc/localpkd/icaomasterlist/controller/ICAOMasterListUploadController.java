@@ -31,7 +31,8 @@ public class ICAOMasterListUploadController {
     }
 
     @GetMapping
-    public String uploadForm() {
+    public String uploadForm(Model model) {
+        model.addAttribute("currentPage", "icao-ml");
         return "masterlist/upload-ml";
     }
 

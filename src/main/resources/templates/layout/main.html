@@ -7,46 +7,641 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title></title>
+    <title th:text="${pageTitle} ?: 'ICAO PKD Download File Manager'">ICAO PKD Download File Manager</title>
     <link rel="stylesheet" th:href="@{/css/application.css}" />
     <link rel="stylesheet" th:href="@{/webjars/font-awesome/css/all.min.css}" />
   </head>
-  <body>
-    <div class="container mx-auto max-w-4xl mt-4">
-      <!-- SSE Connection Alert Section -->
-      <div
-        id="connectionAlert"
-        class="hidden mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-md"
-      >
-        <div class="flex items-center">
-          <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
-          <span class="text-yellow-700">
-            실시간 업데이트(SSE) 연결이 끊어졌습니다. 페이지를 새로고침하여 다시
-            연결하세요.
-          </span>
-          <button
-            onclick="reconnectSSE()"
-            class="ml-4 px-3 py-1 bg-yellow-500 text-white rounded text-sm"
-          >
-            <i class="fas fa-sync-alt"></i>
-          </button>
+  <body class="bg-gray-50">
+    <!-- 네비게이션 바 -->
+    <nav class="bg-white shadow-md border-b border-gray-200 sticky top-0 z-40">
+      <div class="container mx-auto max-w-7xl">
+        <div class="flex items-center justify-between h-16 px-4">
+          <!--  로고 및 브랜드 -->
+          <div class="flex items-center space-x-4">
+            <a href="/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+              <div class="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <i class="fas fa-shield-alt text-white text-lg"></i>
+              </div>
+              <div class="hidden md:block">
+                <h1 class="text-xl font-bold text-gray-900">ICAO Local PKD Manager</h1>
+                <p class="text-xs text-gray-500">CSCA MasterList,DSC,CRL,DL from which downloaded ICAO Management System</p>
+              </div>
+            </a>
+          </div>
+
+          <!--데스크톱 네비게이션 메뉴 -->
+          <div class="hidden md:flex items-center space-x-1">
+            <a href="/"
+              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'home' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+            >
+              <i class="fas fa-home">
+                대시 보드
+              </i>
+            </a>
+            <a href="/icao/ml"
+              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'icao-ml' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+            >
+              <i class="fas fa-file-upload">
+                Master List
+              </i>
+            </a>
+            <a href="/ldif"
+              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'ldif' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+            >
+              <i class="fas fa-file-code"></i>
+              LDIF 파일
+            </a>
+          </div>
+
+          <!-- 우측 유틸리티 메뉴 -->
+          <div class="flex items-center space-x-3">
+            <!-- LDAP 상태 표시 -->
+            <div id="navLdapStatus" class="hidden md:flex items-center space-x-2">
+              <div class="w-3 h-3 rounded-full bg-gray-400 animate-pulse" id="ldapStatusIndicator"></div>
+              <span class="text-xs text-gray-500" id="ldapStatusText">연결 확인 중</span>
+            </div> 
+
+            <!--  도구 드롭다운 -->
+            <div class="relative" x-data="{open: false}">
+              <button
+                @click="opne = !open"
+                @click.away="open = false"
+                class="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                aria-label="도구 메뉴"
+              >
+                <i class="fas fa-cog"></i>
+              </button>
+              <div
+                x-show="open"
+                x-transition:enter="transition ease-out duration-100"
+                x-transition:enter-start="transform opacity-0 scale-95"
+                x-transition:enter-end="transform opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-75"
+                x-transition:leave-start="transform opacity-100 scale-100"
+                x-transition:leave-end="transform opacity-0 scale-95"
+                class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-200"
+                style="display: none;"
+              >
+                <button
+                  onclick="testLdapConnection()"
+                  class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <i class="fas fa-info-circle"></i>
+                  시스템 정보
+                </button>
+                <button
+                  onclick="showHelp()"
+                  class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <i class="fas fa-question-circle"></i>
+                  도움말
+                </button>
+              </div>
+            </div>
+
+            <!-- 모바일 메뉴 버튼 -->
+            <div id="mobileMenu" class="md:hidden hidden bg-white border-t border-gray-200">
+              <div class="px-4 py-3 space-y-2">
+                <a
+                  href="/"
+                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'home' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+                >
+                  <i class="fas fa-home"></i>
+                  대시보드
+                </a>
+                <a
+                  href="/icao/ml"
+                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'icao-ml' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+                >
+                  <i class="fas fa-file-upload"></i>
+                  Master List 관리
+                </a>
+                <a
+                  href="/ldif"
+                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'ldif' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+                >
+                  <i class="fas fa-file-code"></i>
+                  LDIF 파일 관리
+                </a>
+                <div class="border-t border-gray-200 pt-2 mt-2">
+                  <button
+                    onclick="testLdapConnection()"
+                    class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                  >
+                    <i class="fas fa-plug"></i>
+                    LDAP 연결 테스트
+                  </button>
+                  <button
+                    onclick="showSystemInfo()"
+                    class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                  >
+                    <i class="fas fa-info-circle"></i>
+                    시스템 정보
+                  </button>
+                  <button
+                    onclick="showHelp()"
+                    class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                  >
+                    <i class="fas fa-question-circle"></i>
+                    도움말
+                  </button>
+                </div>
+              </div>
+            </div> 
+          </div> 
         </div>
       </div>
+    </nav>
+
+    <!-- SSE Connection Alert Section -->
+    <div
+      id="connectionAlert"
+      class="hidden mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-md"
+    >
+      <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
+        <span class="text-yellow-700">
+          실시간 업데이트(SSE) 연결이 끊어졌습니다. 페이지를 새로고침하여 다시 연결하세요.
+        </span>
+        <button
+          onclick="reconnectSSE()"
+          class="ml-4 px-3 py-1 bg-yellow-500 text-white rounded text-sm"
+        >
+          <i class="fas fa-sync-alt"></i>
+          재연결
+        </button>
+      </div>
+    </div>
+    
+    <!-- 메인 컨텐츠 영역 -->
+    <main class="min-h-screen pb-8">
       <!-- Page Content -->
-      <main layout:fragment="content"></main>
+      <div layout:fragment="content"></div>
+    </main>
+    
+    <!-- 푸터 -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+      <div class="container mx-auto max-w-7xl px-4 py-6">
+        <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+          <div class="text-sm text-gray-600">
+            <p>&copy; 2025 ICAO Master List & LDIF File Manager. 안전하고 효율적인 LDAP 데이터 관리.</p>
+          </div>
+          <div class="flex items-center space-x-4 text-sm text-gray-500">
+            <div class="flex items-center">
+              <i class="fas fa-shield-alt text-green-500 mr-1"></i>
+              SSL 암호화 보안
+            </div>
+            <div class="flex items-center">
+              <i class="fas fa-server mr-1"></i>
+              <span id="serverStatus">서버 정상</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- 시스템 정보 모달 -->
+    <div id="systemModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+      <div class="bg-white rounded-lg max-w-md w-full mx-4">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">시스템 정보</h3>
+            <button onclick="closeSystemInfo()" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div class="flex justify-between">
+              <span class="text-gray-600">시스템 버전:</span>
+              <span class="font-medium">v1.0.0</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">빌드 날짜:</span>
+              <span class="font-medium">2025-09-01</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">LDAP 버전:</span>
+              <span class="font-medium">OpenLDAP 2.6</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">지원 파일 형식:</span>
+              <span class="font-medium">ML, LDIF</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
+    <!-- 도움말 모달 -->
+    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+      <div class="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">도움말</h3>
+            <button onclick="closeHelp()" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <h4 class="font-medium text-blue-600 mb-2">키보드 단축키</h4>
+              <div class="text-sm text-gray-600 space-y-1">
+                <p><kbd class="bg-gray-100 px-2 py-1 rounded">Ctrl + 1</kbd> - Master List 페이지로 이동</p>
+                <p><kbd class="bg-gray-100 px-2 py-1 rounded">Ctrl + 2</kbd> - LDIF 파일 페이지로 이동</p>
+                <p><kbd class="bg-gray-100 px-2 py-1 rounded">Ctrl + H</kbd> - 홈 페이지로 이동</p>
+                <p><kbd class="bg-gray-100 px-2 py-1 rounded">ESC</kbd> - 모달 닫기</p>
+              </div>
+            </div>
+            <div>
+              <h4 class="font-medium text-green-600 mb-2">지원 파일 형식</h4>
+              <div class="text-sm text-gray-600 space-y-1">
+                <p><strong>Master List:</strong> .ml 확장자 (CMS SignedData 형식)</p>
+                <p><strong>LDIF:</strong> .ldif 확장자 (RFC 2849 표준)</p>
+                <p><strong>최대 파일 크기:</strong> 100MB</p>
+              </div>
+            </div>
+            <div>
+              <h4 class="font-medium text-purple-600 mb-2">브라우저 지원</h4>
+              <div class="text-sm text-gray-600">
+                <p>Chrome 80+, Firefox 75+, Safari 13+, Edge 80+</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 알림 컨테이너 -->
+    <div id="notificationContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
     <script
-      type="text/javascript"
-      th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
+        type="text/javascript"
+        th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
     ></script>
     <script
-      type="text/javascript"
-      th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
+        type="text/javascript"
+        th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
     ></script>
     <script>
-      htmx.logAll();
+        htmx.logAll();
     </script>
-    <th:block layout:fragment="script-content"> </th:block>
+
+    <!-- 공통 스크립트 -->
+    <script>
+        // 전역 변수
+        let ldapCheckInterval;
+        let mobileMenuOpen = false;
+
+        // 페이지 로드시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+          // LDAP 상태 초기 확인
+          checkNavLdapStatus();
+
+          // 5분마다 LDAP 상태 확인
+          ldapCheckInterval = setInterval(checkNavLdapStatus, 300000);
+
+          // 키보드 단축키
+          setupKeyboardShortcuts();
+
+          // 모바일 메뉴 외부 클릭 감지
+          document.addEventListener('click', function(e) {
+            if (mobileMenuOpen && !e.target.closest('#mobileMenu') && !e.target.closest('#mobileMenuBtn')) {
+              closeMobileMenu();
+            }
+          });
+        });
+
+        // 네비케이션용 LDAP 상태 확인
+        function checkNavLdapStatus() {
+          fetch('/ldap-test-connection')
+            .then(response => response.json())
+            .then(data => {
+              const indicator = document.getElementById('ldapStatusIndicator');
+              const text = document.getElementById('ldapStatusText');
+
+              if (data.success) {
+                indicator.className = 'w-3 h-3 rounded-full bg-green-500';
+                text.textContent = 'LDAP 연결됨';
+              } else {
+                indicator.className = 'w-3 h-3 rounded-full bg-red-500';
+                text.textContent = 'LDAP 오류';
+              }
+            })
+            .catch(error => {
+              const indicator = document.getElementById('ldapStatusIndicator');
+              const text = document.getElementById('ldapStatusText');
+              indicator.className = 'w-3 h-3 rounded-full bg-yellow-500 animate-pulse';
+              text.textContent = '연결 확인 중';
+            });
+        }
+
+        // LDAP 연결 테스트
+        function testLdapConnection() {
+          fetch('/ldap-test-connection')
+            .then(response => response.json())
+            .then(data => {
+              showNotification(data.message, data.success ? 'success' : 'error');
+              checkNavLdapStatus();
+            })
+            .catch(error => {
+              showNotification("LDAP 연결 테스트에 실패했습니다.", 'error');
+            });
+        }
+
+        // 모바일 메뉴 토글
+        function toggleMobileMenu() {
+          const menu = document.getElementById('mobileMenu');
+          const icon = document.getElementById('menuIcon');
+
+          if (mobileMenuOpen) {
+            closeMobileMenu();
+          } else {
+            openMobileMenu();
+          }
+        }
+
+        function openMobileMenu() {
+          const menu = document.getElementById('mobileMenu');
+          const icon = document.getElementById('menuIcon');
+
+          menu.classList.remove('hidden');
+          menu.classList.add('animate-slideDown');
+          icon.className = 'fas fa-times';
+          mobileMenuOpen = true;
+        }
+
+        function closeMobileMenu() {
+          const menu = document.getElementById('mobileMenu');
+          const icon = document.getElementById('menuIcon');
+
+          menu.classList.add('hidden');
+          menu.classList.remove('animate-slideDown');
+          icon.className = 'fas fa-bars';
+          mobileMenuOpen = false;
+        }
+
+        // 시스템 정보 모달
+        function showSystemInfo() {
+          document.getElementById('systemInfoModal').classList.remove('hidden');
+          document.getElementById('systemInfoModal').classList.add('flex');
+        }
+
+        function closeSystemInfo() {
+          document.getElementById('systemInfoModal').classList.add('hidden');
+          document.getElementById('systemInfoModal').classList.remove('flex');
+        }
+
+        // 도움말 모달
+        function showHelp() {
+          document.getElementById('helpModal').classList.remove('hidden');
+          document.getElementById('helpModal').classList.add('flex');
+        }
+
+        function closeHelp() {
+          document.getElementById('helpModal').classList.add('hidden');
+          document.getElementById('helpModal').classList.remove('flex');
+        }
+
+        // SSE 재연결
+        function reconnectSSE() {
+          location.reload();
+        }
+
+        // 키보드 단축키 설정
+        function setupKeyboardShortcuts() {
+          document.addEventListener('keydown', function(e) {
+            // ESC: 모달 닫기
+            if (e.key == 'Escape') {
+              closeHelp();
+              closeSystemInfo();
+              closeMobileMenu();
+            }
+
+            // Ctrl + H: 홈으로
+            if (e.ctrlKey && e.key == 'h') {
+              e.preventDefault();
+              window.location.href = '/';
+            }
+
+            // Ctrl + 1: Master List
+            if (e.ctrlKey && e.key == '1') {
+              e.preventDefault();
+              window.location.href = '/icao/ml';
+            }
+
+            // Ctrl + 2: LDIF
+            if (e.ctrlKey && e.key == '2') {
+              e.preventDefault();
+              window.location.href = '/ldif';
+            }
+          });
+        }
+
+        // 알림 시스템
+        function showNotification(message, type = 'info', duration = 50000) {
+          const colors = {
+            info: 'bg-blue-50 border-blue-200 text-blue-700',
+            success: 'bg-green-50 border-green-200 text-green-700',
+            warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+            error: 'bg-red-50 border-red-200 text-red-700'
+          };
+
+          const icons = {
+            info: 'fas fa-info-circle',
+            success: 'fas fa-check-circle',
+            warning: 'fas fa-exclamation-triangle',
+            error: 'fas fa-times-circle'
+          };
+
+          const notification = document.createElement('div')
+          notification.className = `p-4 rounded-lg border ${colors[type]} shadow-lg max-w-md animate-slideIn`;
+          notification.innerHTML = `
+            <div class="flex items-center">
+              <i class="${icons[type]} mr-2"></i>
+              <span class="flex-1 text-sm">${message}</span>
+              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
+                <i class="fas fa-times text-sm"></i>
+              </button>
+            </div>
+          `;
+
+          const container = document.getElementById('notificationContainer');
+          container.appendChild(notification);
+
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.style.opacity = '0';
+              notification.style.transform = 'translateX(100%)';
+              setTimeout(() => {
+                if (notification.parentNode) {
+                  notification.remove();
+                }
+              }, 300);
+            }
+          }, duration);
+        }
+
+        // 페이지 언로드시 정리
+        window.addEventListener('beforeunload', function() {
+          if (ldapCheckInterval) {
+            clearInterval(ldapCheckInterval);
+          }
+        });
+    </script>
+
+    <th:block layout:fragment="script-content">
+    </th:block>
+
+    <style>
+      /* 애니메이션 정의 */
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-slideIn {
+        animation: slideIn 0.3s ease-out;
+      }
+
+      .animate-slideDown {
+        animation: slideDown 0.2s ease-out;
+      }
+
+      /* 키보드 단축키 스타일 */
+      kbd {
+        font-family: monospace;
+        font-size: 0.875rem;
+        font-weight: bold;
+      }
+
+      /* 네비게이션 호버 효과 개선 */
+      .nav-link {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .nav-link::before {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: linear-gradient(to right, #3b82f6, #1d4ed8);
+        transition: width 0.3s ease;
+      }
+
+      .nav-link:hover::before {
+        width: 100%;
+      }
+
+      /* 스크롤바 스타일 */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* 반응형 개선 */
+      @media (max-width: 768px) {
+        .container {
+          padding-left: 1rem;
+          padding-right: 1rem;
+        }
+
+        .nav-brand h1 {
+          font-size: 1.125rem;
+        }
+
+        .mobile-menu-overlay {
+          background-color: rgba(0, 0, 0, 0.3);
+        }
+      }
+
+      /* 포커스 스타일 개선 */
+      button:focus,
+      a:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+        border-radius: 0.375rem;
+      }
+
+      /* 로딩 상태 */
+      .loading {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .loading::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        animation: loading 1.5s infinite;
+      }
+
+      @keyframes loading {
+        0% {
+          left: -100%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+
+      /* 알림 스타일 개선 */
+      .notification-enter {
+        animation: notificationEnter 0.3s ease-out;
+      }
+
+      @keyframes notificationEnter {
+        from {
+          opacity: 0;
+          transform: translateX(100%) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0) scale(1);
+        }
+      }
+
+      /* 다크모드 지원 준비 */
+      @media (prefers-color-scheme: dark) {
+        .dark-mode-ready {
+          transition: background-color 0.3s ease, color 0.3s ease;
+        }
+      }
+    </style>
   </body>
 </html>
