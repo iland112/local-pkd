@@ -24,8 +24,6 @@ import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
-import org.springframework.core.io.ClassPathResource;
-
 import lombok.extern.slf4j.Slf4j;
 
 /**
