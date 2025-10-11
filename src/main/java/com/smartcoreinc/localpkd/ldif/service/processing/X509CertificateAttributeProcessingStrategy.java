@@ -4,6 +4,7 @@ import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.smartcoreinc.localpkd.icaomasterlist.entity.CscaCertificate;
@@ -23,6 +24,14 @@ public class X509CertificateAttributeProcessingStrategy implements BinaryAttribu
     private static final List<String> CERTIFICATE_ATTRIBUTES = Arrays.asList(
         "userCertificate", "caCertificate", "crossCertificatePair"
     );
+
+    // 신뢰 체인 검증 활성화 여부를 설정으로 관리
+    @Value("${ldif.processing.trust-chain-verification.enabled:true}")
+    private boolean trustChainVerificationEnabled;
+    
+    // 특정 국가에 대해서만 신뢰 체인 검증 수행 (선택사항)
+    @Value("${ldif.processing.trust-chain-verification.country-codes:}")
+    private List<String> trustChainVerificationCountryCodes;
     
     private final X509CertificateVerificationStrategy certificateVerificationStrategy;
     private final CscaLdapSearchService cscaLdapSearchService;
@@ -30,7 +39,7 @@ public class X509CertificateAttributeProcessingStrategy implements BinaryAttribu
     private final CertificateParsingService certificateParsingService;
     
     public X509CertificateAttributeProcessingStrategy(
-        X509CertificateVerificationStrategy certificateVerificationStrategy,
+            X509CertificateVerificationStrategy certificateVerificationStrategy,
             CscaLdapSearchService cscaLdapSearchService,
             CertificateChainVerificationStrategy chainVerificationStrategy,
             CertificateParsingService certificateParsingService) {
@@ -61,8 +70,16 @@ public class X509CertificateAttributeProcessingStrategy implements BinaryAttribu
                     "Valid X.509 certificate found in record {}: {}", 
                     context.getRecordNumber(), validationResult.getDetails()
                 );
-                // 인증서가 유효한 경우 CSCA 인증서와의 신뢰 체인 검증 수행
-                performTrustChainVerification(verificationContext, context, result);
+
+                // 신뢰 체인 검증을 선택적으로 수행
+                if (shouldPerformTrustChainVerification(context)) {
+                    performTrustChainVerification(verificationContext, context, result);
+                } else {
+                    log.debug("Trust chain verification skipped for record {} (country: {})", 
+                        context.getRecordNumber(), context.getCountryCode());
+                    result.addWarning(String.format("Record %d: Trust chain verification skipped", 
+                        context.getRecordNumber()));
+                }
             } else {
                 result.getMetrics().incrementInvalid();
                 result.addWarning(String.format("Record %d: Invalid X.509 certificate - %s",
@@ -82,7 +99,39 @@ public class X509CertificateAttributeProcessingStrategy implements BinaryAttribu
     }
 
     /**
+     * 신뢰 체인 검증을 수행할지 여부를 결정하는 메서드
+     */
+    private boolean shouldPerformTrustChainVerification(ProcessingContext context) {
+        // 1. 전역 설정으로 비활성화된 경우
+        if (!trustChainVerificationEnabled) {
+            return false;
+        }
+        
+        // 2. 컨텍스트에서 명시적으로 비활성화한 경우
+        Boolean contextSkipTrustChain = context.getSharedData("skipTrustChainVerification");
+        if (Boolean.TRUE.equals(contextSkipTrustChain)) {
+            return false;
+        }
+        
+        // 3. 특정 국가 코드에 대해서만 수행하도록 설정된 경우
+        if (trustChainVerificationCountryCodes != null && !trustChainVerificationCountryCodes.isEmpty()) {
+            String countryCode = context.getCountryCode();
+            if ("UNKNOWN".equals(countryCode) || !trustChainVerificationCountryCodes.contains(countryCode)) {
+                return false;
+            }
+        }
+        
+        // 4. 알 수 없는 국가 코드인 경우 스킵 (기존 로직)
+        if ("UNKNOWN".equals(context.getCountryCode())) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
      * CSCA 인증서와의 신뢰 체인 검증 수행
+     * TODO: 속도 문제로 메모리 캐슁 방법 고려
      */
     private void performTrustChainVerification(VerificationContext verificationContext, 
                                              ProcessingContext context, 

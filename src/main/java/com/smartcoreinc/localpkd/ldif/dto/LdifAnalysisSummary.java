@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.smartcoreinc.localpkd.enums.EntryType;
+
 import lombok.Data;
 
 /**
@@ -25,20 +27,23 @@ public class LdifAnalysisSummary {
     private int totalErrors = 0;
     private int totalWarnings = 0;
     
-    private Map<String, Integer> objectClassCount = new HashMap<>();
+    private Map<String, Integer> entryTypeCount = new HashMap<>();
     private Map<String, Integer> certificateValidationStats = new HashMap<>();
     
     private boolean hasValidationErrors = false;
 
     // PKD 관련 추가 필드들
+    // DSC
     private int totalCertificates = 0;
     private int validCertificates = 0;
     private int invalidCertificates = 0;
     
+    // Master List
     private int totalMasterLists = 0;
     private int validMasterLists = 0;
     private int invalidMasterLists = 0;
     
+    // CRL
     private int totalCrls = 0;
     private int validCrls = 0;
     private int invalidCrls = 0;
@@ -50,6 +55,7 @@ public class LdifAnalysisSummary {
     // 기본 생성자에서 초기화
     public LdifAnalysisSummary() {
         initializeCertificateValidationStats();
+        initializeEntryTypeCount();
     }
 
     private void initializeCertificateValidationStats() {
@@ -70,6 +76,17 @@ public class LdifAnalysisSummary {
         this.certificateValidationStats.putIfAbsent("totalTrustAnchors", 0);
     }
 
+    private void initializeEntryTypeCount() {
+        if (this.entryTypeCount == null) {
+            this.entryTypeCount = new HashMap<>();
+        }
+        
+        // EntryType enum의 모든 값들 초기화
+        for (EntryType entryType : EntryType.values()) {
+            this.entryTypeCount.putIfAbsent(entryType.name(), 0);
+        }
+    }
+
     // 안전한 getter 메서드들
     public Map<String, Integer> getCertificateValidationStats() {
         if (this.certificateValidationStats == null) {
@@ -85,6 +102,20 @@ public class LdifAnalysisSummary {
         }
     }
 
+    public Map<String, Integer> getEntryTypeCount() {
+        if (this.entryTypeCount == null) {
+            initializeEntryTypeCount();
+        }
+        return this.entryTypeCount;
+    }
+
+    public void setEntryTypeCount(Map<String, Integer> entryTypeCount) {
+        this.entryTypeCount = entryTypeCount;
+        if (this.entryTypeCount != null) {
+            initializeEntryTypeCount();
+        }
+    }
+
     public List<String> getErrors() {
         return this.errors != null ? this.errors : new ArrayList<>();
     }
@@ -93,8 +124,10 @@ public class LdifAnalysisSummary {
         return this.warnings != null ? this.warnings : new ArrayList<>();
     }
 
+    // ObjectClass 관련 메서드 제거하고 EntryType 메서드로 대체
     public Map<String, Integer> getObjectClassCount() {
-        return this.objectClassCount != null ? this.objectClassCount : new HashMap<>();
+        // 하위 호환성을 위해 빈 맵 반환
+        return new HashMap<>();
     }
 
     public Map<String, Integer> getCountryStats() {
@@ -135,6 +168,38 @@ public class LdifAnalysisSummary {
     public void updateTrustAnchorStats(int totalTrustAnchors) {
         getCertificateValidationStats().put("totalTrustAnchors", totalTrustAnchors);
         this.totalTrustAnchors = totalTrustAnchors;
+    }
+
+    // EntryType 통계 업데이트 메서드들
+    public void addEntryType(EntryType entryType) {
+        getEntryTypeCount().merge(entryType.name(), 1, Integer::sum);
+    }
+
+    public void addEntryType(String entryTypeName) {
+        getEntryTypeCount().merge(entryTypeName, 1, Integer::sum);
+    }
+
+    public void updateEntryTypeStats(Map<String, Integer> entryTypeStats) {
+        if (entryTypeStats != null) {
+            getEntryTypeCount().putAll(entryTypeStats);
+        }
+    }
+
+    // EntryType 관련 편의 메서드들
+    public int getEntryTypeTotal() {
+        return getEntryTypeCount().values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    public int getPkdEntryCount() {
+        return getEntryTypeCount().getOrDefault("ML", 0) +
+               getEntryTypeCount().getOrDefault("DSC", 0) +
+               getEntryTypeCount().getOrDefault("CRL", 0);
+    }
+
+    public int getInfrastructureEntryCount() {
+        return getEntryTypeCount().getOrDefault("C", 0) +
+               getEntryTypeCount().getOrDefault("O", 0) +
+               getEntryTypeCount().getOrDefault("DC", 0);
     }
 
     // 편의 메서드들
@@ -210,12 +275,26 @@ public class LdifAnalysisSummary {
         }
     }
 
-    // ObjectClass 카운트 추가
+    // ObjectClass 관련 메서드는 하위 호환성을 위해 유지하되 EntryType으로 위임
+    @Deprecated
     public void addObjectClass(String objectClass) {
-        if (this.objectClassCount == null) {
-            this.objectClassCount = new HashMap<>();
-        }
-        this.objectClassCount.merge(objectClass, 1, Integer::sum);
+        // EntryType으로 매핑하여 처리
+        EntryType entryType = mapObjectClassToEntryType(objectClass);
+        addEntryType(entryType);
+    }
+
+    private EntryType mapObjectClassToEntryType(String objectClass) {
+        if (objectClass == null) return EntryType.UNKNOWN;
+        
+        String lowerClass = objectClass.toLowerCase();
+        if (lowerClass.contains("country")) return EntryType.C;
+        if (lowerClass.contains("organization")) return EntryType.O;
+        if (lowerClass.contains("domain")) return EntryType.DC;
+        if (lowerClass.contains("pkd") || lowerClass.contains("master")) return EntryType.ML;
+        if (lowerClass.contains("cert")) return EntryType.DSC;
+        if (lowerClass.contains("crl")) return EntryType.CRL;
+        
+        return EntryType.UNKNOWN;
     }
 
     // 국가별 통계 업데이트
@@ -235,11 +314,18 @@ public class LdifAnalysisSummary {
         sb.append("- Errors: ").append(getErrors().size()).append("\n");
         sb.append("- Warnings: ").append(getWarnings().size()).append("\n");
         
-        if (getTotalPkdObjects() > 0) {
-            sb.append("- PKD Objects: ").append(getTotalPkdObjects()).append("\n");
-            sb.append("  * Certificates: ").append(totalCertificates).append(" (Valid: ").append(validCertificates).append(")\n");
-            sb.append("  * Master Lists: ").append(totalMasterLists).append(" (Valid: ").append(validMasterLists).append(")\n");
-            sb.append("  * CRLs: ").append(totalCrls).append(" (Valid: ").append(validCrls).append(")\n");
+        if (getPkdEntryCount() > 0) {
+            sb.append("- PKD Entries: ").append(getPkdEntryCount()).append("\n");
+            sb.append("  * ML: ").append(getEntryTypeCount().getOrDefault("ML", 0)).append("\n");
+            sb.append("  * DSC: ").append(getEntryTypeCount().getOrDefault("DSC", 0)).append("\n");
+            sb.append("  * CRL: ").append(getEntryTypeCount().getOrDefault("CRL", 0)).append("\n");
+        }
+        
+        if (getInfrastructureEntryCount() > 0) {
+            sb.append("- Infrastructure Entries: ").append(getInfrastructureEntryCount()).append("\n");
+            sb.append("  * Country: ").append(getEntryTypeCount().getOrDefault("C", 0)).append("\n");
+            sb.append("  * Organization: ").append(getEntryTypeCount().getOrDefault("O", 0)).append("\n");
+            sb.append("  * Domain: ").append(getEntryTypeCount().getOrDefault("DC", 0)).append("\n");
         }
         
         return sb.toString();
@@ -264,5 +350,35 @@ public class LdifAnalysisSummary {
 
     public boolean hasCrls() {
         return totalCrls > 0;
+    }
+
+    // EntryType 관련 검사 메서드들
+    public boolean hasEntryType(EntryType entryType) {
+        return getEntryTypeCount().getOrDefault(entryType.name(), 0) > 0;
+    }
+
+    public boolean hasEntryType(String entryTypeName) {
+        return getEntryTypeCount().getOrDefault(entryTypeName, 0) > 0;
+    }
+
+    public boolean hasPkdEntries() {
+        return getPkdEntryCount() > 0;
+    }
+
+    public boolean hasInfrastructureEntries() {
+        return getInfrastructureEntryCount() > 0;
+    }
+
+    // EntryType별 비율 계산 메서드들
+    public double getEntryTypePercentage(EntryType entryType) {
+        if (totalEntries == 0) return 0.0;
+        int count = getEntryTypeCount().getOrDefault(entryType.name(), 0);
+        return (double) count / totalEntries * 100.0;
+    }
+
+    public double getEntryTypePercentage(String entryTypeName) {
+        if (totalEntries == 0) return 0.0;
+        int count = getEntryTypeCount().getOrDefault(entryTypeName, 0);
+        return (double) count / totalEntries * 100.0;
     }
 }
