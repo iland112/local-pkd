@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: docker.io/library/postgres:15-alpine
+    container_name: icao-local-pkd-postgres
+    environment:
+      POSTGRES_DB: icao_local_pkd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - icao-local-pkd-postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+  
+  # pgAdmin (선택사항 - 데이터베이스 관리 도구)
+  pgadmin:
+    image: docker.io/dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartcoreinc.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - icao-local-pkd-pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+volumes:
+  icao-local-pkd-postgres_data:
+  icao-local-pkd-pgadmin_data:
