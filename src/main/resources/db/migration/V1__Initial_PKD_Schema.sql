@@ -12,19 +12,27 @@ CREATE TABLE IF NOT EXISTS pkd_files (
     file_id VARCHAR(36) UNIQUE NOT NULL,
     
     -- 파일 분류
-    file_type VARCHAR(20) NOT NULL,
-    file_format VARCHAR(30) NOT NULL,
+    file_type VARCHAR(30) NOT NULL,  -- CSCA_MASTER_LIST, EMRTD_PKI_OBJECTS, NON_CONFORMANT
+    file_format VARCHAR(30) NOT NULL, -- ML_SIGNED_CMS, CSCA_COMPLETE_LDIF, DSC_DELTA_LDIF 등
     
     -- ICAO PKD 메타데이터
-    collection_number VARCHAR(3),
-    version_number VARCHAR(10),
-    is_delta BOOLEAN DEFAULT FALSE,
+    collection_number VARCHAR(3),     -- '001', '002', '003'
+    version_number VARCHAR(10),       -- '000325', '009398'
+    is_delta BOOLEAN,                 -- TRUE=Delta, FALSE=Complete
+    delta_type VARCHAR(10),           -- ml, dscs, bcscs, crls (Delta인 경우)
     
     -- 파일 정보
     original_filename VARCHAR(255) NOT NULL,
+    file_extension VARCHAR(10),       -- 'ml', 'ldif'
     stored_path VARCHAR(500) NOT NULL,
     file_size BIGINT NOT NULL,
     file_hash_sha256 VARCHAR(64),
+    
+    -- Delta 전용 정보
+    base_version VARCHAR(10),         -- Delta 적용 기준 버전
+    delta_entries_added INTEGER,      -- changetype: add
+    delta_entries_modified INTEGER,   -- changetype: modify
+    delta_entries_deleted INTEGER,    -- changetype: delete
     
     -- 메타데이터
     country_code VARCHAR(2),
