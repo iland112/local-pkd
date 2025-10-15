@@ -3,52 +3,80 @@ package com.smartcoreinc.localpkd.common.enums;
 import lombok.Getter;
 
 /**
- * PKD 파일 타입 분류
- * ICAO PKD Collection 기반
+ * ICAO PKD 파일 타입
+ * 
+ * 실제 ICAO PKD 다운로드 사이트 기반:
+ * - https://www.icao.int/icao-pkd/icao-master-list (ML 파일)
+ * - https://pkddownloadsg.icao.int/ (LDIF 파일)
  */
 @Getter
 public enum FileType {
     /**
-     * CSCA (Country Signing CA) Master List
-     * Collection #1: 전체 회원국의 CSCA 인증서
+     * CSCA Master List
+     * Collection #1
+     * - ML: ICAO_ml-{version}.ml (Signed CMS)
+     * - LDIF: icaopkd-{serial number}-complete-{version}.ldif
+     *   : serial number
+     *   - 001: The latest collection of eMRTD PKI objects (Document Signer certificates (DSCs),
+     *          Bar Code Signer certificates (BCSCs/VDSs),
+     *          Bar Code Signer for non-constrained environments certificates (BCSC-NCs/VDS-NCs)
+     *           and Certificate Revocation Lists (CRLs)) to verify electronic passports.
+     *   - 002: The latest collection of CSCA Master Lists.
+     *   - 003: The latest collection of NON-CONFORMANT Document Signer certificates (DSCs)
+     *           and Certificate Revocation Lists (CRLs) to verify electronic passports.
+     *           Note: the non-conformance branch has been deprecated and does not receive updates.
+     * - LDIF Delta: icaopkd-{serial number}-delta-{version}.ldif
      */
-    CSCA("CSCA", "Country Signing CA Master List", "001"),
+    CSCA_MASTER_LIST(
+        "CSCA_MASTER_LIST", 
+        "CSCA Master List", 
+        "001",
+        "Country Signing CA certificates from all member states"
+    ),
     
     /**
-     * DSC/CRL (Document Signer Certificate + CRL)
-     * Collection #2: DSC 인증서 및 폐기 목록
+     * eMRTD PKI Objects (DSC, BCSC, BCSC-NC, CRL)
+     * Collection #2
+     * - LDIF: icaopkd-002-complete-{version}.ldif
+     * - LDIF Delta: icaopkd-002-{type}-delta-{version}.ldif
+     *   where type = dscs | bcscs | crls
      */
-    DSC_CRL("DSC_CRL", "Document Signer Certificates and CRLs", "002"),
+    EMRTD_PKI_OBJECTS(
+        "EMRTD_PKI_OBJECTS",
+        "eMRTD PKI Objects",
+        "002",
+        "Document Signer Certificates (DSC), Bar Code Signer Certificates (BCSC), and CRLs"
+    ),
     
     /**
-     * Non-Conformant (비표준)
-     * Collection #3: 더 이상 업데이트되지 않음 (Deprecated)
+     * Non-Conformant PKI Objects
+     * Collection #3 (Deprecated)
+     * - LDIF: icaopkd-003-complete-{version}.ldif
      */
-    NON_CONFORMANT("NON_CONFORMANT", "Non-Conformant (Deprecated)", "003"),
-
-    /**
-     * Master List Legacy (CMS 포맷)
-     * .ml 파일 지원
-     */
-    ML("ML", "Master List CMS", null);
-    
+    NON_CONFORMANT(
+        "NON_CONFORMANT",
+        "Non-Conformant PKI Objects",
+        "003",
+        "Non-conformant eMRTD PKI objects (Deprecated)"
+    );
     
     private final String code;
-    private final String description;
+    private final String displayName;
     private final String collectionNumber;
+    private final String description;
     
-    FileType(String code, String description, String collectionNumber) {
+    FileType(String code, String displayName, String collectionNumber, String description) {
         this.code = code;
-        this.description = description;
+        this.displayName = displayName;
         this.collectionNumber = collectionNumber;
+        this.description = description;
     }
     
     /**
      * Collection 번호로 FileType 조회
      * 
-     * @param collectionNumber Collection 번호 (예: "001", "002", "003")
+     * @param collectionNumber Collection 번호 ("001", "002", "003")
      * @return FileType
-     * @throws IllegalArgumentException 유효하지 않은 Collection 번호
      */
     public static FileType fromCollectionNumber(String collectionNumber) {
         if (collectionNumber == null) {
@@ -56,7 +84,7 @@ public enum FileType {
         }
         
         for (FileType type : values()) {
-            if (collectionNumber.equals(type.collectionNumber)) {
+            if (type.collectionNumber.equals(collectionNumber)) {
                 return type;
             }
         }
@@ -66,10 +94,6 @@ public enum FileType {
     
     /**
      * Code로 FileType 조회
-     * 
-     * @param code FileType code
-     * @return FileType
-     * @throws IllegalArgumentException 유효하지 않은 code
      */
     public static FileType fromCode(String code) {
         if (code == null) {
@@ -86,30 +110,24 @@ public enum FileType {
     }
     
     /**
-     * 이 파일 타입이 ICAO PKD Collection에 속하는지 확인
-     * 
-     * @return true if ICAO PKD collection
-     */
-    public boolean isIcaoPkdCollection() {
-        return collectionNumber != null;
-    }
-    
-    /**
-     * 이 파일 타입이 deprecated인지 확인
-     * 
-     * @return true if deprecated
+     * Deprecated 여부 확인
      */
     public boolean isDeprecated() {
         return this == NON_CONFORMANT;
     }
     
     /**
-     * 이 파일 타입이 레거시인지 확인
-     * 
-     * @return true if ML
+     * CSCA 타입인지 확인
      */
-    public boolean isML() {
-        return this == ML;
+    public boolean isCsca() {
+        return this == CSCA_MASTER_LIST;
+    }
+    
+    /**
+     * eMRTD PKI 타입인지 확인
+     */
+    public boolean isEmRtdPki() {
+        return this == EMRTD_PKI_OBJECTS;
     }
     
     @Override
