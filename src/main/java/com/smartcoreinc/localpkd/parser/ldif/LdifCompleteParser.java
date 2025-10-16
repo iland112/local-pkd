@@ -176,6 +176,13 @@ public class LdifCompleteParser implements FileParser {
 
     /**
      * CertificateType 판별
+     *
+     * ICAO PKD LDIF 구조:
+     * - dc=data,dc=download,dc=pkd,dc=icao,dc=int (eMRTD PKI Objects)
+     * - dc=nc-data,dc=download,dc=pkd,dc=icao,dc=int (Non-Conformant)
+     * - o=ml: CSCA Master List
+     * - o=dsc: Document Signer Certificate
+     * - o=crl: Certificate Revocation List
      */
     private CertificateType determineCertificateType(Entry entry, X509Certificate cert) {
         // objectClass로 판별 시도
@@ -189,19 +196,30 @@ public class LdifCompleteParser implements FileParser {
 
         // DN에서 판별 시도
         String dn = entry.getDN();
-        if (dn.contains("o=ml") || dn.contains("o=ml")) {
+
+        // Non-Conformant (Collection #3)
+        // Collection #3는 비표준 DSC만 포함 (CSCA는 없음)
+        if (dn.contains("dc=nc-data")) {
+            return CertificateType.DSC_NC;
+        }
+
+        // CSCA Master List (Collection #1)
+        if (dn.contains("o=ml") || dn.contains("o=ML")) {
             return CertificateType.CSCA;
         }
+
+        // Document Signer Certificate (Collection #2)
         if (dn.contains("o=dsc") || dn.contains("o=DSC")) {
-            // NC 여부 확인
-            if (dn.contains("dc=nc-data")) {
-                return CertificateType.DSC_NC;
-            }
             return CertificateType.DSC;
         }
-        
-        // 기본적으로 CSCA로 간주 (Master List)
-        return CertificateType.CSCA;
+
+        // 기본값: 인증서 타입에서 판별
+        // BasicConstraints 확인: CA=true이면 CSCA
+        if (cert.getBasicConstraints() >= 0) {
+            return CertificateType.CSCA;
+        }
+
+        return CertificateType.DSC;
     }
 
      /**

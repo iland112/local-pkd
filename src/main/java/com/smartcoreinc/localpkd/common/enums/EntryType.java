@@ -64,17 +64,30 @@ public enum EntryType {
             String lower = oc.toLowerCase();
 
             // CRL 확인
+            // - cRLDistributionPoint: ICAO PKD 표준 objectClass
+            // - certificateRevocationList, revocation: 기타 CRL 관련
             if (lower.contains("crl") || lower.contains("revocation")) {
                 return CRL;
             }
 
             // 인증서 확인
+            // ICAO PKD 표준 objectClasses:
+            // - pkdDownload: 다운로드 가능한 PKD 객체
+            // - pkdMasterList: CSCA Master List
+            // - inetOrgPerson, person, organizationalPerson: 인증서를 담는 사람 객체
+            // 기타:
+            // - certificate, csca, dsc, documentsigner, barcodesigner, pkica
             if (lower.contains("certificate") ||
                 lower.contains("csca") ||
                 lower.contains("dsc") ||
                 lower.contains("documentsigner") ||
                 lower.contains("barcodesigner") ||
-                lower.contains("pkica")) {
+                lower.contains("pkica") ||
+                lower.equals("pkddownload") ||
+                lower.equals("pkdmasterlist") ||
+                lower.equals("inetorgperson") ||
+                lower.equals("person") ||
+                lower.equals("organizationalperson")) {
                 return CERTIFICATE;
             }
         }
