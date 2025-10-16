@@ -43,5 +43,5 @@ node
 localpkd.*.*
 /log/
 
-data
-logs
+/data/
+/logs/
