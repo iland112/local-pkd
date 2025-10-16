@@ -135,7 +135,12 @@ public class ParseContext {
      */
     @Builder.Default
     private final boolean notifyProgress = true;
-    
+
+    /**
+     * Trust Anchor 인증서 경로 (ML 서명 검증용)
+     */
+    private final String trustAnchorPath;
+
     // ========================================
     // 상태 추적
     // ========================================

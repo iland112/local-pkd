@@ -5,7 +5,9 @@ import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1InputStream;
@@ -69,13 +71,11 @@ public class MlSignedCmsParser implements FileParser {
 
     @Override
     public ParseResult parse(byte[] fileData, ParseContext context) throws ParsingException {
-        log.info("=== ML Signed CMS 파싱 시작: {} ===", context.getOriginalFileName());
+        log.info("=== ML Signed CMS 파싱 시작: {} ===", context.getFilename());
 
-        ParseResult result = ParseResult.builder()
-            .fieldId(context.getFileId())
-            .success(false)
-            .parseStartTime(LocalDateTime.now())
-            .build();
+        LocalDateTime startTime = LocalDateTime.now();
+        List<ParsedCertificate> parsedCertificates = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
 
         try {
             // 1. CMS Signed Data 생성
@@ -83,12 +83,12 @@ public class MlSignedCmsParser implements FileParser {
             log.debug("CMS Signed Data 생성 완료");
 
             // 2. 서명 검증 (Trust Anchor 필요)
-            if (context.getTrustAnchorPath() != null) {
-                boolean singatureValid = verifySignature(signedData, context.getTrustAnchorPath());
-                if (!singatureValid) {
+            if (context.getTrustAnchorPath() != null && !context.getTrustAnchorPath().isEmpty()) {
+                boolean signatureValid = verifySignature(signedData, context.getTrustAnchorPath());
+                if (!signatureValid) {
                     throw new ParsingException(
                         context.getFileId(),
-                        context.getOriginalFileName(),
+                        context.getFilename(),
                         "CMS 서명 검증 실패"
                     );
                 }
@@ -97,7 +97,7 @@ public class MlSignedCmsParser implements FileParser {
                 log.warn("⚠️ Trust Anchor 경로가 없어 서명 검증을 건너뜁니다");
             }
 
-            // 3. Singed Content 추출
+            // 3. Signed Content 추출
             CMSProcessable signedContent = signedData.getSignedContent();
             byte[] contentBytes = (byte[]) signedContent.getContent();
             log.debug("Signed Content 추출 완료: {} bytes", contentBytes.length);
@@ -121,8 +121,6 @@ public class MlSignedCmsParser implements FileParser {
                     new JcaX509CertificateConverter().setProvider("BC");
 
                 int processed = 0;
-                int valid = 0;
-                int invalid = 0;
 
                 for (ASN1Encodable encodable : certSet) {
                     try {
@@ -130,16 +128,9 @@ public class MlSignedCmsParser implements FileParser {
                         X509CertificateHolder holder = new X509CertificateHolder(bcCert);
                         X509Certificate x509Cert = converter.getCertificate(holder);
 
-                        // ParsedCerificate 생성
+                        // ParsedCertificate 생성
                         ParsedCertificate parsedCert = CertificateParserUtil.parseCertificate(x509Cert, context);
-
-                        result.addCertificate(parsedCert);
-
-                        if (parsedCert.isValid()) {
-                            valid++;
-                        } else {
-                            invalid++;
-                        }
+                        parsedCertificates.add(parsedCert);
 
                         processed++;
 
@@ -148,34 +139,54 @@ public class MlSignedCmsParser implements FileParser {
                         }
                     } catch (Exception e) {
                         log.warn("인증서 처리 실패 (인덱스: {}): {}", processed, e.getMessage());
-                        result.addError(String.format("인증서 %d 처리 실패: %s", processed, e.getMessage()));
-                        invalid++;
+                        errors.add(String.format("인증서 %d 처리 실패: %s", processed, e.getMessage()));
                         processed++;
                     }
                 }
 
-                result.setValidEntries(valid);
-                result.setInvalidEntries(invalid);
-                result.setSuccess(true);
+                // 6. 통계 계산
+                int valid = (int) parsedCertificates.stream().filter(ParsedCertificate::isValid).count();
+                int invalid = parsedCertificates.size() - valid;
 
                 log.info("✅ 파싱 완료: 총 {}, 유효 {}, 무효 {}", processed, valid, invalid);
+
+                // 7. ParseResult 생성
+                LocalDateTime endTime = LocalDateTime.now();
+                long duration = java.time.Duration.between(startTime, endTime).toMillis();
+
+                return ParseResult.builder()
+                    .fileId(context.getFileId())
+                    .filename(context.getFilename())
+                    .fileType(context.getFileType())
+                    .fileFormat(context.getFileFormat())
+                    .version(context.getVersion())
+                    .success(true)
+                    .completed(true)
+                    .totalCertificates(parsedCertificates.size())
+                    .validCount(valid)
+                    .invalidCount(invalid)
+                    .processedCount(processed)
+                    .startTime(startTime)
+                    .endTime(endTime)
+                    .durationMillis(duration)
+                    .errorMessages(errors)
+                    .build();
             }
         } catch (ParsingException e) {
             throw e;
         } catch (Exception e) {
             log.error("ML Signed CMS 파싱 실패", e);
-            result.fail("ML Signed CMS 파싱 실패: " + e.getMessage(), e);
+
+            LocalDateTime endTime = LocalDateTime.now();
+            long duration = java.time.Duration.between(startTime, endTime).toMillis();
+
             throw new ParsingException(
                 context.getFileId(),
-                context.getOriginalFileName(),
-                "ML Signed CMS 파싱 실패",
+                context.getFilename(),
+                "ML Signed CMS 파싱 실패: " + e.getMessage(),
                 e
             );
-        } finally {
-            result.complete();
         }
-
-        return result;
     }
 
     /**
