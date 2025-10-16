@@ -6,14 +6,16 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.stereotype.Component;
 
 import com.smartcoreinc.localpkd.common.enums.CertificateType;
+import com.smartcoreinc.localpkd.common.enums.EntryType;
 import com.smartcoreinc.localpkd.common.enums.FileFormat;
 import com.smartcoreinc.localpkd.common.enums.FileType;
 import com.smartcoreinc.localpkd.common.util.CountryCodeUtil;
-import com.smartcoreinc.localpkd.enums.EntryType;
 import com.smartcoreinc.localpkd.parser.common.CertificateParserUtil;
 import com.smartcoreinc.localpkd.parser.common.FileParser;
 import com.smartcoreinc.localpkd.parser.common.domain.ParseContext;
@@ -51,19 +53,16 @@ public class LdifCompleteParser implements FileParser {
 
     @Override
     public ParseResult parse(byte[] fileData, ParseContext context) throws ParsingException {
-        log.info("=== LDIF Complete 파싱 시작: {} ===", context.getOriginalFileName());
+        log.info("=== LDIF Complete 파싱 시작: {} ===", context.getFilename());
 
-        ParseResult result = ParseResult.builder()
-            .fileId(context.getFileId())
-            .success(false)
-            .parseStartTime(LocalDateTime.now())
-            .build();
+        LocalDateTime startTime = LocalDateTime.now();
+        List<ParsedCertificate> parsedCertificates = new ArrayList<>();
+        List<ParsedCrl> parsedCrls = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
 
         try (InputStream is = new ByteArrayInputStream(fileData);
             LDIFReader ldifReader = new LDIFReader(is)) {
             int processed = 0;
-            int valid = 0;
-            int invalid = 0;
             int certificates = 0;
             int crls = 0;
 
@@ -71,28 +70,22 @@ public class LdifCompleteParser implements FileParser {
             while ((entry = ldifReader.readEntry()) != null) {
                 try {
                     // Entry 타입 판별
-                    EntryType entryType = determineEntryType(entry);
+                    EntryType entryType = EntryType.fromObjectClasses(entry.getObjectClassValues());
 
                     switch (entryType) {
                         case CERTIFICATE:
                             ParsedCertificate cert = parseCertificateEntry(entry, context);
                             if (cert != null) {
-                                result.addCertificate(cert);
+                                parsedCertificates.add(cert);
                                 certificates++;
-                                if (cert.isValid()) {
-                                    valid++;
-                                } else {
-                                    invalid++;
-                                }
                             }
                             break;
-                        
+
                         case CRL:
                             ParsedCrl crl = parseCrlEntry(entry, context);
                             if (crl != null) {
-                                result.addCrl(crl);
+                                parsedCrls.add(crl);
                                 crls++;
-                                valid++;
                             }
                             break;
 
@@ -108,69 +101,57 @@ public class LdifCompleteParser implements FileParser {
                     }
 
                 } catch (Exception e) {
-                    log.warn("Entry 처리 싪패 (DN: {}) {}", entry.getDN(), e.getMessage());
-                    result.addError(String.format("Entry %s 처리 실패: %s", entry.getDN(), e.getMessage()));
-                    invalid++;
+                    log.warn("Entry 처리 실패 (DN: {}): {}", entry.getDN(), e.getMessage());
+                    errors.add(String.format("Entry %s 처리 실패: %s", entry.getDN(), e.getMessage()));
                     processed++;
                 }
             }
 
-            result.setValidEntries(valid);
-            result.setInvalidEntries(invalid);
-            result.setSuccess(true);
+            // 통계 계산
+            int valid = (int) parsedCertificates.stream().filter(ParsedCertificate::isValid).count();
+            int invalid = parsedCertificates.size() - valid;
 
             log.info("✅ LDIF Complete 파싱 완료: 총 {}, 인증서 {}, CRL {}, 유효 {}, 무효 {}",
                 processed, certificates, crls, valid, invalid);
 
+            // ParseResult 생성
+            LocalDateTime endTime = LocalDateTime.now();
+            long duration = java.time.Duration.between(startTime, endTime).toMillis();
+
+            return ParseResult.builder()
+                .fileId(context.getFileId())
+                .filename(context.getFilename())
+                .fileType(context.getFileType())
+                .fileFormat(context.getFileFormat())
+                .version(context.getVersion())
+                .success(true)
+                .completed(true)
+                .totalCertificates(certificates)
+                .validCount(valid)
+                .invalidCount(invalid)
+                .processedCount(processed)
+                .startTime(startTime)
+                .endTime(endTime)
+                .durationMillis(duration)
+                .errorMessages(errors)
+                .metadata("crlCount", crls)
+                .build();
+
         } catch (Exception e) {
             log.error("LDIF Complete 파싱 실패", e);
-            result.fail("LDIF Complete 파싱 실패: " + e.getMessage(), e);
+
+            LocalDateTime endTime = LocalDateTime.now();
+            long duration = java.time.Duration.between(startTime, endTime).toMillis();
+
             throw new ParsingException(
                 context.getFileId(),
-                context.getOriginalFileName(),
-                "LDIF Complete 파싱 실패",
+                context.getFilename(),
+                "LDIF Complete 파싱 실패: " + e.getMessage(),
                 e
             );
-        } finally {
-            result.complete();
         }
-
-        return result;
     }
 
-    /**
-     * Entry 타입 판별
-     * @param entry
-     * @return EntryType
-     */
-    private EntryType determineEntryType(Entry entry) {
-        String[] objectClasses = entry.getObjectClassValues();
-
-        if (objectClasses == null || objectClasses.length == 0) {
-            return EntryType.UNKNOWN;
-        }
-
-        for (String oc : objectClasses) {
-            String lower = oc.toLowerCase();
-
-            // CRL 확인
-            if (lower.contains("crl") || lower.contains("revocation")) {
-                return EntryType.CRL;
-            }
-
-            // 인증서 확인
-            if (lower.contains("certificate") ||
-                lower.contains("csca") ||
-                lower.contains("dsc") ||
-                lower.contains("documentsigner") ||
-                lower.contains("barcodesigner") ||
-                lower.contains("pkica")) {
-                return EntryType.CERTIFICATE;
-            }
-        }
-
-        return EntryType.UNKNOWN;
-    }
 
     /**
      * 인증서 바이너리 데이터 추출
