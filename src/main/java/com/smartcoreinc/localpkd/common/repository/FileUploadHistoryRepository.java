@@ -161,22 +161,22 @@ public interface FileUploadHistoryRepository extends JpaRepository<FileUploadHis
     Optional<FileUploadHistory> findByFileHash(String fileHash);
 
     /**
-     * 원본 파일명과 업로드 상태로 조회
+     * 파일명과 업로드 상태로 조회
      *
-     * @param originalFileName 원본 파일명
-     * @param uploadStatus 업로드 상태
+     * @param filename 파일명
+     * @param status 업로드 상태
      * @return 업로드 파일 목록
      */
-    List<FileUploadHistory> findByOriginalFileNameAndUploadStatus(
-        String originalFileName,
-        UploadStatus uploadStatus
+    List<FileUploadHistory> findByFilenameAndStatus(
+        String filename,
+        UploadStatus status
     );
 
     /**
      * 동적 검색 조건으로 파일 검색
      *
      * @param fileFormat 파일 포맷 (nullable)
-     * @param uploadStatus 업로드 상태 (nullable)
+     * @param status 업로드 상태 (nullable)
      * @param startDate 시작 날짜 (nullable)
      * @param endDate 종료 날짜 (nullable)
      * @param fileName 파일명 검색 키워드 (nullable)
@@ -185,14 +185,14 @@ public interface FileUploadHistoryRepository extends JpaRepository<FileUploadHis
      */
     @Query("SELECT f FROM FileUploadHistory f " +
            "WHERE (:fileFormat IS NULL OR f.fileFormat = :fileFormat) " +
-           "AND (:uploadStatus IS NULL OR f.uploadStatus = :uploadStatus) " +
+           "AND (:status IS NULL OR f.status = :status) " +
            "AND (:startDate IS NULL OR f.uploadedAt >= :startDate) " +
            "AND (:endDate IS NULL OR f.uploadedAt <= :endDate) " +
-           "AND (:fileName IS NULL OR LOWER(f.originalFileName) LIKE LOWER(CONCAT('%', :fileName, '%'))) " +
+           "AND (:fileName IS NULL OR LOWER(f.filename) LIKE LOWER(CONCAT('%', :fileName, '%'))) " +
            "ORDER BY f.uploadedAt DESC")
     Page<FileUploadHistory> searchByMultipleCriteria(
         @Param("fileFormat") com.smartcoreinc.localpkd.common.enums.FileFormat fileFormat,
-        @Param("uploadStatus") UploadStatus uploadStatus,
+        @Param("status") UploadStatus status,
         @Param("startDate") java.time.LocalDateTime startDate,
         @Param("endDate") java.time.LocalDateTime endDate,
         @Param("fileName") String fileName,
@@ -202,8 +202,8 @@ public interface FileUploadHistoryRepository extends JpaRepository<FileUploadHis
     /**
      * 업로드 상태별 개수 조회
      *
-     * @param uploadStatus 업로드 상태
+     * @param status 업로드 상태
      * @return 개수
      */
-    long countByUploadStatus(UploadStatus uploadStatus);
+    long countByStatus(UploadStatus status);
 }

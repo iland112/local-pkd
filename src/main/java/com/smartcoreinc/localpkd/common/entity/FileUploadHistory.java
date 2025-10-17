@@ -195,6 +195,13 @@ public class FileUploadHistory {
     // ========================================
 
     /**
+     * 파일 해시 (SHA-256)
+     * 중복 파일 검사를 위한 해시 값
+     */
+    @Column(name = "file_hash", length = 64)
+    private String fileHash;
+
+    /**
      * 중복 파일 여부
      */
     @Column(name = "is_duplicate")
