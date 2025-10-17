@@ -205,9 +205,9 @@ mvn flyway:info
 | 카테고리 | 기술 |
 |----------|------|
 | Backend | Spring Boot 3.x, Java 17+ |
-| Database | PostgreSQL 15.x |
+| Database | PostgreSQL 15.x, JPA |
 | Migration | Flyway |
-| Frontend | Thymeleaf, HTMX, Tailwind CSS |
+| Frontend | Thymeleaf, HTMX, Alpine.js, Tailwind CSS |
 | Real-time | Server-Sent Events (SSE) |
 | Build Tool | Maven |
 | Version Control | Git |
