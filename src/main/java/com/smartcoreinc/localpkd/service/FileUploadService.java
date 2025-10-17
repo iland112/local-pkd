@@ -377,4 +377,70 @@ public class FileUploadService {
     public Optional<FileUploadHistory> getUploadHistory(Long id) {
         return uploadHistoryRepository.findById(id);
     }
+
+    /**
+     * 다중 조건으로 업로드 이력 검색
+     *
+     * @param criteria 검색 조건
+     * @param pageable 페이징 정보
+     * @return 검색 결과 (페이징)
+     */
+    public org.springframework.data.domain.Page<FileUploadHistory> searchUploadHistory(
+            com.smartcoreinc.localpkd.common.dto.FileSearchCriteria criteria,
+            org.springframework.data.domain.Pageable pageable) {
+
+        log.debug("Searching upload history with criteria: {}", criteria);
+
+        // 검색 조건 검증
+        if (criteria != null && !criteria.isValidDateRange()) {
+            throw new IllegalArgumentException("시작 날짜가 종료 날짜보다 늦을 수 없습니다.");
+        }
+
+        // 조건이 모두 비어있으면 전체 조회
+        if (criteria == null || criteria.isEmpty()) {
+            return uploadHistoryRepository.findRecentUploads(pageable);
+        }
+
+        // 동적 검색 쿼리 실행
+        return uploadHistoryRepository.searchByMultipleCriteria(
+                criteria.getFileFormat(),
+                criteria.getUploadStatus(),
+                criteria.getStartDate(),
+                criteria.getEndDate(),
+                criteria.getFileName(),
+                pageable
+        );
+    }
+
+    /**
+     * 파일 해시로 중복 파일 조회
+     *
+     * @param fileHash SHA-256 파일 해시
+     * @return 기존 업로드 파일 (있으면)
+     */
+    public Optional<FileUploadHistory> findByFileHash(String fileHash) {
+        return uploadHistoryRepository.findByFileHash(fileHash);
+    }
+
+    /**
+     * 전체 업로드 통계 조회
+     *
+     * @return 통계 정보 맵
+     */
+    public java.util.Map<String, Object> getUploadStatistics() {
+        long totalCount = uploadHistoryRepository.count();
+        long successCount = uploadHistoryRepository.countByUploadStatus(UploadStatus.SUCCESS);
+        long failedCount = uploadHistoryRepository.countByUploadStatus(UploadStatus.FAILED);
+
+        // 진행 중인 업로드 수 계산 (RECEIVED, VALIDATING 등)
+        long pendingCount = uploadHistoryRepository.findInProgressUploads().size();
+
+        return java.util.Map.of(
+                "totalCount", totalCount,
+                "successCount", successCount,
+                "failedCount", failedCount,
+                "pendingCount", pendingCount,
+                "successRate", totalCount > 0 ? (double) successCount / totalCount * 100 : 0.0
+        );
+    }
 }

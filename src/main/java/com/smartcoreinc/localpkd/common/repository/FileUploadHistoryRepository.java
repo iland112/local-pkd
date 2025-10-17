@@ -151,4 +151,59 @@ public interface FileUploadHistoryRepository extends JpaRepository<FileUploadHis
      * @return 대체한 새 파일
      */
     Optional<FileUploadHistory> findByReplacedFileId(Long replacedFileId);
+
+    /**
+     * 파일 해시로 조회 (중복 검사용)
+     *
+     * @param fileHash SHA-256 파일 해시
+     * @return 업로드 파일
+     */
+    Optional<FileUploadHistory> findByFileHash(String fileHash);
+
+    /**
+     * 원본 파일명과 업로드 상태로 조회
+     *
+     * @param originalFileName 원본 파일명
+     * @param uploadStatus 업로드 상태
+     * @return 업로드 파일 목록
+     */
+    List<FileUploadHistory> findByOriginalFileNameAndUploadStatus(
+        String originalFileName,
+        UploadStatus uploadStatus
+    );
+
+    /**
+     * 동적 검색 조건으로 파일 검색
+     *
+     * @param fileFormat 파일 포맷 (nullable)
+     * @param uploadStatus 업로드 상태 (nullable)
+     * @param startDate 시작 날짜 (nullable)
+     * @param endDate 종료 날짜 (nullable)
+     * @param fileName 파일명 검색 키워드 (nullable)
+     * @param pageable 페이징 정보
+     * @return 검색 결과
+     */
+    @Query("SELECT f FROM FileUploadHistory f " +
+           "WHERE (:fileFormat IS NULL OR f.fileFormat = :fileFormat) " +
+           "AND (:uploadStatus IS NULL OR f.uploadStatus = :uploadStatus) " +
+           "AND (:startDate IS NULL OR f.uploadedAt >= :startDate) " +
+           "AND (:endDate IS NULL OR f.uploadedAt <= :endDate) " +
+           "AND (:fileName IS NULL OR LOWER(f.originalFileName) LIKE LOWER(CONCAT('%', :fileName, '%'))) " +
+           "ORDER BY f.uploadedAt DESC")
+    Page<FileUploadHistory> searchByMultipleCriteria(
+        @Param("fileFormat") com.smartcoreinc.localpkd.common.enums.FileFormat fileFormat,
+        @Param("uploadStatus") UploadStatus uploadStatus,
+        @Param("startDate") java.time.LocalDateTime startDate,
+        @Param("endDate") java.time.LocalDateTime endDate,
+        @Param("fileName") String fileName,
+        Pageable pageable
+    );
+
+    /**
+     * 업로드 상태별 개수 조회
+     *
+     * @param uploadStatus 업로드 상태
+     * @return 개수
+     */
+    long countByUploadStatus(UploadStatus uploadStatus);
 }

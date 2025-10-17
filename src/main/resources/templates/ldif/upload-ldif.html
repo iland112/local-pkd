@@ -124,8 +124,51 @@
                           <br/>최대 파일 크기:
                           <span class="font-semibold">100MB</span>
                         </p>
-                        <!-- 파일 업로드 상태 프로그래스 바 -->
-                        <progress id="upload-progress" value="0" max="100"></progress>
+                      </div>
+
+                      <!-- 파일 정보 미리보기 -->
+                      <div id="file-preview" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg hidden">
+                        <h4 class="font-semibold text-blue-800 mb-3 flex items-center">
+                          <i class="fas fa-info-circle mr-2"></i>
+                          파일 정보 미리보기
+                        </h4>
+                        <dl class="grid grid-cols-2 gap-3 text-sm">
+                          <dt class="text-gray-600 font-medium">Collection:</dt>
+                          <dd id="preview-collection" class="text-gray-900">-</dd>
+
+                          <dt class="text-gray-600 font-medium">Format:</dt>
+                          <dd id="preview-format" class="text-gray-900">-</dd>
+
+                          <dt class="text-gray-600 font-medium">Version:</dt>
+                          <dd id="preview-version" class="text-gray-900">-</dd>
+
+                          <dt class="text-gray-600 font-medium">Type:</dt>
+                          <dd id="preview-type" class="text-gray-900">-</dd>
+                        </dl>
+                      </div>
+
+                      <!-- ICAO 공식 체크섬 입력 (선택사항) -->
+                      <div class="mt-4">
+                        <label
+                          for="expectedChecksum"
+                          class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          <i class="fas fa-fingerprint text-purple-500 mr-2"></i>
+                          ICAO 공식 SHA-1 체크섬 (선택사항)
+                        </label>
+                        <input
+                          type="text"
+                          id="expectedChecksum"
+                          name="expectedChecksum"
+                          placeholder="예: 82f8106001664427a7d686017aa49dc3fd3722f1"
+                          pattern="[a-fA-F0-9]{40}"
+                          maxlength="40"
+                          class="input input-bordered w-full font-mono text-sm"
+                        />
+                        <p class="mt-1 text-xs text-gray-500 flex items-start gap-1">
+                          <i class="fas fa-lightbulb text-yellow-500 mt-0.5"></i>
+                          <span>ICAO PKD 다운로드 페이지의 Checksum 값을 입력하면 업로드 후 자동으로 검증됩니다.</span>
+                        </p>
                       </div>
                       <div>
                         <button
@@ -368,13 +411,14 @@
                 });
         });
 
-        // 파일 선택 처리 (개선된 검증)
+        // 파일 선택 처리 (개선된 검증 + 미리보기)
         function setupFileSizeValidation() {
             document.getElementById("file").addEventListener("change", function () {
                 const file = this.files[0];
                 const fileInfo = document.getElementById("fileInfo");
                 const fileName = document.getElementById("fileName");
                 const fileSize = document.getElementById("fileSize");
+                const filePreview = document.getElementById("file-preview");
                 const maxSize = 100 * 1024 * 1024; // 100MB
 
                 if (file) {
@@ -383,6 +427,7 @@
                         showFileError(`파일이 너무 큽니다. 최대 크기는 ${formatFileSize(maxSize)}입니다.`);
                         this.value = "";
                         fileInfo.classList.add("hidden");
+                        filePreview.classList.add("hidden");
                         return;
                     }
 
@@ -391,19 +436,93 @@
                         showFileError("LDIF 파일만 업로드할 수 있습니다.");
                         this.value = "";
                         fileInfo.classList.add("hidden");
+                        filePreview.classList.add("hidden");
                         return;
                     }
 
                     fileName.textContent = file.name;
                     fileSize.textContent = `(${formatFileSize(file.size)})`;
                     fileInfo.classList.remove("hidden");
-                    
+
+                    // 파일명으로부터 메타데이터 추출 및 미리보기 표시
+                    parseAndDisplayFileMetadata(file.name);
+
                     // 기존 에러 메시지 제거
                     removeExistingFileErrors();
                 } else {
                     fileInfo.classList.add("hidden");
+                    filePreview.classList.add("hidden");
                 }
             });
+        }
+
+        // 파일명에서 메타데이터 추출 및 표시
+        function parseAndDisplayFileMetadata(filename) {
+            const filePreview = document.getElementById("file-preview");
+            const previewCollection = document.getElementById("preview-collection");
+            const previewFormat = document.getElementById("preview-format");
+            const previewVersion = document.getElementById("preview-version");
+            const previewType = document.getElementById("preview-type");
+
+            // LDIF 파일명 패턴: icaopkd-{collection}-{type}-{version}.ldif
+            const ldifPattern = /icaopkd-(\d{3})-(complete|delta)-(\d+)\.ldif/i;
+            const match = filename.toLowerCase().match(ldifPattern);
+
+            if (match) {
+                const collection = match[1];
+                const type = match[2];
+                const version = match[3];
+
+                // Collection 설명
+                let collectionDesc = '';
+                let collectionBadge = '';
+                if (collection === '001') {
+                    collectionDesc = 'eMRTD PKI Objects';
+                    collectionBadge = '<span class="badge badge-primary">Collection #001</span>';
+                } else if (collection === '002') {
+                    collectionDesc = 'CSCA Master Lists';
+                    collectionBadge = '<span class="badge badge-success">Collection #002</span>';
+                } else if (collection === '003') {
+                    collectionDesc = 'Non-Conformant (Deprecated)';
+                    collectionBadge = '<span class="badge badge-warning">Collection #003</span>';
+                }
+
+                // Type 설명
+                const typeDesc = type === 'complete' ?
+                    '<span class="badge badge-info">Complete</span>' :
+                    '<span class="badge badge-accent">Delta</span>';
+
+                // Format 설명
+                let formatDesc = '';
+                if (collection === '001' && type === 'complete') {
+                    formatDesc = 'CSCA_COMPLETE_LDIF';
+                } else if (collection === '001' && type === 'delta') {
+                    formatDesc = 'CSCA_DELTA_LDIF';
+                } else if (collection === '002' && type === 'complete') {
+                    formatDesc = 'EMRTD_COMPLETE_LDIF';
+                } else if (collection === '002' && type === 'delta') {
+                    formatDesc = 'EMRTD_DELTA_LDIF';
+                } else if (collection === '003' && type === 'complete') {
+                    formatDesc = 'NON_CONFORMANT_COMPLETE_LDIF';
+                } else if (collection === '003' && type === 'delta') {
+                    formatDesc = 'NON_CONFORMANT_DELTA_LDIF';
+                }
+
+                previewCollection.innerHTML = `${collectionBadge} <span class="text-sm text-gray-600 ml-2">${collectionDesc}</span>`;
+                previewFormat.innerHTML = `<code class="text-xs bg-gray-100 px-2 py-1 rounded">${formatDesc}</code>`;
+                previewVersion.innerHTML = `<span class="font-mono font-semibold text-blue-600">${version}</span>`;
+                previewType.innerHTML = typeDesc;
+
+                filePreview.classList.remove("hidden");
+            } else {
+                // 패턴 불일치 시 경고 표시
+                previewCollection.textContent = '알 수 없음';
+                previewFormat.textContent = '비표준 파일명';
+                previewVersion.textContent = '-';
+                previewType.innerHTML = '<span class="text-yellow-600">⚠️ 파일명 형식 확인 필요</span>';
+
+                filePreview.classList.remove("hidden");
+            }
         }
 
         // 업로드 시작 처리 (개선된 버전)

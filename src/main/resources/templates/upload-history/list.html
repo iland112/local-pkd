@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html
+  lang="ko"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 페이지 헤더 -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+          <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
+            <div class="flex items-center justify-between">
+              <h1 class="text-2xl font-bold flex items-center gap-3">
+                <i class="fas fa-history"></i>
+                파일 업로드 이력
+              </h1>
+              <button
+                onclick="location.reload()"
+                class="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-md transition-colors flex items-center gap-2"
+              >
+                <i class="fas fa-sync-alt"></i>
+                새로고침
+              </button>
+            </div>
+          </div>
+
+          <!-- 통계 카드 -->
+          <div class="bg-gray-50 px-6 py-4 border-b">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 mb-1">전체 업로드</div>
+                <div class="text-2xl font-bold text-blue-600">
+                  <span th:text="${statistics.totalCount}">0</span>
+                </div>
+              </div>
+              <div class="bg-white p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 mb-1">성공</div>
+                <div class="text-2xl font-bold text-green-600">
+                  <span th:text="${statistics.successCount}">0</span>
+                </div>
+              </div>
+              <div class="bg-white p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 mb-1">실패</div>
+                <div class="text-2xl font-bold text-red-600">
+                  <span th:text="${statistics.failedCount}">0</span>
+                </div>
+              </div>
+              <div class="bg-white p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 mb-1">성공률</div>
+                <div class="text-2xl font-bold text-purple-600">
+                  <span th:text="${#numbers.formatDecimal(statistics.successRate, 1, 1)}">0.0</span>%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 필터 영역 -->
+          <div class="p-6 bg-white">
+            <form method="get" action="/upload-history" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- 파일 포맷 필터 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <i class="fas fa-file-alt text-blue-500 mr-1"></i>
+                    파일 포맷
+                  </label>
+                  <select
+                    name="format"
+                    class="select select-bordered w-full"
+                    th:value="${criteria?.fileFormat}"
+                  >
+                    <option value="">전체</option>
+                    <option
+                      th:each="fmt : ${fileFormatOptions}"
+                      th:value="${fmt}"
+                      th:text="${fmt.description}"
+                      th:selected="${criteria?.fileFormat == fmt}"
+                    >
+                      Format
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 업로드 상태 필터 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <i class="fas fa-info-circle text-green-500 mr-1"></i>
+                    업로드 상태
+                  </label>
+                  <select
+                    name="status"
+                    class="select select-bordered w-full"
+                    th:value="${criteria?.uploadStatus}"
+                  >
+                    <option value="">전체</option>
+                    <option
+                      th:each="stat : ${uploadStatusOptions}"
+                      th:value="${stat}"
+                      th:text="${stat.displayName}"
+                      th:selected="${criteria?.uploadStatus == stat}"
+                    >
+                      Status
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 시작 날짜 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <i class="fas fa-calendar-alt text-purple-500 mr-1"></i>
+                    시작 날짜
+                  </label>
+                  <input
+                    type="date"
+                    name="startDate"
+                    class="input input-bordered w-full"
+                    th:value="${criteria?.startDate != null ? #temporals.format(criteria.startDate, 'yyyy-MM-dd') : ''}"
+                  />
+                </div>
+
+                <!-- 종료 날짜 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <i class="fas fa-calendar-check text-purple-500 mr-1"></i>
+                    종료 날짜
+                  </label>
+                  <input
+                    type="date"
+                    name="endDate"
+                    class="input input-bordered w-full"
+                    th:value="${criteria?.endDate != null ? #temporals.format(criteria.endDate, 'yyyy-MM-dd') : ''}"
+                  />
+                </div>
+
+                <!-- 파일명 검색 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <i class="fas fa-search text-gray-500 mr-1"></i>
+                    파일명 검색
+                  </label>
+                  <input
+                    type="text"
+                    name="fileName"
+                    placeholder="파일명 입력..."
+                    class="input input-bordered w-full"
+                    th:value="${criteria?.fileName}"
+                  />
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                >
+                  <i class="fas fa-filter mr-2"></i>
+                  필터 적용
+                </button>
+                <button
+                  type="button"
+                  onclick="window.location.href='/upload-history'"
+                  class="btn btn-outline"
+                >
+                  <i class="fas fa-redo mr-2"></i>
+                  초기화
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- 결과 테이블 -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="text-center">ID</th>
+                  <th>파일명</th>
+                  <th class="text-center">포맷</th>
+                  <th class="text-center">크기</th>
+                  <th class="text-center">상태</th>
+                  <th class="text-center">업로드 시간</th>
+                  <th class="text-center">작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  th:each="history : ${uploadHistory.content}"
+                  class="hover:bg-gray-50 cursor-pointer"
+                >
+                  <td class="text-center font-mono text-sm" th:text="${history.id}">1</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-file text-blue-500"></i>
+                      <span class="font-medium" th:text="${history.originalFileName}">filename.ldif</span>
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <span
+                      class="badge badge-info"
+                      th:text="${history.fileFormat?.description}"
+                      th:classappend="${history.fileFormat?.name() == 'LDIF' ? 'badge-primary' : 'badge-secondary'}"
+                    >
+                      LDIF
+                    </span>
+                  </td>
+                  <td class="text-center font-mono text-sm" th:text="${history.fileSizeDisplay}">45 MB</td>
+                  <td class="text-center">
+                    <span
+                      class="badge"
+                      th:text="${history.uploadStatus?.displayName}"
+                      th:classappend="${history.uploadStatus?.name() == 'SUCCESS' ? 'badge-success' :
+                                       history.uploadStatus?.name() == 'FAILED' ? 'badge-error' :
+                                       'badge-warning'}"
+                    >
+                      성공
+                    </span>
+                  </td>
+                  <td class="text-center text-sm" th:text="${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm:ss')}">
+                    2025-10-17 12:00:00
+                  </td>
+                  <td class="text-center">
+                    <button
+                      class="btn btn-sm btn-ghost"
+                      th:onclick="|showDetailModal(${history.id})|"
+                    >
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </td>
+                </tr>
+                <tr th:if="${uploadHistory.empty}">
+                  <td colspan="7" class="text-center py-8 text-gray-500">
+                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                    <div>업로드 이력이 없습니다.</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 페이지네이션 -->
+          <div class="flex justify-between items-center p-4 bg-gray-50 border-t" th:if="${!uploadHistory.empty}">
+            <div class="text-sm text-gray-600">
+              전체 <span class="font-semibold" th:text="${totalElements}">0</span>개 중
+              <span class="font-semibold" th:text="${uploadHistory.numberOfElements}">0</span>개 표시
+            </div>
+
+            <div class="btn-group">
+              <!-- 이전 페이지 -->
+              <a
+                th:if="${currentPage > 0}"
+                th:href="@{/upload-history(page=${currentPage - 1}, size=${size}, format=${criteria?.fileFormat}, status=${criteria?.uploadStatus}, startDate=${criteria?.startDate}, endDate=${criteria?.endDate}, fileName=${criteria?.fileName})}"
+                class="btn btn-sm"
+              >
+                <i class="fas fa-chevron-left"></i>
+              </a>
+              <button class="btn btn-sm" disabled th:if="${currentPage == 0}">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+
+              <!-- 페이지 번호 -->
+              <button class="btn btn-sm btn-active">
+                <span th:text="${currentPage + 1}">1</span> / <span th:text="${totalPages}">10</span>
+              </button>
+
+              <!-- 다음 페이지 -->
+              <a
+                th:if="${currentPage < totalPages - 1}"
+                th:href="@{/upload-history(page=${currentPage + 1}, size=${size}, format=${criteria?.fileFormat}, status=${criteria?.uploadStatus}, startDate=${criteria?.startDate}, endDate=${criteria?.endDate}, fileName=${criteria?.fileName})}"
+                class="btn btn-sm"
+              >
+                <i class="fas fa-chevron-right"></i>
+              </a>
+              <button class="btn btn-sm" disabled th:if="${currentPage >= totalPages - 1}">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+
+            <!-- 페이지 크기 선택 -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-gray-600">페이지당</label>
+              <select
+                class="select select-sm select-bordered"
+                onchange="changePage Size(this.value)"
+              >
+                <option value="10" th:selected="${size == 10}">10</option>
+                <option value="20" th:selected="${size == 20}">20</option>
+                <option value="50" th:selected="${size == 50}">50</option>
+                <option value="100" th:selected="${size == 100}">100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 상세 정보 모달 -->
+      <div id="detailModal" class="modal">
+        <div class="modal-box max-w-4xl">
+          <h3 class="font-bold text-lg mb-4">
+            <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+            업로드 이력 상세 정보
+          </h3>
+          <div id="modalContent" class="space-y-4">
+            <!-- JavaScript로 동적으로 채워짐 -->
+          </div>
+          <div class="modal-action">
+            <button class="btn" onclick="closeDetailModal()">닫기</button>
+          </div>
+        </div>
+        <div class="modal-backdrop" onclick="closeDetailModal()"></div>
+      </div>
+    </div>
+
+    <th:block layout:fragment="script-content">
+      <script>
+        // 상세 정보 모달 표시
+        function showDetailModal(id) {
+            fetch(`/upload-history/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    const content = `
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-semibold text-gray-700">파일명:</label>
+                                <div class="text-gray-900">${data.originalFileName || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-gray-700">파일 포맷:</label>
+                                <div class="text-gray-900">${data.fileFormat?.description || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-gray-700">파일 크기:</label>
+                                <div class="text-gray-900">${data.fileSizeDisplay || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-gray-700">업로드 상태:</label>
+                                <div class="text-gray-900">
+                                    <span class="badge ${getStatusBadgeClass(data.uploadStatus?.name)}">
+                                        ${data.uploadStatus?.displayName || 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-gray-700">업로드 시간:</label>
+                                <div class="text-gray-900">${formatDateTime(data.uploadedAt)}</div>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-gray-700">파일 해시:</label>
+                                <div class="text-gray-900 font-mono text-xs break-all">${data.fileHash || 'N/A'}</div>
+                            </div>
+                            ${data.calculatedChecksum ? `
+                                <div class="col-span-2">
+                                    <label class="font-semibold text-gray-700">계산된 체크섬:</label>
+                                    <div class="text-gray-900 font-mono text-xs break-all">${data.calculatedChecksum}</div>
+                                </div>
+                            ` : ''}
+                            ${data.errorMessage ? `
+                                <div class="col-span-2">
+                                    <label class="font-semibold text-red-700">오류 메시지:</label>
+                                    <div class="text-red-600 bg-red-50 p-3 rounded-md">${data.errorMessage}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+
+                    document.getElementById('modalContent').innerHTML = content;
+                    document.getElementById('detailModal').classList.add('modal-open');
+                })
+                .catch(error => {
+                    console.error('Error fetching detail:', error);
+                    alert('상세 정보를 불러오는 중 오류가 발생했습니다.');
+                });
+        }
+
+        // 모달 닫기
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('modal-open');
+        }
+
+        // 페이지 크기 변경
+        function changePageSize(size) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('size', size);
+            url.searchParams.set('page', '0'); // 첫 페이지로 이동
+            window.location.href = url.toString();
+        }
+
+        // 날짜 포맷팅
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('ko-KR');
+        }
+
+        // 상태 배지 클래스
+        function getStatusBadgeClass(status) {
+            switch(status) {
+                case 'SUCCESS': return 'badge-success';
+                case 'FAILED': return 'badge-error';
+                case 'PENDING': return 'badge-warning';
+                default: return 'badge-info';
+            }
+        }
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetailModal();
+            }
+        });
+      </script>
+    </th:block>
+  </body>
+</html>
