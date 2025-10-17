@@ -304,6 +304,59 @@
           </div>
         </div>
       </div>
+
+      <!-- 중복 파일 경고 모달 -->
+      <div id="duplicateWarningModal" class="modal">
+        <div class="modal-box max-w-2xl">
+          <h3 class="font-bold text-lg flex items-center">
+            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+            중복 파일 감지
+          </h3>
+
+          <div class="py-4">
+            <p class="text-gray-700 mb-4" id="duplicateMessage"></p>
+
+            <div class="bg-gray-50 p-4 rounded-lg mb-4">
+              <h4 class="font-semibold mb-3 text-gray-800">기존 업로드 정보:</h4>
+              <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <dt class="text-gray-600 font-medium">파일명:</dt>
+                <dd id="existingFilename" class="font-mono text-gray-900">-</dd>
+
+                <dt class="text-gray-600 font-medium">업로드 날짜:</dt>
+                <dd id="existingUploadDate" class="text-gray-900">-</dd>
+
+                <dt class="text-gray-600 font-medium">버전:</dt>
+                <dd id="existingVersion" class="font-mono text-gray-900">-</dd>
+
+                <dt class="text-gray-600 font-medium">상태:</dt>
+                <dd id="existingStatus" class="text-gray-900">-</dd>
+              </dl>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-2">
+              <h5 class="font-semibold text-sm text-blue-800 mb-1">경고 유형:</h5>
+              <p id="warningTypeInfo" class="text-sm"></p>
+            </div>
+
+            <div class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+              <h5 class="font-semibold text-sm text-yellow-800 mb-1">추가 정보:</h5>
+              <p id="additionalInfo" class="text-sm text-gray-700"></p>
+            </div>
+          </div>
+
+          <div class="modal-action">
+            <button class="btn btn-ghost" onclick="closeDuplicateModal()">
+              <i class="fas fa-times mr-1"></i> 취소
+            </button>
+            <a class="btn btn-outline btn-info" id="viewHistoryBtn" href="#" target="_blank">
+              <i class="fas fa-history mr-1"></i> 기존 이력 보기
+            </a>
+            <button class="btn btn-primary" id="forceUploadBtn" onclick="forceUpload()">
+              <i class="fas fa-upload mr-1"></i> 강제 업로드
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     <th:block layout:fragment="script-content">
       <script type="text/javascript" th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
@@ -703,12 +756,12 @@
           // TODO: LDIF 내보내기 API 구현 후 연결
         }
 
-        // 파일 크기 검증 설정 (개선된 버전)
+        // 파일 크기 검증 설정 (개선된 버전 + 중복 체크)
         function setupFileSizeValidation() {
             const fileInput = document.getElementById("file");
             if (!fileInput) return;
 
-            fileInput.addEventListener("change", function () {
+            fileInput.addEventListener("change", async function () {
                 const file = this.files[0];
                 const fileInfo = document.getElementById("fileInfo");
                 const fileName = document.getElementById("fileName");
@@ -738,6 +791,9 @@
 
                     // 기존 에러 메시지 제거
                     removeExistingFileErrors();
+
+                    // 중복 체크 수행
+                    await checkDuplicateBeforeUpload(file);
                 } else {
                     fileInfo.classList.add("hidden");
                 }
@@ -851,6 +907,200 @@
             }
           }
         });
+
+        // ====== 중복 파일 체크 기능 ======
+
+        // SHA-256 해시 계산 (브라우저 Web Crypto API 사용)
+        async function calculateFileHashSHA256(file) {
+            try {
+                const buffer = await file.arrayBuffer();
+                const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (error) {
+                console.error('Error calculating file hash:', error);
+                throw error;
+            }
+        }
+
+        // 중복 파일 체크
+        async function checkDuplicateBeforeUpload(file) {
+            try {
+                console.log('Starting duplicate check for:', file.name);
+
+                // 해시 계산 중 표시
+                showDuplicateCheckProgress('파일 해시 계산 중...');
+
+                const fileHash = await calculateFileHashSHA256(file);
+                console.log('File hash calculated:', fileHash);
+
+                // 중복 검사 중 표시
+                showDuplicateCheckProgress('중복 파일 검사 중...');
+
+                const response = await fetch('/api/duplicate-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        fileSize: file.size,
+                        fileHash: fileHash
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                console.log('Duplicate check result:', result);
+
+                // 진행 표시 제거
+                removeDuplicateCheckProgress();
+
+                if (result.isDuplicate) {
+                    showDuplicateWarningModal(result);
+                    return false;
+                }
+
+                return true;
+
+            } catch (error) {
+                console.error('Error checking duplicate:', error);
+                removeDuplicateCheckProgress();
+                showNotification('중복 검사 중 오류가 발생했습니다: ' + error.message, 'error');
+                return true; // 오류 발생 시 업로드 허용
+            }
+        }
+
+        // 중복 체크 진행 표시
+        function showDuplicateCheckProgress(message) {
+            removeDuplicateCheckProgress(); // 기존 진행 표시 제거
+
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'duplicate-check-progress';
+            progressDiv.className = 'mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 animate-fadeIn';
+            progressDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-spinner animate-spin mr-2 text-blue-500"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            const fileInput = document.getElementById('file');
+            fileInput.parentNode.appendChild(progressDiv);
+        }
+
+        // 중복 체크 진행 표시 제거
+        function removeDuplicateCheckProgress() {
+            const progress = document.getElementById('duplicate-check-progress');
+            if (progress) {
+                progress.remove();
+            }
+        }
+
+        // 중복 파일 경고 모달 표시
+        function showDuplicateWarningModal(data) {
+            const modal = document.getElementById('duplicateWarningModal');
+            const messageEl = document.getElementById('duplicateMessage');
+            const filenameEl = document.getElementById('existingFilename');
+            const uploadDateEl = document.getElementById('existingUploadDate');
+            const versionEl = document.getElementById('existingVersion');
+            const statusEl = document.getElementById('existingStatus');
+            const warningTypeEl = document.getElementById('warningTypeInfo');
+            const additionalInfoEl = document.getElementById('additionalInfo');
+            const forceUploadBtn = document.getElementById('forceUploadBtn');
+            const viewHistoryBtn = document.getElementById('viewHistoryBtn');
+
+            // 모달 내용 설정
+            messageEl.textContent = data.message || '중복 파일이 감지되었습니다.';
+            filenameEl.textContent = data.existingFilename || '-';
+            uploadDateEl.textContent = data.existingUploadDate ? formatDateTime(data.existingUploadDate) : '-';
+            versionEl.textContent = data.existingVersion || '-';
+            statusEl.textContent = data.existingStatus || '-';
+
+            // 경고 유형에 따른 아이콘 및 색상
+            let warningIcon = 'fa-exclamation-triangle';
+            let warningColor = 'text-yellow-600';
+            if (data.warningType === 'EXACT_DUPLICATE') {
+                warningIcon = 'fa-copy';
+                warningColor = 'text-red-600';
+            } else if (data.warningType === 'SAME_VERSION') {
+                warningIcon = 'fa-code-branch';
+                warningColor = 'text-orange-600';
+            } else if (data.warningType === 'OLDER_VERSION') {
+                warningIcon = 'fa-history';
+                warningColor = 'text-blue-600';
+            }
+
+            warningTypeEl.innerHTML = `<i class="fas ${warningIcon} ${warningColor} mr-2"></i>${data.warningType || ''}`;
+            additionalInfoEl.textContent = data.additionalInfo || '';
+
+            // 강제 업로드 버튼 활성화/비활성화
+            if (data.canForceUpload) {
+                forceUploadBtn.disabled = false;
+                forceUploadBtn.classList.remove('btn-disabled');
+            } else {
+                forceUploadBtn.disabled = true;
+                forceUploadBtn.classList.add('btn-disabled');
+            }
+
+            // 이력 보기 링크 설정
+            if (data.existingUploadId) {
+                viewHistoryBtn.href = `/upload-history?id=${data.existingUploadId}`;
+            }
+
+            // 모달 열기
+            modal.classList.add('modal-open');
+        }
+
+        // 중복 모달 닫기
+        function closeDuplicateModal() {
+            const modal = document.getElementById('duplicateWarningModal');
+            modal.classList.remove('modal-open');
+
+            // 파일 입력 초기화
+            const fileInput = document.getElementById('file');
+            fileInput.value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+        }
+
+        // 강제 업로드
+        function forceUpload() {
+            // 강제 업로드 플래그를 폼에 추가
+            const form = document.querySelector('form');
+            let forceInput = document.getElementById('forceUploadInput');
+
+            if (!forceInput) {
+                forceInput = document.createElement('input');
+                forceInput.type = 'hidden';
+                forceInput.id = 'forceUploadInput';
+                forceInput.name = 'forceUpload';
+                form.appendChild(forceInput);
+            }
+
+            forceInput.value = 'true';
+
+            // 모달 닫기
+            closeDuplicateModal();
+
+            // 폼 제출
+            console.log('Force uploading file...');
+            htmx.trigger(form, 'submit');
+        }
+
+        // 날짜/시간 포맷팅
+        function formatDateTime(dateTimeStr) {
+            if (!dateTimeStr) return '-';
+            const date = new Date(dateTimeStr);
+            return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
       </script>
 
       <style>

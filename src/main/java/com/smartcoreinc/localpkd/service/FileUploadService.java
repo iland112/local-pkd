@@ -429,8 +429,8 @@ public class FileUploadService {
      */
     public java.util.Map<String, Object> getUploadStatistics() {
         long totalCount = uploadHistoryRepository.count();
-        long successCount = uploadHistoryRepository.countByUploadStatus(UploadStatus.SUCCESS);
-        long failedCount = uploadHistoryRepository.countByUploadStatus(UploadStatus.FAILED);
+        long successCount = uploadHistoryRepository.countByStatus(UploadStatus.SUCCESS);
+        long failedCount = uploadHistoryRepository.countByStatus(UploadStatus.FAILED);
 
         // 진행 중인 업로드 수 계산 (RECEIVED, VALIDATING 등)
         long pendingCount = uploadHistoryRepository.findInProgressUploads().size();
