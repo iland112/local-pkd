@@ -265,6 +265,15 @@ public enum UploadStatus {
     }
 
     /**
+     * UI 표시용 이름 반환
+     *
+     * @return 표시 이름
+     */
+    public String getDisplayName() {
+        return this.title;
+    }
+
+    /**
      * 상태 전이 가능 여부 확인
      *
      * @param nextStatus 다음 상태

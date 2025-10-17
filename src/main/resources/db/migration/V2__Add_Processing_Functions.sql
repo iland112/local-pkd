@@ -131,6 +131,7 @@ RETURNS INTEGER AS $$
 DECLARE
     revoked_count INTEGER := 0;
     v_entry RECORD;
+    v_found BOOLEAN;
 BEGIN
     -- CRL 항목을 순회하며 인증서 폐기 처리
     FOR v_entry IN
@@ -150,24 +151,26 @@ BEGIN
           AND serial_number = v_entry.serial_number
           AND is_latest = TRUE
           AND status != 'REVOKED';
-        
+
+        GET DIAGNOSTICS v_found = ROW_COUNT;
+
         -- affected_cert_id 업데이트
         UPDATE crl_entries
         SET affected_cert_id = (
-            SELECT cert_id 
-            FROM certificates 
-            WHERE country_code = v_entry.country_code 
+            SELECT cert_id
+            FROM certificates
+            WHERE country_code = v_entry.country_code
               AND serial_number = v_entry.serial_number
               AND is_latest = TRUE
             LIMIT 1
         )
         WHERE id = v_entry.entry_id;
-        
-        IF FOUND THEN
+
+        IF v_found THEN
             revoked_count := revoked_count + 1;
         END IF;
     END LOOP;
-    
+
     RETURN revoked_count;
 END;
 $$ LANGUAGE plpgsql;
@@ -175,52 +178,24 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION apply_crl_revocations(BIGINT) IS 'CRL 폐기 목록을 인증서에 적용';
 
 -- ================================================================
--- 5. 파일 처리 상태 업데이트 함수
+-- 5. 파일 업로드 상태 업데이트 함수
 -- ================================================================
-CREATE OR REPLACE FUNCTION update_file_processing_status(
-    p_file_id VARCHAR(36),
-    p_status_type VARCHAR(20), -- 'upload', 'parse', 'verify', 'ldap'
-    p_status VARCHAR(20),
+CREATE OR REPLACE FUNCTION update_upload_status(
+    p_upload_id BIGINT,
+    p_status VARCHAR(50),
     p_error_message TEXT DEFAULT NULL
 )
 RETURNS VOID AS $$
 BEGIN
-    CASE p_status_type
-        WHEN 'upload' THEN
-            UPDATE pkd_files
-            SET upload_status = p_status,
-                error_message = COALESCE(p_error_message, error_message),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE file_id = p_file_id;
-            
-        WHEN 'parse' THEN
-            UPDATE pkd_files
-            SET parse_status = p_status,
-                parse_completed_at = CASE WHEN p_status IN ('PARSED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE parse_completed_at END,
-                error_message = COALESCE(p_error_message, error_message),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE file_id = p_file_id;
-            
-        WHEN 'verify' THEN
-            UPDATE pkd_files
-            SET verify_status = p_status,
-                verify_completed_at = CASE WHEN p_status IN ('VERIFIED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE verify_completed_at END,
-                error_message = COALESCE(p_error_message, error_message),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE file_id = p_file_id;
-            
-        WHEN 'ldap' THEN
-            UPDATE pkd_files
-            SET ldap_status = p_status,
-                ldap_completed_at = CASE WHEN p_status IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE ldap_completed_at END,
-                error_message = COALESCE(p_error_message, error_message),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE file_id = p_file_id;
-    END CASE;
+    UPDATE file_upload_history
+    SET status = p_status,
+        error_message = COALESCE(p_error_message, error_message),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_upload_id;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION update_file_processing_status(VARCHAR, VARCHAR, VARCHAR, TEXT) IS '파일 처리 상태 업데이트';
+COMMENT ON FUNCTION update_upload_status(BIGINT, VARCHAR, TEXT) IS '파일 업로드 상태 업데이트';
 
 -- ================================================================
 -- 6. 중복 인증서 확인 함수
@@ -251,16 +226,16 @@ COMMENT ON FUNCTION check_certificate_duplicate(VARCHAR) IS 'SHA256 fingerprint�
 CREATE OR REPLACE FUNCTION get_latest_version(
     p_collection_number VARCHAR(3)
 )
-RETURNS VARCHAR(10) AS $$
+RETURNS VARCHAR(50) AS $$
 DECLARE
-    v_latest_version VARCHAR(10);
+    v_latest_version VARCHAR(50);
 BEGIN
-    SELECT MAX(version_number)
+    SELECT MAX(version)
     INTO v_latest_version
-    FROM pkd_files
+    FROM file_upload_history
     WHERE collection_number = p_collection_number
-      AND upload_status = 'APPLIED';
-    
+      AND status = 'SUCCESS';
+
     RETURN COALESCE(v_latest_version, '000000');
 END;
 $$ LANGUAGE plpgsql;
@@ -272,24 +247,23 @@ COMMENT ON FUNCTION get_latest_version(VARCHAR) IS 'Collection별 최신 버전 
 -- ================================================================
 CREATE OR REPLACE FUNCTION get_pending_files()
 RETURNS TABLE (
-    file_id VARCHAR(36),
-    file_type VARCHAR(20),
-    file_format VARCHAR(30),
+    upload_id BIGINT,
+    filename VARCHAR(255),
+    file_format VARCHAR(50),
     uploaded_at TIMESTAMP
-) AS $
+) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
-        pf.file_id,
-        pf.file_type,
-        pf.file_format,
-        pf.uploaded_at
-    FROM pkd_files pf
-    WHERE pf.upload_status = 'UPLOADED'
-      AND (pf.parse_status IS NULL OR pf.parse_status = 'FAILED')
-    ORDER BY pf.uploaded_at ASC;
+    SELECT
+        fuh.id,
+        fuh.filename,
+        fuh.file_format,
+        fuh.uploaded_at
+    FROM file_upload_history fuh
+    WHERE fuh.status IN ('RECEIVED', 'VALIDATING', 'CHECKSUM_VALIDATING', 'PARSING')
+    ORDER BY fuh.uploaded_at ASC;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION get_pending_files() IS '처리 대기 중인 파일 목록 조회';
 
@@ -309,7 +283,7 @@ RETURNS TABLE (
     revoked_dsc INTEGER,
     total_revocations INTEGER,
     active_deviations INTEGER
-) AS $
+) AS $$
 BEGIN
     RETURN QUERY
     SELECT
@@ -327,7 +301,7 @@ BEGIN
     FROM certificates c
     WHERE c.is_latest = TRUE;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION get_global_statistics() IS '전체 시스템 통계 요약';
 
