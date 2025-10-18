@@ -443,4 +443,19 @@ public class FileUploadService {
                 "successRate", totalCount > 0 ? (double) successCount / totalCount * 100 : 0.0
         );
     }
+
+    /**
+     * 업로드 이력 저장
+     *
+     * 간단한 파일 업로드 컨트롤러에서 사용하기 위한 메서드
+     *
+     * @param history 저장할 업로드 이력
+     * @return 저장된 업로드 이력
+     */
+    @Transactional
+    public FileUploadHistory saveUploadHistory(FileUploadHistory history) {
+        log.debug("Saving upload history: filename={}, status={}",
+                 history.getFilename(), history.getStatus());
+        return uploadHistoryRepository.save(history);
+    }
 }
