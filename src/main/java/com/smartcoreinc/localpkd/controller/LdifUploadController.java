@@ -11,6 +11,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -60,7 +61,8 @@ public class LdifUploadController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "forceUpload", defaultValue = "false") boolean forceUpload,
             @RequestParam(value = "expectedChecksum", required = false) String expectedChecksum,
-            Model model
+            Model model,
+            RedirectAttributes redirectAttributes
     ) {
         log.info("=== LDIF file upload started ===");
         log.info("Filename: {}", file.getOriginalFilename());
@@ -128,9 +130,10 @@ public class LdifUploadController {
             FileUploadHistory savedHistory = fileUploadService.saveUploadHistory(history);
             log.info("Upload history created: id={}, status={}", savedHistory.getId(), savedHistory.getStatus());
 
-            // 7. 성공 메시지와 함께 이력 페이지로 리다이렉트
-            return "redirect:/upload-history?id=" + savedHistory.getId() +
-                   "&success=" + java.net.URLEncoder.encode("파일 업로드가 완료되었습니다.", "UTF-8");
+            // 7. Flash Attributes로 성공 메시지 전달 (URL에 노출하지 않음)
+            redirectAttributes.addFlashAttribute("highlightId", savedHistory.getId());
+            redirectAttributes.addFlashAttribute("successMessage", "파일 업로드가 완료되었습니다.");
+            return "redirect:/upload-history";
 
         } catch (IllegalArgumentException e) {
             log.error("Validation error: {}", e.getMessage());

@@ -8,6 +8,53 @@
   <body>
     <div layout:fragment="content">
       <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 성공 메시지 -->
+        <div
+          th:if="${successMessage}"
+          class="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-md"
+          x-data="{ show: true }"
+          x-show="show"
+          x-init="setTimeout(() => show = false, 5000)"
+          x-transition:leave="transition ease-in duration-300"
+          x-transition:leave-start="opacity-100"
+          x-transition:leave-end="opacity-0"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-check-circle text-green-500 mr-3 text-xl"></i>
+              <span class="text-green-700 font-medium" th:text="${successMessage}">
+                파일 업로드가 완료되었습니다.
+              </span>
+            </div>
+            <button @click="show = false" class="text-green-500 hover:text-green-700">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div
+          th:if="${errorMessage}"
+          class="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-md"
+          x-data="{ show: true }"
+          x-show="show"
+          x-transition:leave="transition ease-in duration-300"
+          x-transition:leave-start="opacity-100"
+          x-transition:leave-end="opacity-0"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-exclamation-circle text-red-500 mr-3 text-xl"></i>
+              <span class="text-red-700 font-medium" th:text="${errorMessage}">
+                오류가 발생했습니다.
+              </span>
+            </div>
+            <button @click="show = false" class="text-red-500 hover:text-red-700">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
         <!-- 페이지 헤더 -->
         <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
           <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
@@ -188,13 +235,14 @@
               <tbody>
                 <tr
                   th:each="history : ${uploadHistory.content}"
-                  class="hover:bg-gray-50 cursor-pointer"
+                  th:id="'row-' + ${history.id}"
+                  th:class="${highlightId != null && highlightId == history.id} ? 'bg-green-100 hover:bg-green-200 cursor-pointer transition-colors duration-500' : 'hover:bg-gray-50 cursor-pointer'"
                 >
                   <td class="text-center font-mono text-sm" th:text="${history.id}">1</td>
                   <td>
                     <div class="flex items-center gap-2">
                       <i class="fas fa-file text-blue-500"></i>
-                      <span class="font-medium" th:text="${history.originalFileName}">filename.ldif</span>
+                      <span class="font-medium" th:text="${history.filename}">filename.ldif</span>
                     </div>
                   </td>
                   <td class="text-center">
@@ -394,6 +442,20 @@
           url.searchParams.set('page', '0');
           window.location.href = url.toString();
         }
+
+        // 페이지 로드 시 하이라이트된 행으로 스크롤
+        document.addEventListener('DOMContentLoaded', function() {
+          const highlightId = /*[[${highlightId}]]*/ null;
+          if (highlightId) {
+            const row = document.getElementById('row-' + highlightId);
+            if (row) {
+              // 약간의 지연 후 스크롤 (페이지 렌더링 완료 대기)
+              setTimeout(() => {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 300);
+            }
+          }
+        });
 
         // 알림 표시 함수
         function showNotification(message, type = 'info') {

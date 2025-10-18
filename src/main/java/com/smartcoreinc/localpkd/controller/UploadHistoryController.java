@@ -65,8 +65,13 @@ public class UploadHistoryController {
             @RequestParam(defaultValue = "DESC") String direction,
             Model model) {
 
-        log.info("Fetching upload history - page: {}, size: {}, format: {}, status: {}",
-                page, size, format, status);
+        // Flash Attributes에서 highlightId와 successMessage 가져오기
+        Long highlightId = (Long) model.asMap().get("highlightId");
+        String successMessage = (String) model.asMap().get("successMessage");
+        String errorMessage = (String) model.asMap().get("errorMessage");
+
+        log.info("Fetching upload history - page: {}, size: {}, format: {}, status: {}, highlightId: {}",
+                page, size, format, status, highlightId);
 
         try {
             // 검색 조건 생성
@@ -106,6 +111,11 @@ public class UploadHistoryController {
             // 필터 옵션 (Enum 전체 목록)
             model.addAttribute("fileFormatOptions", FileFormat.values());
             model.addAttribute("uploadStatusOptions", UploadStatus.values());
+
+            // Flash Attributes는 이미 Model에 자동으로 추가되어 있음
+            // highlightId, successMessage, errorMessage는 이미 사용 가능
+            log.debug("Flash attributes - highlightId: {}, successMessage: {}, errorMessage: {}",
+                    highlightId, successMessage, errorMessage);
 
             return "upload-history/list";
 

@@ -25,9 +25,11 @@ ICAO PKD Master List 및 LDIF 파일을 로컬에서 관리하고 평가하는 �
 - **Database Migration**: Flyway
 
 ### Database
-- **RDBMS**: PostgreSQL 15.14
+- **RDBMS**: PostgreSQL 15.14 (Podman Container)
 - **Schema**: public
 - **Connection Pool**: HikariCP (Spring Boot default)
+- **Container Runtime**: Podman
+- **Container Orchestration**: podman-compose
 
 ### Frontend
 - **Template Engine**: Thymeleaf 3.x
@@ -861,6 +863,243 @@ LDAP_PORT=389
 LDAP_USERNAME=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
 LDAP_PASSWORD=your_ldap_password
 ```
+
+---
+
+## Podman Container Environment
+
+### Overview
+
+이 프로젝트는 PostgreSQL 데이터베이스를 Podman 컨테이너로 실행합니다.
+모든 컨테이너 관리는 프로젝트 루트 디렉토리의 `podman-*.sh` 스크립트를 통해 수행됩니다.
+
+### Container Configuration
+
+**podman-compose.yaml**:
+```yaml
+services:
+  postgres:
+    image: docker.io/library/postgres:15-alpine
+    container_name: icao-local-pkd-postgres
+    environment:
+      POSTGRES_DB: icao_local_pkd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - icao-local-pkd-postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+
+  pgadmin:
+    image: docker.io/dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartcoreinc.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - icao-local-pkd-pgadmin_data:/var/lib/pgadmin
+```
+
+### Container Management Scripts
+
+#### 1. **podman-start.sh** - 컨테이너 시작
+
+```bash
+./podman-start.sh
+```
+
+**기능**:
+- 필요한 디렉토리 생성 (`./data/uploads`, `./data/temp`, `./logs`)
+- PostgreSQL 및 pgAdmin 컨테이너 시작
+- 컨테이너 상태 확인
+
+**접속 정보**:
+- PostgreSQL: `localhost:5432` (postgres/secret)
+- pgAdmin: `http://localhost:5050` (admin@smartcoreinc.com/admin)
+
+#### 2. **podman-stop.sh** - 컨테이너 중지
+
+```bash
+./podman-stop.sh
+```
+
+**기능**:
+- 모든 컨테이너 중지
+- 데이터는 볼륨에 보존됨
+
+#### 3. **podman-restart.sh** - 컨테이너 재시작
+
+```bash
+./podman-restart.sh
+```
+
+**기능**:
+- 컨테이너 중지 후 재시작
+- 설정 변경 후 적용 시 사용
+
+#### 4. **podman-clean.sh** - 완전 삭제 (⚠️ 주의)
+
+```bash
+./podman-clean.sh
+```
+
+**기능**:
+- 모든 컨테이너, 볼륨, 네트워크 삭제
+- **모든 데이터베이스 데이터가 삭제됨**
+- 확인 프롬프트 제공 (`yes` 입력 필요)
+
+**사용 시나리오**:
+- 데이터베이스 완전 초기화
+- 테스트 환경 재구성
+- 볼륨 오류 해결
+
+#### 5. **podman-logs.sh** - 로그 확인
+
+```bash
+./podman-logs.sh [서비스명]
+```
+
+**예시**:
+```bash
+./podman-logs.sh postgres   # PostgreSQL 로그
+./podman-logs.sh pgadmin    # pgAdmin 로그
+```
+
+#### 6. **podman-health.sh** - 헬스 체크
+
+```bash
+./podman-health.sh
+```
+
+**기능**:
+- 컨테이너 상태 확인
+- 포트 바인딩 확인
+- 볼륨 마운트 상태 확인
+
+#### 7. **podman-backup.sh** - 데이터베이스 백업
+
+```bash
+./podman-backup.sh
+```
+
+**기능**:
+- PostgreSQL 데이터베이스 덤프 생성
+- 백업 파일 저장: `./backups/icao_local_pkd_YYYYMMDD_HHMMSS.sql`
+
+#### 8. **podman-restore.sh** - 데이터베이스 복원
+
+```bash
+./podman-restore.sh <backup-file>
+```
+
+**예시**:
+```bash
+./podman-restore.sh ./backups/icao_local_pkd_20251018_140000.sql
+```
+
+### Database Connection
+
+**Spring Boot application.properties**:
+```properties
+spring.datasource.url=jdbc:postgresql://localhost:5432/icao_local_pkd
+spring.datasource.username=postgres
+spring.datasource.password=secret
+```
+
+**Direct Connection (if psql available)**:
+```bash
+psql -h localhost -p 5432 -U postgres -d icao_local_pkd
+# Password: secret
+```
+
+### Testing Environment Setup
+
+테스트를 위한 깨끗한 환경 구성:
+
+```bash
+# 1. 모든 애플리케이션 프로세스 종료
+lsof -ti:8081 | xargs kill -9 2>/dev/null
+
+# 2. 기존 컨테이너 및 데이터 완전 삭제
+./podman-clean.sh
+# yes 입력
+
+# 3. 컨테이너 재시작
+./podman-start.sh
+
+# 4. 애플리케이션 시작 (Flyway가 자동으로 스키마 생성)
+./mvnw spring-boot:run
+```
+
+### Troubleshooting
+
+#### 컨테이너가 시작되지 않는 경우
+
+```bash
+# 1. 기존 컨테이너 확인
+podman ps -a
+
+# 2. 로그 확인
+./podman-logs.sh postgres
+
+# 3. 완전 삭제 후 재시작
+./podman-clean.sh
+./podman-start.sh
+```
+
+#### 포트 충돌 (5432 already in use)
+
+```bash
+# 1. 포트 사용 중인 프로세스 확인
+lsof -i:5432
+
+# 2. 기존 PostgreSQL 중지
+sudo systemctl stop postgresql
+
+# 또는 포트 변경 (podman-compose.yaml)
+ports:
+  - "15432:5432"  # 호스트:컨테이너
+```
+
+#### 데이터베이스 연결 실패
+
+```bash
+# 1. 컨테이너 상태 확인
+./podman-health.sh
+
+# 2. PostgreSQL 로그 확인
+./podman-logs.sh postgres
+
+# 3. 컨테이너 재시작
+./podman-restart.sh
+```
+
+### Volume Management
+
+**데이터 영구 저장**:
+- `icao-local-pkd-postgres_data`: PostgreSQL 데이터 (`/var/lib/postgresql/data`)
+- `icao-local-pkd-pgadmin_data`: pgAdmin 설정 (`/var/lib/pgadmin`)
+
+**볼륨 확인**:
+```bash
+podman volume ls | grep icao-local-pkd
+```
+
+**볼륨 위치** (WSL2):
+```bash
+podman volume inspect icao-local-pkd-postgres_data | grep Mountpoint
+```
+
+### Best Practices
+
+1. **개발 시작 전**: `./podman-health.sh`로 컨테이너 상태 확인
+2. **데이터베이스 변경 전**: `./podman-backup.sh`로 백업 생성
+3. **테스트 환경 구성**: `./podman-clean.sh` → `./podman-start.sh`
+4. **로그 모니터링**: `./podman-logs.sh postgres -f` (실시간)
+5. **정기 백업**: 중요한 데이터는 정기적으로 백업
 
 ---
 

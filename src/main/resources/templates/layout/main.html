@@ -88,13 +88,6 @@
                 style="display: none;"
               >
                 <button
-                  @click="$store.app.testLdapConnection()"
-                  class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <i class="fas fa-plug"></i>
-                  LDAP 연결 테스트
-                </button>
-                <button
                   @click="showSystemInfo()"
                   class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                 >
@@ -144,13 +137,6 @@
                 </a>
                 <div class="border-t border-gray-200 pt-2 mt-2">
                   <button
-                    @click="$store.app.testLdapConnection()"
-                    class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
-                  >
-                    <i class="fas fa-plug"></i>
-                    LDAP 연결 테스트
-                  </button>
-                  <button
                     @click="showSystemInfo()"
                     class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
                   >
@@ -172,26 +158,6 @@
       </div>
     </nav>
 
-    <!-- SSE Connection Alert Section -->
-    <div
-      id="connectionAlert"
-      class="hidden mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-md"
-    >
-      <div class="flex items-center">
-        <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
-        <span class="text-yellow-700">
-          실시간 업데이트(SSE) 연결이 끊어졌습니다. 페이지를 새로고침하여 다시 연결하세요.
-        </span>
-        <button
-          onclick="reconnectSSE()"
-          class="ml-4 px-3 py-1 bg-yellow-500 text-white rounded text-sm"
-        >
-          <i class="fas fa-sync-alt"></i>
-          재연결
-        </button>
-      </div>
-    </div>
-    
     <!-- 메인 컨텐츠 영역 -->
     <main class="min-h-screen pb-8">
       <!-- Page Content -->
@@ -353,17 +319,6 @@
                   class: 'bg-yellow-500 animate-pulse'
                 };
               }
-            },
-
-            async testLdapConnection() {
-              try {
-                const response = await fetch('/ldap-test-connection');
-                const data = await response.json();
-                showNotification(data.message, data.success ? 'success' : 'error');
-                this.checkLdapStatus();
-              } catch (error) {
-                showNotification("LDAP 연결 테스트에 실패했습니다.", 'error');
-              }
             }
           });
 
@@ -379,11 +334,6 @@
         // 도움말 모달 표시 (Alpine.js 이벤트)
         function showHelp() {
           window.dispatchEvent(new CustomEvent('show-help'));
-        }
-
-        // SSE 재연결
-        function reconnectSSE() {
-          location.reload();
         }
 
         // 키보드 단축키 설정 (Alpine.js와 호환)
