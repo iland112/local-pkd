@@ -36,30 +36,30 @@
 
         <!-- 시스템 상태 카드 -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-          <!-- LDAP 연결 상태 -->
-          <div class="bg-white rounded-lg shadow-md p-6 border-l-4" :class="ldapConnected ? 'border-green-500' : 'border-red-500'">
+          <!-- PostgreSQL 데이터베이스 상태 -->
+          <div class="bg-white rounded-lg shadow-md p-6 border-l-4" :class="dbConnected ? 'border-green-500' : 'border-red-500'">
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  LDAP 상태
+                  PostgreSQL 상태
                 </h3>
                 <div class="mt-2">
-                  <span class="text-2xl font-bold" :class="ldapConnected ? 'text-green-600' : 'text-red-600'" x-text="ldapConnected ? '연결됨' : '연결 안됨'"></span>
-                  <p class="text-sm text-gray-600 mt-1" x-text="ldapMessage"></p>
+                  <span class="text-2xl font-bold" :class="dbConnected ? 'text-green-600' : 'text-red-600'" x-text="dbConnected ? '연결됨' : '연결 안됨'"></span>
+                  <p class="text-sm text-gray-600 mt-1" x-text="dbMessage"></p>
                 </div>
               </div>
               <div class="flex-shrink-0">
-                <i class="fas fa-database text-3xl" :class="ldapConnected ? 'text-green-500' : 'text-red-500'"></i>
+                <i class="fas fa-database text-3xl" :class="dbConnected ? 'text-green-500' : 'text-red-500'"></i>
               </div>
             </div>
             <div class="mt-4">
               <button
-                @click="testLdapConnection()"
-                :disabled="ldapTesting"
-                class="w-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                @click="testDatabaseConnection()"
+                :disabled="dbTesting"
+                class="w-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
               >
-                <i class="fas mr-2" :class="ldapTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
-                <span x-text="ldapTesting ? '테스트 중...' : '연결 테스트'"></span>
+                <i class="fas mr-2" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
+                <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
               </button>
             </div>
           </div>
@@ -349,9 +349,9 @@
             // 상태 데이터
             currentDate: '',
             currentTime: '',
-            ldapConnected: false,
-            ldapMessage: '확인 중...',
-            ldapTesting: false,
+            dbConnected: false,
+            dbMessage: '확인 중...',
+            dbTesting: false,
             statistics: {
               totalCount: 0,
               successCount: 0,
@@ -364,15 +364,15 @@
             // 초기화
             init() {
               this.updateDateTime();
-              this.checkLdapStatus();
+              this.checkDatabaseStatus();
               this.loadStatistics();
               this.loadRecentActivity();
 
               // 1분마다 시간 업데이트
               setInterval(() => this.updateDateTime(), 60000);
 
-              // 5분마다 LDAP 상태 체크
-              setInterval(() => this.checkLdapStatus(), 300000);
+              // 5분마다 데이터베이스 상태 체크
+              setInterval(() => this.checkDatabaseStatus(), 300000);
             },
 
             // 날짜/시간 업데이트
@@ -387,34 +387,38 @@
               this.currentTime = now.toLocaleTimeString('ko-KR');
             },
 
-            // LDAP 상태 확인
-            async checkLdapStatus() {
+            // PostgreSQL 데이터베이스 상태 확인
+            async checkDatabaseStatus() {
               try {
-                const response = await fetch('/ldap-test-connection');
+                const response = await fetch('/api/database-health');
                 const data = await response.json();
 
-                this.ldapConnected = data.success;
-                this.ldapMessage = data.message || (data.success ? 'LDAP 서버 정상' : '연결 실패');
+                this.dbConnected = data.success;
+                if (data.success) {
+                  this.dbMessage = `${data.database} ${data.version}`;
+                } else {
+                  this.dbMessage = data.message || '연결 실패';
+                }
               } catch (error) {
-                console.error('LDAP status check failed:', error);
-                this.ldapConnected = false;
-                this.ldapMessage = '연결 확인 불가';
+                console.error('Database status check failed:', error);
+                this.dbConnected = false;
+                this.dbMessage = '연결 확인 불가';
               }
             },
 
-            // LDAP 연결 테스트
-            async testLdapConnection() {
-              this.ldapTesting = true;
+            // PostgreSQL 데이터베이스 연결 테스트
+            async testDatabaseConnection() {
+              this.dbTesting = true;
               try {
-                const response = await fetch('/ldap-test-connection');
+                const response = await fetch('/api/database-health');
                 const data = await response.json();
 
                 showNotification(data.message, data.success ? 'success' : 'error');
-                this.checkLdapStatus();
+                this.checkDatabaseStatus();
               } catch (error) {
                 showNotification('연결 테스트에 실패했습니다.', 'error');
               } finally {
-                this.ldapTesting = false;
+                this.dbTesting = false;
               }
             },
 

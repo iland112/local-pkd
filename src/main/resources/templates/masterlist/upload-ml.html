@@ -63,34 +63,13 @@
                   </div>
                 </div>
 
-                <!-- LD 연결 테스트 -->
-                <div class="mb-6">
-                  <button
-                    id="testConnectionBtn"
-                    class="bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2"
-                  >
-                    <i class="fas fa-plug"></i> LDAP 연결 테스트
-                  </button>
-                  <div id="connectionResult" class="mt-3"></div>
-                </div>
-
                 <!-- File Upload Form -->
-                <div
-                  class="mb-6"
-                  hx-ext="sse"
-                  sse-connect="/progress"
-                  hx-on::sse-error="handleSseError()"
-                  hx-on::sse-open="handleSseOpen()"
-                >
+                <div class="mb-6">
                   <form
+                    action="/masterlist/upload"
+                    method="post"
+                    enctype="multipart/form-data"
                     class="space-y-4"
-                    hx-encoding="multipart/form-data"
-                    hx-post="/icao/ml/upload"
-                    hx-disabled-elt=".disable-during-request"
-                    hx-target="#results-container"
-                    hx-swap="innerHTML"
-                    hx-on::before-request="beforeUpload()"
-                    hx-on::after-request="afterUpload()"
                   >
                     <div class="flex flex-col lg:flex-row gap-4 items-end">
                       <div class="flex-1">
@@ -106,7 +85,7 @@
                           type="file"
                           name="file"
                           accept=".ml"
-                          class="file-input file-input-bordered w-full disable-during-request"
+                          class="file-input file-input-bordered w-full"
                           required
                         />
                         <div
@@ -127,146 +106,70 @@
                         <button
                           id="upload-button"
                           type="submit"
-                          class="btn btn-dash btn-primary disable-during-request"
+                          class="btn btn-primary"
                         >
-                          <i class="fas fa-upload"></i> 파일 업로드 및 분석
+                          <i class="fas fa-upload"></i> 파일 업로드
                         </button>
                       </div>
                     </div>
                   </form>
-
-                  <!-- 진행 상황 표시 영역 -->
-                  <div id="progress-container" class="mt-6 space-y-4">
-                    <!-- 프로그레스 바 -->
-                    <div
-                      class="card bg-base-100 shadow-sm"
-                      id="progress-card"
-                      style="display: none"
-                    >
-                      <div class="card-body">
-                        <h3 class="card-title text-lg">
-                          <i
-                            class="fas fa-spinner animate-spin text-blue-600"
-                          ></i>
-                          Master List 분석 진행 상황
-                        </h3>
-                        <div
-                          sse-swap="progress-update"
-                          id="progress-update"
-                        ></div>
-                        <div sse-swap="status-update" id="status-update"></div>
-                      </div>
-                    </div>
-
-                    <!-- 로그 영역 -->
-                    <div
-                      class="card bg-base-100 shadow-sm"
-                      id="log-card"
-                      style="display: none"
-                    >
-                      <div class="card-body">
-                        <h3 class="card-title text-lg">
-                          <i class="fas fa-list-ul text-green-600"></i>
-                          분석 로그
-                        </h3>
-                        <div
-                          id="log-update"
-                          class="p-3 h-64 font-mono text-xs bg-gray-900 text-green-400 overflow-y-auto rounded-md border"
-                          sse-swap="log-update"
-                          hx-swap="beforeend"
-                          hx-on::after-settle="this.scrollTo(0, this.scrollHeight);"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                <!-- 결과 표시 영역 -->
-                <div id="results-container" class="mt-6">
-                  <!-- 업로드 및 분석 결과가 여기에 표시됩니다 -->
-                </div>
-
-                <!-- 주요 기능 소개 -->
+                <!-- 업로드 안내 -->
                 <div class="mt-8">
                   <h5 class="text-lg font-semibold text-gray-800 mb-4">
-                    주요 기능
+                    업로드 기능
                   </h5>
                   <div
                     class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200"
                   >
-                    <div
-                      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-                    >
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm"
                       >
                         <div
                           class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"
                         >
-                          <i class="fas fa-search text-blue-600"></i>
+                          <i class="fas fa-file-upload text-blue-600"></i>
                         </div>
                         <span class="text-gray-700 font-medium"
-                          >Master List 파일 구문 분석 및 검증</span
+                          >Master List 파일 업로드</span
                         >
                       </div>
                       <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm"
                       >
                         <div
                           class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"
                         >
-                          <i class="fas fa-shield-alt text-green-600"></i>
+                          <i class="fas fa-fingerprint text-green-600"></i>
                         </div>
                         <span class="text-gray-700 font-medium"
-                          >디지털 서명 검증</span
+                          >중복 파일 검사 (SHA-256)</span
                         >
                       </div>
                       <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
-                      >
-                        <div
-                          class="flex-shrink-0 w-10 h-10 bg-cyan-100 rounded-full flex items-center justify-center"
-                        >
-                          <i class="fas fa-database text-cyan-600"></i>
-                        </div>
-                        <span class="text-gray-700 font-medium"
-                          >OpenLDAP 서버 직접 저장</span
-                        >
-                      </div>
-                      <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm"
                       >
                         <div
                           class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center"
                         >
-                          <i class="fas fa-certificate text-purple-600"></i>
+                          <i class="fas fa-history text-purple-600"></i>
                         </div>
                         <span class="text-gray-700 font-medium"
-                          >X.509 인증서 유효성 검증</span
+                          >업로드 이력 관리</span
                         >
                       </div>
                       <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
+                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm"
                       >
                         <div
-                          class="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center"
+                          class="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center"
                         >
-                          <i class="fas fa-chart-bar text-yellow-600"></i>
+                          <i class="fas fa-save text-orange-600"></i>
                         </div>
                         <span class="text-gray-700 font-medium"
-                          >실시간 통계 및 분석 결과</span
-                        >
-                      </div>
-                      <div
-                        class="flex items-center gap-3 py-3 px-3 bg-white rounded-md shadow-sm hover:shadow-md transition-shadow"
-                      >
-                        <div
-                          class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center"
-                        >
-                          <i class="fas fa-bolt text-indigo-600"></i>
-                        </div>
-                        <span class="text-gray-700 font-medium"
-                          >실시간 진행률 표시</span
+                          >안전한 파일 저장</span
                         >
                       </div>
                     </div>
@@ -362,755 +265,79 @@
       </div>
     </div>
     <th:block layout:fragment="script-content">
-      <script type="text/javascript" th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
       <script>
-        // 전역 변수 (개선된 상태 관리)
-        let isUploading = false;
-        let sseRetryCount = 0;
-        let maxRetryAttempts = 3;
-
         // 페이지 로드 시 초기화
         document.addEventListener("DOMContentLoaded", function () {
-            console.log("ML page loaded");
+            console.log("Master List Upload page loaded");
 
             // 자동 알림 숨김 처리
             setupAutoHideAlerts();
 
-            // 파일 크기 검증 리스너 추가
-            setupFileSizeValidation();
+            // 파일 선택 시 정보 표시
+            const fileInput = document.getElementById("file");
+            if (fileInput) {
+                fileInput.addEventListener("change", function () {
+                    const file = this.files[0];
+                    if (file) {
+                        const fileInfo = document.getElementById("fileInfo");
+                        const fileName = document.getElementById("fileName");
+                        const fileSize = document.getElementById("fileSize");
+
+                        fileName.textContent = file.name;
+                        fileSize.textContent = `(${formatFileSize(file.size)})`;
+                        fileInfo.classList.remove("hidden");
+                    }
+                });
+            }
         });
 
-        // LDAP 연결 테스트 기능 (개선된 버전)
-        document
-          .getElementById("testConnectionBtn")
-          .addEventListener("click", function () {
-            const btn = this;
-            const resultDiv = document.getElementById("connectionResult");
-
-            btn.disabled = true;
-            btn.innerHTML =
-              '<i class="fas fa-spinner animate-spin mr-2"></i>테스트중...';
-            btn.classList.add("opacity-75", "cursor-not-allowed");
-
-            fetch("/ldap-test-connection")
-              .then((response) => response.json())
-              .then((data) => {
-                if (data.success) {
-                  resultDiv.innerHTML = `
-                  <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded-md animate-fadeIn">
-                    <div class="flex items-center">
-                      <i class="fas fa-check text-green-500 mr-3"></i>
-                      <span class="text-green-700 font-medium">${data.message}</span>
-                    </div>
-                  </div>
-                `;
-                } else {
-                  resultDiv.innerHTML = `
-                  <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md animate-fadeIn">
-                    <div class="flex items-center">
-                      <i class="fas fa-times text-red-500 mr-3"></i>
-                      <span class="text-red-700 font-medium">${data.message}</span>
-                    </div>
-                  </div>
-                `;
-                }
-              })
-              .catch((error) => {
-                resultDiv.innerHTML = `
-                <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-md animate-fadeIn">
-                  <div class="flex items-center">
-                    <i class="fas fa-times text-red-500 mr-3"></i>
-                    <span class="text-red-700 font-medium">연결 테스트 실패</span>
-                  </div>
-                </div>
-              `;
-              })
-              .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML =
-                  '<i class="fas fa-plug mr-2"></i>LDAP 연결 테스트';
-                btn.classList.remove("opacity-75", "cursor-not-allowed");
-              });
-          });
-
-        // 파일 입력 기능 향상
-        document.getElementById("file").addEventListener("change", function () {
-          const file = this.files[0];
-          const fileInfo = document.getElementById("fileInfo");
-          const fileName = document.getElementById("fileName");
-          const fileSize = document.getElementById("fileSize");
-
-          if (file) {
-            fileName.textContent = file.name;
-            fileSize.textContent = `(${formatFileSize(file.size)})`;
-            fileInfo.classList.remove("hidden");
-
-            // 파일 확장자 유효성 검사
-            if (!file.name.toLowerCase().endsWith(".ml")) {
-              showFileError(".ml 확장자 파일만 업로드할 수 있습니다.");
-              this.value = "";
-              fileInfo.classList.add("hidden");
-            }
-          } else {
-            fileInfo.classList.add("hidden");
-          }
-        });
-
-        // 업로드 전 처리
-        function beforeUpload() {
-          if (isUploading) {
-            return false;
-          }
-
-          isUploading = true;
-          const btn = document.getElementById('upload-button');
-          btn.disabled = true;
-          btn.innerHTML =
-            '<i class="fas fa-spinner animate-spin mr-2"></i>분석 중...';
-
-          // 진행 상황 카드 표시
-          document.getElementById("progress-card").style.display = "block";
-          document.getElementById("log-card").style.display = "block";
-
-          // 결과 영역 초기화
-          document.getElementById("results-container").innerHTML = "";
-
-          showNotification("파일 업로드를 시작합니다...", "info");
-        }
-
-        // 업로드 후 처리
-        function afterUpload() {
-          isUploading = false;
-          const btn = document.getElementById('upload-button');
-
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-upload mr-2"></i>파일 업로드 및 분석';
-
-          showNotification("분석이 완료되었습니다.", "success");
-        }
-
-        // SSE 연결 상태 처리
-        function handleSseError() {
-          console.warn("SSE 연결 오류 - HTMX가 자동으로 재연결을 시도합니다.");
-          showNotification(
-            "SSE 연결에 문제가 있습니다. 재연결 중...",
-            "warning"
-          );
-        }
-
-        function handleSseOpen() {
-          console.log("SSE 연결 성공");
-        }
-
-        // 파일 크기 포맷터
-        function formatFileSize(bytes) {
-          if (bytes === 0) return "0 Bytes";
-          const k = 1024;
-          const sizes = ["Bytes", "KB", "MB", "GB"];
-          const i = Math.floor(Math.log(bytes) / Math.log(k));
-          return (
-            parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-          );
-        }
-
-        // 파일 에러 표시
-        function showFileError(message) {
-          const errorDiv = document.createElement("div");
-          errorDiv.className =
-            "mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 animate-fadeIn";
-          errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i>${message}`;
-
-          const fileInput = document.getElementById("file");
-          fileInput.parentNode.insertBefore(errorDiv, fileInput.nextSibling);
-
-          setTimeout(() => {
-            errorDiv.remove();
-          }, 3000);
-        }
-
-        // 알림 표시 함수
-        function showNotification(message, type = "info") {
-          const colors = {
-            info: "bg-blue-50 border-blue-200 text-blue-700",
-            success: "bg-green-50 border-green-200 text-green-700",
-            warning: "bg-yellow-50 border-yellow-200 text-yellow-700",
-            error: "bg-red-50 border-red-200 text-red-700",
-          };
-
-          const icons = {
-            info: "fas fa-info-circle",
-            success: "fas fa-check-circle",
-            warning: "fas fa-exclamation-triangle",
-            error: "fas fa-times-circle",
-          };
-
-          const notification = document.createElement("div");
-          notification.className = `fixed top-4 right-4 p-4 rounded-lg border ${colors[type]} shadow-lg z-50 animate-slideIn max-w-md`;
-          notification.innerHTML = `
-            <div class="flex items-center">
-              <i class="${icons[type]} mr-2"></i>
-              <span class="flex-1">${message}</span>
-              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-          `;
-
-          document.body.appendChild(notification);
-
-          setTimeout(() => {
-            if (notification.parentNode) {
-              notification.remove();
-            }
-          }, 5000);
-        }
-
-        // 통계 다운로드 함수
-        function downloadStatistics() {
-          fetch("/icao/ml/statistics")
-            .then((response) => response.json())
-            .then((data) => {
-              const blob = new Blob([JSON.stringify(data, null, 2)], {
-                type: "application/json",
-              });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `csca-statistics-${
-                new Date().toISOString().split("T")[0]
-              }.json`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              window.URL.revokeObjectURL(url);
-              showNotification("통계 파일이 다운로드되었습니다.", "success");
-            })
-            .catch((error) => {
-              showNotification(
-                "통계 다운로드 중 오류가 발생했습니다.",
-                "error"
-              );
-            });
-        }
-
-        // 상세 보고서 보기
-        function viewDetailedReport() {
-          fetch("/icao/ml/statistics")
-            .then((response) => response.json())
-            .then((data) => {
-              showDetailedReportModal(data);
-            })
-            .catch((error) => {
-              showNotification("보고서 생성 중 오류가 발생했습니다.", "error");
-            });
-        }
-
-        // 국가 코드를 국기 이모지로 변환
-        function getCountryFlag(countryCode) {
-          if (!countryCode || countryCode.length !== 2) return '🏳️';
-          
-          const codePoints = countryCode
-            .toUpperCase()
-            .split('')
-            .map(char => 127397 + char.charCodeAt());
-          
-          return String.fromCodePoint(...codePoints);
-        }
-
-        // 국가별 차트 생성
-        function createCountryChart(countryData) {
-          const ctx = document.getElementById('countryChart');
-          if (!ctx) return;
-
-          const entries = Object.entries(countryData)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 10); // 상위 10개 국가만 표시
-
-          const labels = entries.map(([country]) => country);
-          const data = entries.map(([,count]) => count);
-          const backgroundColors = [
-            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
-            '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
-            '#4BC0C0', '#FF6384'
-          ];
-
-          new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-              labels: labels,
-              datasets: [{
-                data: data,
-                backgroundColor: backgroundColors,
-                borderWidth: 2,
-                borderColor: '#fff'
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: false
-                },
-                tooltip: {
-                  callbacks: {
-                    label: function(context) {
-                      const country = context.label;
-                      const count = context.parsed;
-                      const flag = getCountryFlag(country);
-                      const percentage = ((count / data.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
-                      return `${flag} ${country}: ${count}개 (${percentage}%)`;
-                    }
-                  }
-                }
-              }
-            }
-          });
-
-          // 범례 생성
-          const legendContainer = document.getElementById('countryLegend');
-          if (legendContainer) {
-            legendContainer.innerHTML = entries.map(([country, count], index) => {
-              const flag = getCountryFlag(country);
-              const percentage = ((count / data.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
-              const color = backgroundColors[index];
-              
-              return `
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div class="flex items-center gap-3">
-                    <div class="w-4 h-4 rounded-full" style="background-color: ${color}"></div>
-                    <span class="text-2xl">${flag}</span>
-                    <span class="font-medium text-gray-800">${country}</span>
-                  </div>
-                  <div class="text-right">
-                    <div class="font-bold text-gray-900">${count}</div>
-                    <div class="text-sm text-gray-500">${percentage}%</div>
-                  </div>
-                </div>
-              `;
-            }).join('');
-          }
-        }
-
-        // 상세 보고서 모달 표시
-        function showDetailedReportModal(data) {
-          const modal = document.createElement("div");
-          modal.className =
-            "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50";
-          modal.innerHTML = `
-            <div class="bg-white rounded-lg max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                  <h3 class="text-xl font-bold">CSCA Master List 상세 분석 보고서</h3>
-                  <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-xl"></i>
-                  </button>
-                </div>
-                <div class="space-y-6">
-                  <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold mb-2">분석 요약</h4>
-                    <p class="text-gray-700">${data.summary || "N/A"}</p>
-                  </div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-blue-50 p-4 rounded-lg">
-                      <h4 class="font-semibold text-blue-800">총 인증서 수</h4>
-                      <p class="text-2xl font-bold text-blue-600">${
-                        data.totalCertificates || 0
-                      }</p>
-                    </div>
-                    <div class="bg-green-50 p-4 rounded-lg">
-                      <h4 class="font-semibold text-green-800">유효율</h4>
-                      <p class="text-2xl font-bold text-green-600">${(data.validityRate || 0).toFixed(
-                        1
-                      )}%</p>
-                    </div>
-                  </div>
-                  <div class="bg-white p-4 rounded-lg border">
-                    <h4 class="font-semibold mb-4 flex items-center gap-2">
-                      <i class="fas fa-globe text-blue-600"></i>
-                      국가별 인증서 현황
-                    </h4>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div class="relative h-80">
-                        <canvas id="countryChart"></canvas>
-                      </div>
-                      <div class="space-y-2 max-h-80 overflow-y-auto">
-                        <div id="countryLegend" class="grid grid-cols-1 gap-2"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-
-          document.body.appendChild(modal);
-          
-          // 차트 생성
-          setTimeout(() => {
-            createCountryChart(data.countByCountry || {});
-          }, 100);
-        }
-
-        // LDIF 내보내기
-        function exportToLdif() {
-          showNotification("LDIF 내보내기 기능을 준비 중입니다.", "info");
-          // TODO: LDIF 내보내기 API 구현 후 연결
-        }
-
-        // 파일 크기 검증 설정 (개선된 버전 + 중복 체크)
-        function setupFileSizeValidation() {
-            const fileInput = document.getElementById("file");
-            if (!fileInput) return;
-
-            fileInput.addEventListener("change", async function () {
-                const file = this.files[0];
-                const fileInfo = document.getElementById("fileInfo");
-                const fileName = document.getElementById("fileName");
-                const fileSize = document.getElementById("fileSize");
-                const maxSize = 100 * 1024 * 1024; // 100MB
-
-                if (file) {
-                    // 파일 크기 검증
-                    if (file.size > maxSize) {
-                        showFileError(`파일이 너무 큽니다. 최대 크기는 ${formatFileSize(maxSize)}입니다.`);
-                        this.value = "";
-                        fileInfo.classList.add("hidden");
-                        return;
-                    }
-
-                    // 파일 확장자 검증
-                    if (!file.name.toLowerCase().endsWith(".ml")) {
-                        showFileError(".ml 확장자 파일만 업로드할 수 있습니다.");
-                        this.value = "";
-                        fileInfo.classList.add("hidden");
-                        return;
-                    }
-
-                    fileName.textContent = file.name;
-                    fileSize.textContent = `(${formatFileSize(file.size)})`;
-                    fileInfo.classList.remove("hidden");
-
-                    // 기존 에러 메시지 제거
-                    removeExistingFileErrors();
-
-                    // 중복 체크 수행
-                    await checkDuplicateBeforeUpload(file);
-                } else {
-                    fileInfo.classList.add("hidden");
-                }
-            });
-        }
-
-        // 기존 파일 오류 메시지 제거
-        function removeExistingFileErrors() {
-            const existingErrors = document.querySelectorAll(".file-error");
-            existingErrors.forEach(error => error.remove());
-        }
-
-        // 개선된 파일 오류 표시
-        function showFileError(message) {
-            // 기존 오류 메시지 제거
-            removeExistingFileErrors();
-
-            const errorDiv = document.createElement("div");
-            errorDiv.className = "mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 animate-fadeIn file-error";
-            errorDiv.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>
-                    <span>${message}</span>
-                    <button type="button" class="ml-auto text-red-400 hover:text-red-600" onclick="this.parentElement.parentElement.remove()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-
-            const fileInput = document.getElementById("file");
-            fileInput.parentNode.appendChild(errorDiv);
-
-            // 10초 후 자동 제거
-            setTimeout(() => {
-                if (errorDiv.parentNode) {
-                    fadeOutElement(errorDiv);
-                }
-            }, 10000);
-        }
-
-        // 자동 알림 숨김 설정 (개선된 버전)
+        // 자동 알림 숨김 처리
         function setupAutoHideAlerts() {
             const alerts = document.querySelectorAll(".auto-hide-alert");
-
             alerts.forEach((alert) => {
-                // 닫기 버튼 이벤트 리스너 추가
+                setTimeout(() => {
+                    alert.style.opacity = "0";
+                    alert.style.transition = "opacity 0.5s ease-out";
+                    setTimeout(() => alert.remove(), 500);
+                }, 5000);
+
                 const closeBtn = alert.querySelector(".alert-close-btn");
                 if (closeBtn) {
-                    closeBtn.addEventListener("click", () => fadeOutElement(alert));
+                    closeBtn.addEventListener("click", function () {
+                        alert.style.opacity = "0";
+                        setTimeout(() => alert.remove(), 300);
+                    });
                 }
-
-                // 자동 숨김 (성공 메시지는 5초, 오류 메시지는 10초)
-                const isError = alert.classList.contains("border-red-500");
-                const timeout = isError ? 10000 : 5000;
-
-                setTimeout(() => {
-                    if (alert.parentNode) {
-                        fadeOutElement(alert);
-                    }
-                }, timeout);
             });
         }
 
-        // 부드러운 페이드 아웃 효과
-        function fadeOutElement(element) {
-            if (!element) return;
-
-            element.style.opacity = "0";
-            element.style.transform = "translateY(-10px)";
-            element.style.transition = "all 0.3s ease-out";
-
-            setTimeout(() => {
-                if (element.parentNode) {
-                    element.remove();
-                }
-            }, 300);
+        // 파일 크기 포맷팅
+        function formatFileSize(bytes) {
+            if (bytes === 0) return "0 Bytes";
+            const k = 1024;
+            const sizes = ["Bytes", "KB", "MB", "GB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
         }
 
-        // 페이지 가시성 변경 처리
-        document.addEventListener("visibilitychange", function() {
-            if (document.hidden) {
-                console.log("Page hidden - SSE may be paused by browser");
-            } else {
-                console.log("Page visible - SSE should resume");
-                // 페이지가 다시 보이고 업로드가 진행 중이면 연결 상태 확인
-                if (isUploading && sseRetryCount < maxRetryAttempts) {
-                    console.log("Checking SSE connection after page visibility change");
-                }
-            }
-        });
-
-        // 페이지 언로드 시 정리
-        window.addEventListener("beforeunload", function() {
-            isUploading = false;
-            console.log("Page unloading, cleaning up...");
-        });
-
-        // 키보드 단축키
-        document.addEventListener("keydown", function (e) {
-          // Ctrl + U: 파일 선택
-          if (e.ctrlKey && e.key === "u") {
-            e.preventDefault();
-            document.getElementById("file").click();
-          }
-
-          // Escape: 모달 닫기
-          if (e.key === "Escape") {
-            const modal = document.querySelector(".fixed.inset-0");
-            if (modal) {
-              modal.remove();
-            }
-          }
-        });
-
-        // ====== 중복 파일 체크 기능 ======
-
-        // SHA-256 해시 계산 (브라우저 Web Crypto API 사용)
-        async function calculateFileHashSHA256(file) {
-            try {
-                const buffer = await file.arrayBuffer();
-                const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            } catch (error) {
-                console.error('Error calculating file hash:', error);
-                throw error;
-            }
-        }
-
-        // 중복 파일 체크
-        async function checkDuplicateBeforeUpload(file) {
-            try {
-                console.log('Starting duplicate check for:', file.name);
-
-                // 해시 계산 중 표시
-                showDuplicateCheckProgress('파일 해시 계산 중...');
-
-                const fileHash = await calculateFileHashSHA256(file);
-                console.log('File hash calculated:', fileHash);
-
-                // 중복 검사 중 표시
-                showDuplicateCheckProgress('중복 파일 검사 중...');
-
-                const response = await fetch('/api/duplicate-check', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        filename: file.name,
-                        fileSize: file.size,
-                        fileHash: fileHash
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const result = await response.json();
-                console.log('Duplicate check result:', result);
-
-                // 진행 표시 제거
-                removeDuplicateCheckProgress();
-
-                if (result.isDuplicate) {
-                    showDuplicateWarningModal(result);
-                    return false;
-                }
-
-                return true;
-
-            } catch (error) {
-                console.error('Error checking duplicate:', error);
-                removeDuplicateCheckProgress();
-                showNotification('중복 검사 중 오류가 발생했습니다: ' + error.message, 'error');
-                return true; // 오류 발생 시 업로드 허용
-            }
-        }
-
-        // 중복 체크 진행 표시
-        function showDuplicateCheckProgress(message) {
-            removeDuplicateCheckProgress(); // 기존 진행 표시 제거
-
-            const progressDiv = document.createElement('div');
-            progressDiv.id = 'duplicate-check-progress';
-            progressDiv.className = 'mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 animate-fadeIn';
-            progressDiv.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fas fa-spinner animate-spin mr-2 text-blue-500"></i>
-                    <span>${message}</span>
-                </div>
-            `;
-
-            const fileInput = document.getElementById('file');
-            fileInput.parentNode.appendChild(progressDiv);
-        }
-
-        // 중복 체크 진행 표시 제거
-        function removeDuplicateCheckProgress() {
-            const progress = document.getElementById('duplicate-check-progress');
-            if (progress) {
-                progress.remove();
-            }
-        }
-
-        // 중복 파일 경고 모달 표시
-        function showDuplicateWarningModal(data) {
-            const modal = document.getElementById('duplicateWarningModal');
-            const messageEl = document.getElementById('duplicateMessage');
-            const filenameEl = document.getElementById('existingFilename');
-            const uploadDateEl = document.getElementById('existingUploadDate');
-            const versionEl = document.getElementById('existingVersion');
-            const statusEl = document.getElementById('existingStatus');
-            const warningTypeEl = document.getElementById('warningTypeInfo');
-            const additionalInfoEl = document.getElementById('additionalInfo');
-            const forceUploadBtn = document.getElementById('forceUploadBtn');
-            const viewHistoryBtn = document.getElementById('viewHistoryBtn');
-
-            // 모달 내용 설정
-            messageEl.textContent = data.message || '중복 파일이 감지되었습니다.';
-            filenameEl.textContent = data.existingFilename || '-';
-            uploadDateEl.textContent = data.existingUploadDate ? formatDateTime(data.existingUploadDate) : '-';
-            versionEl.textContent = data.existingVersion || '-';
-            statusEl.textContent = data.existingStatus || '-';
-
-            // 경고 유형에 따른 아이콘 및 색상
-            let warningIcon = 'fa-exclamation-triangle';
-            let warningColor = 'text-yellow-600';
-            if (data.warningType === 'EXACT_DUPLICATE') {
-                warningIcon = 'fa-copy';
-                warningColor = 'text-red-600';
-            } else if (data.warningType === 'SAME_VERSION') {
-                warningIcon = 'fa-code-branch';
-                warningColor = 'text-orange-600';
-            } else if (data.warningType === 'OLDER_VERSION') {
-                warningIcon = 'fa-history';
-                warningColor = 'text-blue-600';
-            }
-
-            warningTypeEl.innerHTML = `<i class="fas ${warningIcon} ${warningColor} mr-2"></i>${data.warningType || ''}`;
-            additionalInfoEl.textContent = data.additionalInfo || '';
-
-            // 강제 업로드 버튼 활성화/비활성화
-            if (data.canForceUpload) {
-                forceUploadBtn.disabled = false;
-                forceUploadBtn.classList.remove('btn-disabled');
-            } else {
-                forceUploadBtn.disabled = true;
-                forceUploadBtn.classList.add('btn-disabled');
-            }
-
-            // 이력 보기 링크 설정
-            if (data.existingUploadId) {
-                viewHistoryBtn.href = `/upload-history?id=${data.existingUploadId}`;
-            }
-
-            // 모달 열기
-            modal.classList.add('modal-open');
-        }
-
-        // 중복 모달 닫기
+        // 중복 파일 모달 관련
         function closeDuplicateModal() {
-            const modal = document.getElementById('duplicateWarningModal');
-            modal.classList.remove('modal-open');
-
-            // 파일 입력 초기화
-            const fileInput = document.getElementById('file');
-            fileInput.value = '';
-            document.getElementById('fileInfo').classList.add('hidden');
+            document.getElementById("duplicateWarningModal").classList.remove("modal-open");
         }
 
-        // 강제 업로드
         function forceUpload() {
-            // 강제 업로드 플래그를 폼에 추가
-            const form = document.querySelector('form');
-            let forceInput = document.getElementById('forceUploadInput');
-
-            if (!forceInput) {
-                forceInput = document.createElement('input');
-                forceInput.type = 'hidden';
-                forceInput.id = 'forceUploadInput';
-                forceInput.name = 'forceUpload';
-                form.appendChild(forceInput);
-            }
-
-            forceInput.value = 'true';
-
-            // 모달 닫기
+            // 강제 업로드 로직 (구현 예정)
+            console.log("Force upload");
             closeDuplicateModal();
-
-            // 폼 제출
-            console.log('Force uploading file...');
-            htmx.trigger(form, 'submit');
-        }
-
-        // 날짜/시간 포맷팅
-        function formatDateTime(dateTimeStr) {
-            if (!dateTimeStr) return '-';
-            const date = new Date(dateTimeStr);
-            return date.toLocaleString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
         }
       </script>
 
       <style>
+        /* 애니메이션 */
         @keyframes fadeIn {
           from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(-10px);
           }
           to {
             opacity: 1;
@@ -1118,75 +345,11 @@
           }
         }
 
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
         }
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
-        }
 
-        /* 로딩 애니메이션 */
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-
-        /* 커스텀 파일 입력 스타일링 */
-        input[type="file"]::-webkit-file-upload-button {
-          transition: all 0.2s ease-in-out;
-        }
-        input[type="file"]:hover::-webkit-file-upload-button {
-          transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        /* 프로그레스 바 애니��이션 */
-        .progress {
-          background: linear-gradient(45deg, #f3f4f6, #e5e7eb);
-          overflow: hidden;
-        }
-        .progress::-webkit-progress-bar {
-          background-color: #f3f4f6;
-          border-radius: 4px;
-        }
-        .progress::-webkit-progress-value {
-          background: linear-gradient(45deg, #3b82f6, #1d4ed8);
-          border-radius: 4px;
-          transition: width 0.3s ease;
-        }
-
-        /* 로그 영역 스타일 */
-        #log-update {
-          font-family: "Courier New", monospace;
-          line-height: 1.4;
-        }
-        #log-update .log-entry {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 2px 0;
-        }
-        #log-update .log-entry:hover {
-          background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        /* 반응형 그리드 */
+        /* 반응형 */
         @media (max-width: 768px) {
           .grid {
             grid-template-columns: 1fr;
