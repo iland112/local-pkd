@@ -31,10 +31,12 @@ ICAO PKD Master List 및 LDIF 파일을 로컬에서 관리하고 평가하는 �
 
 ### Frontend
 - **Template Engine**: Thymeleaf 3.x
-- **JavaScript Library**: HTMX + SSE (Server-Sent Events)
-- **CSS Framework**: Tailwind CSS 3.x
+- **JavaScript Framework**: Alpine.js 3.14.8 (reactive components)
+- **HTTP Library**: HTMX 2.0.4 + htmx-ext-sse 2.2.3 (Server-Sent Events)
+- **CSS Framework**: Tailwind CSS 3.x (built via npm)
 - **UI Components**: DaisyUI 5.0
-- **Icons**: Heroicons
+- **Icons**: Font Awesome 6.7.2
+- **Build Tool**: frontend-maven-plugin 1.15.0 (Node v22.16.0, npm 11.4.1)
 
 ### External Integration
 - **Directory Service**: OpenLDAP
@@ -414,10 +416,99 @@ public long countByStatus(UploadStatus status)
 
 ### Technology Stack
 - **Template Engine**: Thymeleaf 3.x
-- **JavaScript**: Vanilla JS + Web Crypto API
-- **HTTP**: HTMX (향후 SSE 통합 예정)
+- **JavaScript Framework**: Alpine.js 3.14.8 (reactive state management)
+- **JavaScript Utilities**: Web Crypto API (file hashing)
+- **HTTP Library**: HTMX 2.0.4 + htmx-ext-sse 2.2.3 (Server-Sent Events)
 - **CSS**: Tailwind CSS 3.x
 - **Components**: DaisyUI 5.0
+- **Icons**: Font Awesome 6.7.2
+
+### Architecture Overview
+
+The frontend uses a combination of:
+
+- **Alpine.js**: Reactive state management and component logic
+- **HTMX**: Server-driven UI updates and SSE integration
+- **Web Crypto API**: Client-side file hashing
+
+### Alpine.js Implementation
+
+#### Global State Store
+
+```javascript
+document.addEventListener('alpine:init', () => {
+  Alpine.store('app', {
+    ldapStatus: {
+      connected: false,
+      message: '연결 확인 중',
+      class: 'bg-yellow-500 animate-pulse'
+    },
+
+    init() {
+      this.checkLdapStatus();
+      setInterval(() => this.checkLdapStatus(), 300000);
+    },
+
+    async checkLdapStatus() {
+      try {
+        const response = await fetch('/ldap-test-connection');
+        const data = await response.json();
+
+        this.ldapStatus = data.success ?
+          { connected: true, message: 'LDAP 연결됨', class: 'bg-green-500' } :
+          { connected: false, message: 'LDAP 오류', class: 'bg-red-500' };
+      } catch (error) {
+        this.ldapStatus = {
+          connected: false,
+          message: '연결 확인 중',
+          class: 'bg-yellow-500 animate-pulse'
+        };
+      }
+    }
+  });
+});
+```
+
+#### Reactive Components
+
+**Dropdown Menu (Alpine.js)**:
+```html
+<div class="relative" x-data="{open: false}">
+  <button @click="open = !open" @click.away="open = false">
+    <i class="fas fa-cog"></i>
+  </button>
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-100"
+       x-transition:leave="transition ease-in duration-75">
+    <button @click="$store.app.testLdapConnection()">
+      LDAP 연결 테스트
+    </button>
+  </div>
+</div>
+```
+
+**Modal (Alpine.js)**:
+```html
+<div x-data="{ open: false }" @keydown.escape.window="open = false">
+  <div x-show="open"
+       @show-help.window="open = true"
+       class="modal"
+       x-cloak>
+    <div class="modal-box">
+      <h3>도움말</h3>
+      <button @click="open = false">닫기</button>
+    </div>
+  </div>
+</div>
+```
+
+**LDAP Status Indicator (Alpine.js)**:
+```html
+<div class="flex items-center space-x-2">
+  <div class="w-3 h-3 rounded-full" :class="$store.app.ldapStatus.class"></div>
+  <span x-text="$store.app.ldapStatus.message"></span>
+</div>
+```
 
 ### Key Features
 

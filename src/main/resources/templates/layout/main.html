@@ -38,33 +38,38 @@
                 대시 보드
               </i>
             </a>
-            <a href="/icao/ml"
-              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'icao-ml' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+            <a href="/masterlist/upload"
+              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'masterlist' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
             >
-              <i class="fas fa-file-upload">
-                Master List
-              </i>
+              <i class="fas fa-file-upload"></i>
+              Master List
             </a>
-            <a href="/ldif"
+            <a href="/ldif/upload"
               th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'ldif' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
             >
               <i class="fas fa-file-code"></i>
               LDIF 파일
             </a>
+            <a href="/upload-history"
+              th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'upload-history' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+            >
+              <i class="fas fa-history"></i>
+              업로드 이력
+            </a>
           </div>
 
           <!-- 우측 유틸리티 메뉴 -->
           <div class="flex items-center space-x-3">
-            <!-- LDAP 상태 표시 -->
-            <div id="navLdapStatus" class="hidden md:flex items-center space-x-2">
-              <div class="w-3 h-3 rounded-full bg-gray-400 animate-pulse" id="ldapStatusIndicator"></div>
-              <span class="text-xs text-gray-500" id="ldapStatusText">연결 확인 중</span>
+            <!-- LDAP 상태 표시 (Alpine.js) -->
+            <div class="hidden md:flex items-center space-x-2">
+              <div class="w-3 h-3 rounded-full" :class="$store.app.ldapStatus.class"></div>
+              <span class="text-xs text-gray-500" x-text="$store.app.ldapStatus.message"></span>
             </div> 
 
             <!--  도구 드롭다운 -->
             <div class="relative" x-data="{open: false}">
               <button
-                @click="opne = !open"
+                @click="open = !open"
                 @click.away="open = false"
                 class="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
                 aria-label="도구 메뉴"
@@ -83,14 +88,21 @@
                 style="display: none;"
               >
                 <button
-                  onclick="testLdapConnection()"
+                  @click="$store.app.testLdapConnection()"
+                  class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <i class="fas fa-plug"></i>
+                  LDAP 연결 테스트
+                </button>
+                <button
+                  @click="showSystemInfo()"
                   class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                 >
                   <i class="fas fa-info-circle"></i>
                   시스템 정보
                 </button>
                 <button
-                  onclick="showHelp()"
+                  @click="showHelp()"
                   class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                 >
                   <i class="fas fa-question-circle"></i>
@@ -110,36 +122,43 @@
                   대시보드
                 </a>
                 <a
-                  href="/icao/ml"
-                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'icao-ml' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+                  href="/masterlist/upload"
+                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'masterlist' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
                 >
                   <i class="fas fa-file-upload"></i>
-                  Master List 관리
+                  Master List 업로드
                 </a>
                 <a
-                  href="/ldif"
+                  href="/ldif/upload"
                   th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'ldif' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
                 >
                   <i class="fas fa-file-code"></i>
-                  LDIF 파일 관리
+                  LDIF 파일 업로드
+                </a>
+                <a
+                  href="/upload-history"
+                  th:class="'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ' + (${currentPage} == 'upload-history' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-blue-700 hover:bg-blue-50')"
+                >
+                  <i class="fas fa-history"></i>
+                  업로드 이력
                 </a>
                 <div class="border-t border-gray-200 pt-2 mt-2">
                   <button
-                    onclick="testLdapConnection()"
+                    @click="$store.app.testLdapConnection()"
                     class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
                   >
                     <i class="fas fa-plug"></i>
                     LDAP 연결 테스트
                   </button>
                   <button
-                    onclick="showSystemInfo()"
+                    @click="showSystemInfo()"
                     class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
                   >
                     <i class="fas fa-info-circle"></i>
                     시스템 정보
                   </button>
                   <button
-                    onclick="showHelp()"
+                    @click="showHelp()"
                     class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors duration-200"
                   >
                     <i class="fas fa-question-circle"></i>
@@ -200,16 +219,17 @@
       </div>
     </footer>
 
-    <!-- 시스템 정보 모달 -->
-    <div id="systemModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-      <div class="bg-white rounded-lg max-w-md w-full mx-4">
-        <div class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">시스템 정보</h3>
-            <button onclick="closeSystemInfo()" class="text-gray-400 hover:text-gray-600">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
+    <!-- 시스템 정보 모달 (Alpine.js) -->
+    <div x-data="{ open: false }" @keydown.escape.window="open = false">
+      <div x-show="open" @show-system-info.window="open = true" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-white rounded-lg max-w-md w-full mx-4">
+          <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold">시스템 정보</h3>
+              <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
           <div class="space-y-3">
             <div class="flex justify-between">
               <span class="text-gray-600">시스템 버전:</span>
@@ -227,21 +247,23 @@
               <span class="text-gray-600">지원 파일 형식:</span>
               <span class="font-medium">ML, LDIF</span>
             </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 도움말 모달 -->
-    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-      <div class="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <div class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">도움말</h3>
-            <button onclick="closeHelp()" class="text-gray-400 hover:text-gray-600">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
+    <!-- 도움말 모달 (Alpine.js) -->
+    <div x-data="{ open: false }" @keydown.escape.window="open = false">
+      <div x-show="open" @show-help.window="open = true" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold">도움말</h3>
+              <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
           <div class="space-y-4">
             <div>
               <h4 class="font-medium text-blue-600 mb-2">키보드 단축키</h4>
@@ -266,11 +288,12 @@
                 <p>Chrome 80+, Firefox 75+, Safari 13+, Edge 80+</p>
               </div>
             </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <!-- 알림 컨테이너 -->
     <div id="notificationContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
 
@@ -286,120 +309,76 @@
         htmx.logAll();
     </script>
 
-    <!-- 공통 스크립트 -->
+    <!-- Alpine.js Global State -->
     <script>
-        // 전역 변수
-        let ldapCheckInterval;
-        let mobileMenuOpen = false;
+        document.addEventListener('alpine:init', () => {
+          // Global app state
+          Alpine.store('app', {
+            ldapStatus: {
+              connected: false,
+              message: '연결 확인 중',
+              class: 'bg-yellow-500 animate-pulse'
+            },
 
-        // 페이지 로드시 초기화
-        document.addEventListener('DOMContentLoaded', function() {
-          // LDAP 상태 초기 확인
-          checkNavLdapStatus();
+            init() {
+              // LDAP 상태 초기 확인
+              this.checkLdapStatus();
 
-          // 5분마다 LDAP 상태 확인
-          ldapCheckInterval = setInterval(checkNavLdapStatus, 300000);
+              // 5분마다 LDAP 상태 확인
+              setInterval(() => this.checkLdapStatus(), 300000);
+            },
 
-          // 키보드 단축키
-          setupKeyboardShortcuts();
+            async checkLdapStatus() {
+              try {
+                const response = await fetch('/ldap-test-connection');
+                const data = await response.json();
 
-          // 모바일 메뉴 외부 클릭 감지
-          document.addEventListener('click', function(e) {
-            if (mobileMenuOpen && !e.target.closest('#mobileMenu') && !e.target.closest('#mobileMenuBtn')) {
-              closeMobileMenu();
+                if (data.success) {
+                  this.ldapStatus = {
+                    connected: true,
+                    message: 'LDAP 연결됨',
+                    class: 'bg-green-500'
+                  };
+                } else {
+                  this.ldapStatus = {
+                    connected: false,
+                    message: 'LDAP 오류',
+                    class: 'bg-red-500'
+                  };
+                }
+              } catch (error) {
+                this.ldapStatus = {
+                  connected: false,
+                  message: '연결 확인 중',
+                  class: 'bg-yellow-500 animate-pulse'
+                };
+              }
+            },
+
+            async testLdapConnection() {
+              try {
+                const response = await fetch('/ldap-test-connection');
+                const data = await response.json();
+                showNotification(data.message, data.success ? 'success' : 'error');
+                this.checkLdapStatus();
+              } catch (error) {
+                showNotification("LDAP 연결 테스트에 실패했습니다.", 'error');
+              }
             }
           });
+
+          // Initialize app store
+          Alpine.store('app').init();
         });
 
-        // 네비케이션용 LDAP 상태 확인
-        function checkNavLdapStatus() {
-          fetch('/ldap-test-connection')
-            .then(response => response.json())
-            .then(data => {
-              const indicator = document.getElementById('ldapStatusIndicator');
-              const text = document.getElementById('ldapStatusText');
-
-              if (data.success) {
-                indicator.className = 'w-3 h-3 rounded-full bg-green-500';
-                text.textContent = 'LDAP 연결됨';
-              } else {
-                indicator.className = 'w-3 h-3 rounded-full bg-red-500';
-                text.textContent = 'LDAP 오류';
-              }
-            })
-            .catch(error => {
-              const indicator = document.getElementById('ldapStatusIndicator');
-              const text = document.getElementById('ldapStatusText');
-              indicator.className = 'w-3 h-3 rounded-full bg-yellow-500 animate-pulse';
-              text.textContent = '연결 확인 중';
-            });
-        }
-
-        // LDAP 연결 테스트
-        function testLdapConnection() {
-          fetch('/ldap-test-connection')
-            .then(response => response.json())
-            .then(data => {
-              showNotification(data.message, data.success ? 'success' : 'error');
-              checkNavLdapStatus();
-            })
-            .catch(error => {
-              showNotification("LDAP 연결 테스트에 실패했습니다.", 'error');
-            });
-        }
-
-        // 모바일 메뉴 토글
-        function toggleMobileMenu() {
-          const menu = document.getElementById('mobileMenu');
-          const icon = document.getElementById('menuIcon');
-
-          if (mobileMenuOpen) {
-            closeMobileMenu();
-          } else {
-            openMobileMenu();
-          }
-        }
-
-        function openMobileMenu() {
-          const menu = document.getElementById('mobileMenu');
-          const icon = document.getElementById('menuIcon');
-
-          menu.classList.remove('hidden');
-          menu.classList.add('animate-slideDown');
-          icon.className = 'fas fa-times';
-          mobileMenuOpen = true;
-        }
-
-        function closeMobileMenu() {
-          const menu = document.getElementById('mobileMenu');
-          const icon = document.getElementById('menuIcon');
-
-          menu.classList.add('hidden');
-          menu.classList.remove('animate-slideDown');
-          icon.className = 'fas fa-bars';
-          mobileMenuOpen = false;
-        }
-
-        // 시스템 정보 모달
+        // 시스템 정보 모달 표시 (Alpine.js 이벤트)
         function showSystemInfo() {
-          document.getElementById('systemInfoModal').classList.remove('hidden');
-          document.getElementById('systemInfoModal').classList.add('flex');
+          window.dispatchEvent(new CustomEvent('show-system-info'));
         }
 
-        function closeSystemInfo() {
-          document.getElementById('systemInfoModal').classList.add('hidden');
-          document.getElementById('systemInfoModal').classList.remove('flex');
-        }
-
-        // 도움말 모달
+        // 도움말 모달 표시 (Alpine.js 이벤트)
         function showHelp() {
-          document.getElementById('helpModal').classList.remove('hidden');
-          document.getElementById('helpModal').classList.add('flex');
-        }
-
-        function closeHelp() {
-          document.getElementById('helpModal').classList.add('hidden');
-          document.getElementById('helpModal').classList.remove('flex');
+          window.dispatchEvent(new CustomEvent('show-help'));
         }
 
         // SSE 재연결
@@ -407,35 +386,26 @@
           location.reload();
         }
 
-        // 키보드 단축키 설정
-        function setupKeyboardShortcuts() {
-          document.addEventListener('keydown', function(e) {
-            // ESC: 모달 닫기
-            if (e.key == 'Escape') {
-              closeHelp();
-              closeSystemInfo();
-              closeMobileMenu();
-            }
+        // 키보드 단축키 설정 (Alpine.js와 호환)
+        document.addEventListener('keydown', function(e) {
+          // Ctrl + H: 홈으로
+          if (e.ctrlKey && e.key == 'h') {
+            e.preventDefault();
+            window.location.href = '/';
+          }
 
-            // Ctrl + H: 홈으로
-            if (e.ctrlKey && e.key == 'h') {
-              e.preventDefault();
-              window.location.href = '/';
-            }
+          // Ctrl + 1: Master List
+          if (e.ctrlKey && e.key == '1') {
+            e.preventDefault();
+            window.location.href = '/icao/ml';
+          }
 
-            // Ctrl + 1: Master List
-            if (e.ctrlKey && e.key == '1') {
-              e.preventDefault();
-              window.location.href = '/icao/ml';
-            }
-
-            // Ctrl + 2: LDIF
-            if (e.ctrlKey && e.key == '2') {
-              e.preventDefault();
-              window.location.href = '/ldif';
-            }
-          });
-        }
+          // Ctrl + 2: LDIF
+          if (e.ctrlKey && e.key == '2') {
+            e.preventDefault();
+            window.location.href = '/ldif';
+          }
+        });
 
         // 알림 시스템
         function showNotification(message, type = 'info', duration = 50000) {
@@ -481,18 +451,15 @@
           }, duration);
         }
 
-        // 페이지 언로드시 정리
-        window.addEventListener('beforeunload', function() {
-          if (ldapCheckInterval) {
-            clearInterval(ldapCheckInterval);
-          }
-        });
     </script>
 
     <th:block layout:fragment="script-content">
     </th:block>
 
     <style>
+      /* Alpine.js x-cloak */
+      [x-cloak] { display: none !important; }
+
       /* 애니메이션 정의 */
       @keyframes slideIn {
         from {
