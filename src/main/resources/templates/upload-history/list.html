@@ -158,14 +158,13 @@
                   <i class="fas fa-filter mr-2"></i>
                   필터 적용
                 </button>
-                <button
-                  type="button"
-                  onclick="window.location.href='/upload-history'"
+                <a
+                  href="/upload-history"
                   class="btn btn-outline"
                 >
                   <i class="fas fa-redo mr-2"></i>
                   초기화
-                </button>
+                </a>
               </div>
             </form>
           </div>
@@ -284,7 +283,7 @@
               <label class="text-sm text-gray-600">페이지당</label>
               <select
                 class="select select-sm select-bordered"
-                onchange="changePage Size(this.value)"
+                onchange="changePageSize(this.value)"
               >
                 <option value="10" th:selected="${size == 10}">10</option>
                 <option value="20" th:selected="${size == 20}">20</option>
@@ -296,122 +295,193 @@
         </div>
       </div>
 
-      <!-- 상세 정보 모달 -->
-      <div id="detailModal" class="modal">
-        <div class="modal-box max-w-4xl">
-          <h3 class="font-bold text-lg mb-4">
-            <i class="fas fa-info-circle text-blue-500 mr-2"></i>
-            업로드 이력 상세 정보
-          </h3>
-          <div id="modalContent" class="space-y-4">
-            <!-- JavaScript로 동적으로 채워짐 -->
-          </div>
-          <div class="modal-action">
-            <button class="btn" onclick="closeDetailModal()">닫기</button>
+      <!-- 상세 정보 모달 (Alpine.js) -->
+      <div x-data="{ open: false, detail: null }" @keydown.escape.window="open = false" @show-detail.window="open = true; detail = $event.detail">
+        <div x-show="open" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" x-cloak>
+          <div class="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg">
+                  <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                  업로드 이력 상세 정보
+                </h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                  <i class="fas fa-times text-xl"></i>
+                </button>
+              </div>
+
+              <div x-show="detail" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="font-semibold text-gray-700">파일명:</label>
+                    <div class="text-gray-900" x-text="detail?.originalFileName || 'N/A'"></div>
+                  </div>
+                  <div>
+                    <label class="font-semibold text-gray-700">파일 포맷:</label>
+                    <div class="text-gray-900" x-text="detail?.fileFormat?.description || 'N/A'"></div>
+                  </div>
+                  <div>
+                    <label class="font-semibold text-gray-700">파일 크기:</label>
+                    <div class="text-gray-900" x-text="detail?.fileSizeDisplay || 'N/A'"></div>
+                  </div>
+                  <div>
+                    <label class="font-semibold text-gray-700">업로드 상태:</label>
+                    <div class="text-gray-900">
+                      <span class="badge" :class="{
+                        'badge-success': detail?.uploadStatus?.name === 'SUCCESS',
+                        'badge-error': detail?.uploadStatus?.name === 'FAILED',
+                        'badge-warning': detail?.uploadStatus?.name !== 'SUCCESS' && detail?.uploadStatus?.name !== 'FAILED'
+                      }" x-text="detail?.uploadStatus?.displayName || 'N/A'"></span>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="font-semibold text-gray-700">업로드 시간:</label>
+                    <div class="text-gray-900" x-text="detail?.uploadedAt ? new Date(detail.uploadedAt).toLocaleString('ko-KR') : 'N/A'"></div>
+                  </div>
+                  <div>
+                    <label class="font-semibold text-gray-700">파일 해시:</label>
+                    <div class="text-gray-900 font-mono text-xs break-all" x-text="detail?.fileHash || 'N/A'"></div>
+                  </div>
+                  <template x-if="detail?.calculatedChecksum">
+                    <div class="col-span-2">
+                      <label class="font-semibold text-gray-700">계산된 체크섬:</label>
+                      <div class="text-gray-900 font-mono text-xs break-all" x-text="detail.calculatedChecksum"></div>
+                    </div>
+                  </template>
+                  <template x-if="detail?.errorMessage">
+                    <div class="col-span-2">
+                      <label class="font-semibold text-red-700">오류 메시지:</label>
+                      <div class="text-red-600 bg-red-50 p-3 rounded-md" x-text="detail.errorMessage"></div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <div class="mt-6 flex justify-end">
+                <button @click="open = false" class="btn btn-primary">닫기</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="modal-backdrop" onclick="closeDetailModal()"></div>
       </div>
     </div>
 
     <th:block layout:fragment="script-content">
       <script>
-        // 상세 정보 모달 표시
-        function showDetailModal(id) {
-            fetch(`/upload-history/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    const content = `
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="font-semibold text-gray-700">파일명:</label>
-                                <div class="text-gray-900">${data.originalFileName || 'N/A'}</div>
-                            </div>
-                            <div>
-                                <label class="font-semibold text-gray-700">파일 포맷:</label>
-                                <div class="text-gray-900">${data.fileFormat?.description || 'N/A'}</div>
-                            </div>
-                            <div>
-                                <label class="font-semibold text-gray-700">파일 크기:</label>
-                                <div class="text-gray-900">${data.fileSizeDisplay || 'N/A'}</div>
-                            </div>
-                            <div>
-                                <label class="font-semibold text-gray-700">업로드 상태:</label>
-                                <div class="text-gray-900">
-                                    <span class="badge ${getStatusBadgeClass(data.uploadStatus?.name)}">
-                                        ${data.uploadStatus?.displayName || 'N/A'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="font-semibold text-gray-700">업로드 시간:</label>
-                                <div class="text-gray-900">${formatDateTime(data.uploadedAt)}</div>
-                            </div>
-                            <div>
-                                <label class="font-semibold text-gray-700">파일 해시:</label>
-                                <div class="text-gray-900 font-mono text-xs break-all">${data.fileHash || 'N/A'}</div>
-                            </div>
-                            ${data.calculatedChecksum ? `
-                                <div class="col-span-2">
-                                    <label class="font-semibold text-gray-700">계산된 체크섬:</label>
-                                    <div class="text-gray-900 font-mono text-xs break-all">${data.calculatedChecksum}</div>
-                                </div>
-                            ` : ''}
-                            ${data.errorMessage ? `
-                                <div class="col-span-2">
-                                    <label class="font-semibold text-red-700">오류 메시지:</label>
-                                    <div class="text-red-600 bg-red-50 p-3 rounded-md">${data.errorMessage}</div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
+        // 상세 정보 모달 표시 (Alpine.js 이벤트 기반)
+        async function showDetailModal(id) {
+          try {
+            const response = await fetch(`/upload-history/${id}`);
+            if (!response.ok) {
+              throw new Error('Failed to fetch detail');
+            }
+            const data = await response.json();
 
-                    document.getElementById('modalContent').innerHTML = content;
-                    document.getElementById('detailModal').classList.add('modal-open');
-                })
-                .catch(error => {
-                    console.error('Error fetching detail:', error);
-                    alert('상세 정보를 불러오는 중 오류가 발생했습니다.');
-                });
-        }
-
-        // 모달 닫기
-        function closeDetailModal() {
-            document.getElementById('detailModal').classList.remove('modal-open');
+            // Alpine.js 이벤트로 모달 표시
+            window.dispatchEvent(new CustomEvent('show-detail', {
+              detail: data
+            }));
+          } catch (error) {
+            console.error('Error fetching detail:', error);
+            showNotification('상세 정보를 불러오는 중 오류가 발생했습니다.', 'error');
+          }
         }
 
         // 페이지 크기 변경
         function changePageSize(size) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('size', size);
-            url.searchParams.set('page', '0'); // 첫 페이지로 이동
-            window.location.href = url.toString();
+          const url = new URL(window.location.href);
+          url.searchParams.set('size', size);
+          url.searchParams.set('page', '0');
+          window.location.href = url.toString();
         }
 
-        // 날짜 포맷팅
-        function formatDateTime(dateString) {
-            if (!dateString) return 'N/A';
-            const date = new Date(dateString);
-            return date.toLocaleString('ko-KR');
-        }
+        // 알림 표시 함수
+        function showNotification(message, type = 'info') {
+          const colors = {
+            info: 'bg-blue-50 border-blue-200 text-blue-700',
+            success: 'bg-green-50 border-green-200 text-green-700',
+            warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+            error: 'bg-red-50 border-red-200 text-red-700'
+          };
 
-        // 상태 배지 클래스
-        function getStatusBadgeClass(status) {
-            switch(status) {
-                case 'SUCCESS': return 'badge-success';
-                case 'FAILED': return 'badge-error';
-                case 'PENDING': return 'badge-warning';
-                default: return 'badge-info';
+          const icons = {
+            info: 'fas fa-info-circle',
+            success: 'fas fa-check-circle',
+            warning: 'fas fa-exclamation-triangle',
+            error: 'fas fa-times-circle'
+          };
+
+          const notification = document.createElement('div');
+          notification.className = `fixed top-4 right-4 p-4 rounded-lg border ${colors[type]} shadow-lg z-50 max-w-md animate-slideIn`;
+          notification.innerHTML = `
+            <div class="flex items-center">
+              <i class="${icons[type]} mr-2"></i>
+              <span class="flex-1">${message}</span>
+              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `;
+
+          document.body.appendChild(notification);
+
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.style.opacity = '0';
+              notification.style.transform = 'translateX(100%)';
+              setTimeout(() => notification.remove(), 300);
             }
+          }, 5000);
         }
-
-        // ESC 키로 모달 닫기
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeDetailModal();
-            }
-        });
       </script>
+
+      <style>
+        /* Badge 스타일 */
+        .badge {
+          display: inline-block;
+          padding: 0.25rem 0.75rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          line-height: 1;
+          border-radius: 0.375rem;
+        }
+
+        .badge-success {
+          background-color: rgb(220 252 231);
+          color: rgb(22 163 74);
+        }
+
+        .badge-error {
+          background-color: rgb(254 226 226);
+          color: rgb(220 38 38);
+        }
+
+        .badge-warning {
+          background-color: rgb(254 249 195);
+          color: rgb(202 138 4);
+        }
+
+        .badge-info {
+          background-color: rgb(219 234 254);
+          color: rgb(29 78 216);
+        }
+
+        /* 애니메이션 */
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      </style>
     </th:block>
   </body>
 </html>
