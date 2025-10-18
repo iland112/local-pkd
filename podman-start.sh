@@ -13,7 +13,8 @@ mkdir -p ./ldap-schemas
 
 # 2. Podman Compose 시작
 echo "🐳 Podman Compose 시작..."
-podman-compose -f podman-compose.yaml up -d
+# WSL2에서 발생하는 systemd 경고는 무시 (실제 동작에 영향 없음)
+podman-compose -f podman-compose.yaml up -d 2>&1 | grep -v "failed to move the rootless netns slirp4netns process"
 
 # 3. 컨테이너 상태 확인
 echo ""
