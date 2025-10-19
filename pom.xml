@@ -34,6 +34,10 @@
         <frontend-maven-plugin.version>1.15.0</frontend-maven-plugin.version>
         <frontend-maven-plugin.nodeVersion>v22.16.0</frontend-maven-plugin.nodeVersion>
         <frontend-maven-plugin.npmVersion>11.4.1</frontend-maven-plugin.npmVersion>
+
+        <!-- DDD Libraries -->
+        <jpearl.version>2.0.1</jpearl.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
     </properties>
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -127,6 +131,26 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- DDD: JPearl - Type-safe JPA Entity IDs -->
+        <dependency>
+            <groupId>io.github.wimdeblauwe</groupId>
+            <artifactId>jpearl-core</artifactId>
+            <version>${jpearl.version}</version>
+        </dependency>
+
+        <!-- DDD: MapStruct - DTO/Entity Mapping -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct-processor</artifactId>
+            <version>${mapstruct.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Web UI -->
         <dependency>
             <groupId>nz.net.ultraq.thymeleaf</groupId>
@@ -195,6 +219,36 @@
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
+            </plugin>
+            <!-- Maven Compiler Plugin with MapStruct + Lombok -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                    <annotationProcessorPaths>
+                        <!-- MapStruct Processor -->
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                        <!-- Lombok -->
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                        <!-- Lombok-MapStruct Binding -->
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>0.2.0</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
             </plugin>
         </plugins>
         <pluginManagement>

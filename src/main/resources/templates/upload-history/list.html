@@ -76,28 +76,67 @@
           <!-- 통계 카드 -->
           <div class="bg-gray-50 px-6 py-4 border-b">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="bg-white p-4 rounded-lg shadow-sm">
-                <div class="text-sm text-gray-600 mb-1">전체 업로드</div>
-                <div class="text-2xl font-bold text-blue-600">
-                  <span th:text="${statistics.totalCount}">0</span>
+              <!-- 전체 업로드 -->
+              <div class="stat-card bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                  <div class="w-full">
+                    <div class="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                      <i class="fas fa-database text-blue-500"></i>
+                      전체 업로드
+                    </div>
+                    <div class="text-3xl font-bold text-blue-600">
+                      <span th:text="${statistics.totalCount ?: 0}">0</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">총 업로드 건수</div>
+                  </div>
                 </div>
               </div>
-              <div class="bg-white p-4 rounded-lg shadow-sm">
-                <div class="text-sm text-gray-600 mb-1">성공</div>
-                <div class="text-2xl font-bold text-green-600">
-                  <span th:text="${statistics.successCount}">0</span>
+
+              <!-- 성공 -->
+              <div class="stat-card bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                  <div class="w-full">
+                    <div class="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                      <i class="fas fa-check-circle text-green-500"></i>
+                      성공
+                    </div>
+                    <div class="text-3xl font-bold text-green-600">
+                      <span th:text="${statistics.successCount ?: 0}">0</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">처리 완료 건수</div>
+                  </div>
                 </div>
               </div>
-              <div class="bg-white p-4 rounded-lg shadow-sm">
-                <div class="text-sm text-gray-600 mb-1">실패</div>
-                <div class="text-2xl font-bold text-red-600">
-                  <span th:text="${statistics.failedCount}">0</span>
+
+              <!-- 실패 -->
+              <div class="stat-card bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500">
+                <div class="flex items-center justify-between">
+                  <div class="w-full">
+                    <div class="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                      <i class="fas fa-times-circle text-red-500"></i>
+                      실패
+                    </div>
+                    <div class="text-3xl font-bold text-red-600">
+                      <span th:text="${statistics.failedCount ?: 0}">0</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">오류 발생 건수</div>
+                  </div>
                 </div>
               </div>
-              <div class="bg-white p-4 rounded-lg shadow-sm">
-                <div class="text-sm text-gray-600 mb-1">성공률</div>
-                <div class="text-2xl font-bold text-purple-600">
-                  <span th:text="${#numbers.formatDecimal(statistics.successRate, 1, 1)}">0.0</span>%
+
+              <!-- 성공률 -->
+              <div class="stat-card bg-white p-4 rounded-lg shadow-sm border-l-4 border-purple-500">
+                <div class="flex items-center justify-between">
+                  <div class="w-full">
+                    <div class="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                      <i class="fas fa-chart-line text-purple-500"></i>
+                      성공률
+                    </div>
+                    <div class="text-3xl font-bold text-purple-600">
+                      <span th:text="${statistics.successRate != null ? statistics.successRate : 0.0}">0.0</span>%
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">전체 대비 성공률</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -258,9 +297,9 @@
                   <td class="text-center">
                     <span
                       class="badge"
-                      th:text="${history.uploadStatus?.displayName}"
-                      th:classappend="${history.uploadStatus?.name() == 'SUCCESS' ? 'badge-success' :
-                                       history.uploadStatus?.name() == 'FAILED' ? 'badge-error' :
+                      th:text="${history.status?.displayName}"
+                      th:classappend="${history.status?.name() == 'SUCCESS' ? 'badge-success' :
+                                       history.status?.name() == 'FAILED' ? 'badge-error' :
                                        'badge-warning'}"
                     >
                       성공
@@ -528,7 +567,34 @@
           color: rgb(29 78 216);
         }
 
-        /* 애니메이션 */
+        /* 통계 카드 애니메이션 */
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .stat-card {
+          animation: fadeInUp 0.5s ease-out;
+        }
+
+        .stat-card:nth-child(1) { animation-delay: 0s; }
+        .stat-card:nth-child(2) { animation-delay: 0.1s; }
+        .stat-card:nth-child(3) { animation-delay: 0.2s; }
+        .stat-card:nth-child(4) { animation-delay: 0.3s; }
+
+        .stat-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+          transition: all 0.3s ease;
+        }
+
+        /* 슬라이드 애니메이션 */
         @keyframes slideIn {
           from {
             opacity: 0;
