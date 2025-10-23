@@ -1,8 +1,11 @@
 package com.smartcoreinc.localpkd.fileupload.domain.model;
 
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,12 +52,13 @@ import java.util.regex.Pattern;
  */
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FileVersion implements Comparable<FileVersion> {
 
     /**
      * 버전 값
      */
-    private final String value;
+    private String value;
 
     /**
      * LDIF 버전 패턴: -(숫자).ldif$

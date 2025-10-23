@@ -1,8 +1,11 @@
 package com.smartcoreinc.localpkd.fileupload.domain.model;
 
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -48,12 +51,13 @@ import java.util.regex.Pattern;
  */
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CollectionNumber {
 
     /**
      * Collection 번호 (3자리 숫자 문자열)
      */
-    private final String value;
+    private String value;
 
     /**
      * Collection 001 상수 (CSCA)

@@ -4103,10 +4103,808 @@ curl http://localhost:8081/actuator/health
 
 ---
 
-**Document Version**: 4.0 (DDD Complete)
-**Last Updated**: 2025-10-19
-**Status**: DDD Implementation - Phase 4-5 완료 (File Upload Context)
+## Phase 8: UI Improvements & User Experience (Sprint 2) - COMPLETED ✅
+
+### 완료 날짜: 2025-10-22
+
+Phase 8에서는 DaisyUI 기반 모던 UI 및 사용자 경험 개선 작업을 완료했습니다.
+
+### Phase 8.1: File Upload History Query Page ✅
+
+**구현 내용**:
+- DaisyUI 기반 업로드 이력 페이지 완전 재작성 (422 lines)
+- 통계 카드 (전체/성공/실패/진행중)
+- 검색 및 필터링 (파일명, 상태, 포맷)
+- 페이지네이션 (20/50/100개씩)
+- 상세 정보 모달 with 체크섬 검증 결과
+
+**DaisyUI 컴포넌트 사용**:
+- Stats cards for statistics
+- Table (zebra, hover) for data display
+- Modal for detail view
+- Form controls for search/filter
+- Join component for pagination
+- Alert for messages
+
+### Phase 8.2: Duplicate File Upload Handling UI ✅
+
+**LDIF Upload Page** (`ldif/upload-ldif.html`, 383 lines):
+- Client-side SHA-256 hash calculation (Web Crypto API)
+- Duplicate check API integration (`/ldif/api/check-duplicate`)
+- DaisyUI warning modal for duplicates
+- Progress bar for upload stages (hash → check → upload)
+- 4-step process visualization
+- Checksum input field (optional, SHA-1)
+
+**Master List Upload Page** (`masterlist/upload-ml.html`, 382 lines):
+- Same features as LDIF page
+- API endpoint: `/masterlist/api/check-duplicate`
+- Consistent UI/UX with LDIF page
+
+**Key Features**:
+```javascript
+// Client-side hash calculation (2-3 seconds for 75MB file)
+async function calculateSHA256(file) {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 3-step upload process
+async function handleUpload() {
+  // Step 1: Calculate hash (30%)
+  showProgress('파일 해시 계산 중...', 30);
+
+  // Step 2: Check duplicate (60%)
+  showProgress('중복 파일 검사 중...', 60);
+  const isDuplicate = await checkDuplicate();
+
+  if (isDuplicate) {
+    // Show modal, user decides
+    return;
+  }
+
+  // Step 3: Submit form (90%)
+  showProgress('파일 업로드 중...', 90);
+  document.getElementById('uploadForm').submit();
+}
+```
+
+### Phase 8.3: Checksum Verification Result Display UI ✅
+
+**UploadHistoryResponse 개선**:
+- `expectedChecksum` 필드 추가 (SHA-1)
+- `calculatedChecksum` 필드 추가 (SHA-1)
+
+**업로드 이력 상세 모달 개선**:
+- 체크섬 검증 섹션 추가 (조건부 표시)
+- 체크섬 일치 시: 녹색 success alert
+- 체크섬 불일치 시: 빨간색 error alert
+- 예상 vs 계산된 체크섬 비교 표시
+- Copy to clipboard 버튼
+
+```html
+<!-- Checksum Verification Section -->
+<div id="checksum-verified" class="alert alert-success">
+  <svg>...</svg>
+  <div>
+    <h4 class="font-bold">체크섬 검증 성공</h4>
+    <div class="text-xs mt-1">예상 체크섬과 계산된 체크섬이 일치합니다.</div>
+  </div>
+</div>
+
+<div id="checksum-mismatch" class="alert alert-error">
+  <svg>...</svg>
+  <div>
+    <h4 class="font-bold">체크섬 검증 실패</h4>
+    <div class="text-xs mt-1">예상 체크섬과 계산된 체크섬이 일치하지 않습니다.</div>
+  </div>
+</div>
+```
+
+**JavaScript 개선**:
+```javascript
+function showDetail(id, filename, format, size, status, time, hash,
+                   expectedChecksum, calculatedChecksum, errorMsg) {
+  // Checksum validation logic
+  if (expectedChecksum && calculatedChecksum) {
+    if (expectedChecksum.toLowerCase() === calculatedChecksum.toLowerCase()) {
+      // Show success alert
+      checksumVerified.style.display = 'flex';
+    } else {
+      // Show error alert
+      checksumMismatch.style.display = 'flex';
+    }
+  }
+}
+```
+
+### Phase 8 통계
+
+| 항목 | 수량/결과 |
+|------|-----------|
+| **Modified Files** | 3개 (Controller, DTO, UseCase) |
+| **Rewritten Files** | 3개 (list.html, upload-ldif.html, upload-ml.html) |
+| **Total Lines Added** | ~1,200 lines |
+| **DaisyUI Components** | 11개 (Card, Stats, Table, Modal, Alert, Badge, etc.) |
+| **Build Status** | ✅ SUCCESS (68 source files) |
+| **Application Status** | ✅ RUNNING (port 8081, 7.3s startup) |
+
+### 사용자 경험 개선
+
+**Before Phase 8**:
+- ❌ 단순한 HTML 테이블
+- ❌ 중복 파일 수동 확인
+- ❌ 체크섬 검증 결과 미표시
+- ❌ 일관성 없는 UI
+
+**After Phase 8**:
+- ✅ DaisyUI 기반 모던 UI
+- ✅ 실시간 중복 파일 감지
+- ✅ 체크섬 검증 시각화 (성공/실패)
+- ✅ 일관된 디자인 시스템
+- ✅ 반응형 레이아웃
+- ✅ Progress indicators
+- ✅ Toast notifications
+- ✅ Modal dialogs
+
+### 상세 문서
+
+자세한 구현 내용은 다음 문서 참조:
+- **docs/PHASE_8_UI_IMPROVEMENTS.md**: Phase 8 전체 구현 상세
 
 ---
 
-*이 문서는 DDD 아키텍처 완성 버전입니다. Phase 1-5의 모든 구현이 완료되었으며, Legacy 코드는 완전히 제거되었습니다.*
+## Phase 9: Server-Sent Events (SSE) for Real-Time Progress Tracking - COMPLETED ✅
+
+### 완료 날짜: 2025-10-23
+
+Phase 9에서는 파일 업로드 후 처리 과정(파싱, 검증, LDAP 저장)의 실시간 진행 상황을 추적하기 위한 SSE 인프라를 구현했습니다.
+
+### 구현 배경
+
+**기존 문제점**:
+- 파일 업로드는 빠름(~1초) → SSE 불필요
+- **진짜 문제**: 업로드 후 처리가 오래 걸림
+  - LDIF 파일 파싱 (수천 개의 인증서 엔트리)
+  - 인증서 검증 (CSCA, DSC, CRL)
+  - LDAP 서버 등록
+
+**해결책**:
+- Spring MVC 기반 SSE 구현 (SseEmitter)
+- 12단계 처리 상태 추적
+- DaisyUI 모달 기반 실시간 진행률 표시
+
+### Phase 9.1: SSE Infrastructure (Shared Kernel) ✅
+
+**구현 파일** (3개):
+1. `shared/progress/ProcessingStage.java` - 12단계 처리 상태 Enum
+2. `shared/progress/ProcessingProgress.java` - 진행 상황 Value Object
+3. `shared/progress/ProgressService.java` - SSE 연결 관리 및 브로드캐스트
+
+**12단계 처리 상태**:
+```
+UPLOAD_COMPLETED (5%)      → 파일 업로드 완료
+PARSING_STARTED (10%)      → 파일 파싱 시작
+PARSING_IN_PROGRESS (30%)  → 파일 파싱 중 (동적 20-50%)
+PARSING_COMPLETED (60%)    → 파일 파싱 완료
+VALIDATION_STARTED (65%)   → 인증서 검증 시작
+VALIDATION_IN_PROGRESS (75%) → 인증서 검증 중 (동적 65-85%)
+VALIDATION_COMPLETED (85%) → 인증서 검증 완료
+LDAP_SAVING_STARTED (90%)  → LDAP 저장 시작
+LDAP_SAVING_IN_PROGRESS (95%) → LDAP 저장 중 (동적 90-100%)
+LDAP_SAVING_COMPLETED (100%) → LDAP 저장 완료
+COMPLETED (100%)           → 처리 완료
+FAILED (0%)                → 처리 실패
+```
+
+**핵심 기능**:
+- **ProcessingProgress**: Immutable Value Object with Static Factory Methods
+  ```java
+  ProcessingProgress.parsingInProgress(uploadId, 50, 100, "entry-123.ldif")
+  // → {"stage":"PARSING_IN_PROGRESS", "percentage":35, ...}
+  ```
+- **ProgressService**: Thread-safe SSE emitter 관리
+  - `CopyOnWriteArrayList<SseEmitter>` for concurrent access
+  - `ConcurrentHashMap<UUID, ProcessingProgress>` for progress cache
+  - Auto-cleanup on connection close/timeout/error
+  - Heartbeat mechanism (30초마다)
+
+### Phase 9.2: REST API Endpoints ✅
+
+**구현 파일**: `controller/ProgressController.java`
+
+**엔드포인트**:
+| Endpoint | Method | 설명 |
+|----------|--------|------|
+| `/progress/stream` | GET (SSE) | 실시간 진행 상황 스트림 |
+| `/progress/status/{uploadId}` | GET | 특정 업로드의 현재 상태 조회 |
+| `/progress/connections` | GET | 활성 SSE 연결 수 및 통계 |
+
+**SSE 이벤트 타입**:
+- `connected`: 연결 성공
+- `progress`: 진행 상황 업데이트 (JSON)
+- `heartbeat`: 연결 유지 (30초마다)
+
+### Phase 9.3: Heartbeat Mechanism ✅
+
+**구현 파일**: `config/SchedulingConfig.java`
+
+```java
+@Scheduled(fixedRate = 30000) // 30초마다
+public void sendSseHeartbeat() {
+    int activeConnections = progressService.getActiveConnectionCount();
+    if (activeConnections > 0) {
+        progressService.sendHeartbeat();
+    }
+}
+```
+
+**목적**:
+- SSE 연결 keep-alive
+- 프록시/방화벽 타임아웃 방지
+- 죽은 연결 자동 감지 및 제거
+
+### Phase 9.4: Frontend Integration ✅
+
+**수정 파일** (2개):
+- `templates/ldif/upload-ldif.html`
+- `templates/masterlist/upload-ml.html`
+
+**DaisyUI 진행률 모달** (주요 컴포넌트):
+```html
+<dialog id="progressModal" class="modal">
+  <div class="modal-box max-w-2xl">
+    <!-- 제목 + 스피너 -->
+    <h3 class="font-bold text-lg text-primary mb-4">
+      <i class="fas fa-spinner fa-spin mr-2"></i>
+      파일 처리 중
+    </h3>
+
+    <!-- 진행 상태 + 카운터 -->
+    <div class="flex justify-between items-center mb-2">
+      <span id="progressStage">파일 업로드 완료</span>
+      <span id="progressCount">50 / 100</span>
+    </div>
+
+    <!-- 진행률 바 -->
+    <div class="w-full bg-base-300 rounded-full h-6">
+      <div id="progressBar" class="bg-primary h-full" style="width: 35%">
+        35%
+      </div>
+    </div>
+
+    <!-- 메시지 -->
+    <div class="alert alert-info mb-4">
+      <span id="progressMessage">파일 파싱 중 (50/100)</span>
+    </div>
+
+    <!-- 세부 정보 (선택) -->
+    <div id="progressDetails" class="text-sm">
+      entry-123.ldif
+    </div>
+
+    <!-- 오류 메시지 (선택) -->
+    <div id="progressError" class="alert alert-error hidden">
+      파싱 오류: Invalid certificate format
+    </div>
+
+    <!-- 처리 단계 (접을 수 있는) -->
+    <div class="collapse collapse-arrow bg-base-200">
+      <input type="checkbox" />
+      <div class="collapse-title">처리 단계</div>
+      <div class="collapse-content">
+        <ul class="steps steps-vertical">
+          <li class="step step-primary">파일 업로드 완료</li>
+          <li class="step">LDIF 파싱</li>
+          <li class="step">인증서 검증</li>
+          <li class="step">LDAP 서버 저장</li>
+          <li class="step">처리 완료</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</dialog>
+```
+
+**JavaScript SSE 클라이언트**:
+```javascript
+let sseEventSource = null;
+
+function startSSEProgress(uploadId) {
+  currentUploadId = uploadId;
+  document.getElementById('progressModal').showModal();
+
+  sseEventSource = new EventSource('/progress/stream');
+
+  sseEventSource.addEventListener('connected', (e) => {
+    console.log('SSE connected');
+  });
+
+  sseEventSource.addEventListener('progress', (e) => {
+    const progress = JSON.parse(e.data);
+
+    if (progress.uploadId === currentUploadId) {
+      updateProgressUI(progress);
+
+      if (progress.stage === 'COMPLETED') {
+        setTimeout(() => {
+          closeProgressModal(true);
+          window.location.href = '/upload-history?id=' + currentUploadId;
+        }, 2000);
+      } else if (progress.stage === 'FAILED') {
+        setTimeout(() => closeProgressModal(false), 3000);
+      }
+    }
+  });
+
+  sseEventSource.addEventListener('heartbeat', (e) => {
+    console.debug('SSE heartbeat');
+  });
+
+  // Auto-reconnection on error
+  sseEventSource.onerror = (error) => {
+    console.error('SSE error:', error);
+    setTimeout(() => {
+      if (sseEventSource.readyState === EventSource.CLOSED) {
+        startSSEProgress(currentUploadId);
+      }
+    }, 3000);
+  };
+}
+
+function updateProgressUI(progress) {
+  document.getElementById('progressStage').textContent = progress.stageName;
+
+  const progressBar = document.getElementById('progressBar');
+  progressBar.style.width = progress.percentage + '%';
+  progressBar.textContent = progress.percentage + '%';
+
+  document.getElementById('progressMessage').textContent = progress.message;
+
+  if (progress.totalCount > 0) {
+    document.getElementById('progressCount').textContent =
+      `${progress.processedCount} / ${progress.totalCount}`;
+  }
+
+  // Color coding
+  if (progress.stage === 'COMPLETED') {
+    progressBar.classList.add('bg-success');
+  } else if (progress.stage === 'FAILED') {
+    progressBar.classList.add('bg-error');
+  }
+}
+```
+
+### Phase 9 통계
+
+| 항목 | 수량/결과 |
+|------|-----------|
+| **Created Files** | 5개 (ProcessingStage, ProcessingProgress, ProgressService, ProgressController, SchedulingConfig) |
+| **Modified Files** | 2개 (upload-ldif.html, upload-ml.html) |
+| **Total Lines Added** | ~800 lines (Java: ~500, HTML/JS: ~300) |
+| **SSE Events** | 3개 타입 (connected, progress, heartbeat) |
+| **Processing Stages** | 12개 단계 |
+| **Build Status** | ✅ SUCCESS (73 source files) |
+| **Application Status** | ✅ RUNNING (port 8081, startup 7.2s) |
+
+### 핵심 설계 결정
+
+1. **Spring MVC SseEmitter vs WebFlux**
+   - 기존 프로젝트가 Spring MVC 기반
+   - WebFlux 의존성 추가 불필요
+   - SseEmitter로 충분히 구현 가능
+
+2. **Thread Safety**
+   - `CopyOnWriteArrayList`: SSE emitter 목록 (동시 읽기/쓰기)
+   - `ConcurrentHashMap`: Progress cache (동시 업데이트)
+   - 별도 동기화 불필요
+
+3. **Connection Management**
+   - 5분 타임아웃
+   - Auto-cleanup on completion/timeout/error
+   - Heartbeat every 30 seconds
+   - Cache cleanup after 10 seconds for completed uploads
+
+4. **Progress Percentage Calculation**
+   - 각 단계별 고정 범위 (예: 파싱 20-50%)
+   - 동적 계산: `minPercent + (current/total) × (maxPercent - minPercent)`
+   - 예: 50/100 파싱 → 20 + (0.5 × 30) = 35%
+
+5. **Auto-Reconnection**
+   - Client-side error handler
+   - 3초 후 자동 재연결 시도
+   - `EventSource.CLOSED` 상태 확인
+
+### 사용 시나리오
+
+**파일 업로드 후 처리 흐름**:
+```
+1. 사용자가 LDIF 파일 업로드
+   ↓
+2. Server: UploadLdifFileUseCase.execute()
+   - 파일 저장 완료
+   - progressService.sendProgress(UPLOAD_COMPLETED)
+   ↓
+3. Frontend: SSE 모달 표시
+   - startSSEProgress(uploadId)
+   - EventSource 연결
+   ↓
+4. Server: 백그라운드 파싱 시작 (향후 구현)
+   - progressService.sendProgress(PARSING_STARTED)
+   - progressService.sendProgress(PARSING_IN_PROGRESS, 10/100)
+   - progressService.sendProgress(PARSING_IN_PROGRESS, 50/100)
+   - progressService.sendProgress(PARSING_COMPLETED)
+   ↓
+5. Server: 인증서 검증 (향후 구현)
+   - progressService.sendProgress(VALIDATION_STARTED)
+   - progressService.sendProgress(VALIDATION_IN_PROGRESS, 20/50)
+   - progressService.sendProgress(VALIDATION_COMPLETED)
+   ↓
+6. Server: LDAP 저장 (향후 구현)
+   - progressService.sendProgress(LDAP_SAVING_STARTED)
+   - progressService.sendProgress(LDAP_SAVING_IN_PROGRESS, 30/50)
+   - progressService.sendProgress(LDAP_SAVING_COMPLETED)
+   ↓
+7. Server: 완료
+   - progressService.sendProgress(COMPLETED)
+   ↓
+8. Frontend: 2초 후 자동 닫기
+   - 업로드 이력 페이지로 리다이렉트
+```
+
+### Next Steps (향후 구현)
+
+1. **LDIF Parser Integration**
+   - ProcessingProgress 전송 코드 추가
+   - 파싱 중 `PARSING_IN_PROGRESS` 이벤트 발행
+
+2. **Certificate Validation Integration**
+   - `VALIDATION_IN_PROGRESS` 이벤트 발행
+   - Trust Chain 검증 진행률 추적
+
+3. **LDAP Upload Integration**
+   - `LDAP_SAVING_IN_PROGRESS` 이벤트 발행
+   - 배치 업로드 진행률 추적
+
+4. **Error Handling Enhancement**
+   - 각 단계별 상세 오류 메시지
+   - 재시도 로직
+
+### 상세 문서
+
+자세한 구현 내용은 다음 문서 참조:
+- **docs/PHASE_9_SSE_IMPLEMENTATION.md**: Phase 9 전체 구현 상세
+
+---
+
+**Document Version**: 6.0 (DDD + UI + SSE Complete)
+**Last Updated**: 2025-10-23
+**Status**: Phase 9 완료 - Server-Sent Events for Real-Time Progress Tracking
+
+---
+
+## 📐 코딩 규칙 (Coding Rules)
+
+### Value Object 작성 규칙
+
+모든 DDD Value Object는 다음 규칙을 **필수적으로** 준수해야 합니다:
+
+#### 1. **Hibernate/JPA 호환성** (필수)
+```java
+@Embeddable  // JPA Embeddable 타입
+@NoArgsConstructor(access = AccessLevel.PROTECTED)  // JPA용 기본 생성자
+public class CollectionNumber {
+    private String value;  // ❌ final 사용 금지 (JPA가 값 설정 불가)
+
+    private CollectionNumber(String value) {  // 비즈니스 생성자
+        validate(value);
+        this.value = value;
+    }
+}
+```
+
+**핵심 요구사항**:
+- `@NoArgsConstructor(access = AccessLevel.PROTECTED)` - Hibernate 리플렉션 인스턴스 생성용
+- 필드는 **non-final** - JPA가 리플렉션으로 값 주입 가능하도록
+- `protected` 기본 생성자 - 외부 직접 생성 차단, JPA는 접근 가능
+- `@Embeddable` 어노테이션 필수
+
+#### 2. **DDD Value Object 패턴** (필수)
+```java
+@Getter
+@EqualsAndHashCode  // 값 기반 동등성 (value equality)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class CollectionNumber {
+    private String value;
+
+    // ❌ Setter 금지 - 불변성 유지
+
+    // ✅ 정적 팩토리 메서드 (Static Factory Method)
+    public static CollectionNumber of(String value) {
+        return new CollectionNumber(value);
+    }
+
+    // ✅ Private 생성자 + 검증
+    private CollectionNumber(String value) {
+        validate(value);  // 생성 시점에 검증
+        this.value = value;
+    }
+
+    private void validate(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new DomainException("...", "...");
+        }
+        // 비즈니스 규칙 검증
+    }
+}
+```
+
+**핵심 패턴**:
+- **정적 팩토리 메서드** (`of()`, `from()`, `extractFrom()`) - 생성 메서드명으로 의도 표현
+- **Private 생성자** - 외부 직접 생성 차단
+- **불변성 (Immutability)** - Setter 없음, 실질적 불변
+- **값 기반 동등성** - `@EqualsAndHashCode`로 value equality
+- **Self-validation** - 생성 시점에 모든 규칙 검증
+
+#### 3. **비즈니스 규칙 완전 구현** (필수)
+```java
+public class CollectionNumber {
+    // ✅ 도메인 상수
+    public static final CollectionNumber CSCA = new CollectionNumber("001");
+    public static final CollectionNumber EMRTD = new CollectionNumber("002");
+
+    // ✅ 비즈니스 의미를 가진 메서드
+    public boolean isCsca() {
+        return "001".equals(value);
+    }
+
+    public boolean isEmrtd() {
+        return "002".equals(value);
+    }
+
+    // ✅ 도메인 로직 (파일명에서 추출)
+    public static CollectionNumber extractFromFileName(FileName fileName) {
+        // 비즈니스 규칙 구현
+    }
+
+    // ✅ 검증 로직
+    private void validate(String value) {
+        // 1. Null 체크
+        if (value == null || value.trim().isEmpty()) { ... }
+
+        // 2. 형식 검증 (정규식)
+        if (!value.matches("^\\d{3}$")) { ... }
+
+        // 3. 비즈니스 범위 검증
+        int number = Integer.parseInt(value);
+        if (number < 1 || number > 999) { ... }
+    }
+}
+```
+
+**비즈니스 규칙 구현 요구사항**:
+- 도메인 의미를 가진 메서드명 (`isCsca()`, `isValid()`, `matches()`)
+- 도메인 상수 정의 (`CSCA`, `EMRTD`)
+- 완전한 검증 로직 (Null, 형식, 범위, 비즈니스 규칙)
+- 도메인 로직 캡슐화
+
+#### 4. **일관성 (Consistency)** (필수)
+모든 Value Object는 동일한 패턴을 따라야 합니다:
+
+```java
+// ✅ 표준 패턴 템플릿
+@Embeddable
+@Getter
+@EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class XxxValueObject {
+
+    // 1. 필드 (non-final)
+    private String value;
+
+    // 2. 도메인 상수 (필요 시)
+    public static final XxxValueObject CONSTANT = new XxxValueObject("...");
+
+    // 3. 정적 팩토리 메서드
+    public static XxxValueObject of(String value) {
+        return new XxxValueObject(value);
+    }
+
+    // 4. Private 생성자 + 검증
+    private XxxValueObject(String value) {
+        validate(value);
+        this.value = value;
+    }
+
+    // 5. 검증 로직
+    private void validate(String value) {
+        // 비즈니스 규칙
+    }
+
+    // 6. 비즈니스 메서드
+    public boolean isXxx() { ... }
+
+    // 7. toString() 오버라이드
+    @Override
+    public String toString() {
+        return String.format("XxxValueObject[value=%s]", value);
+    }
+}
+```
+
+#### 5. **JavaDoc 작성 규칙** (권장)
+```java
+/**
+ * CollectionNumber - Collection 번호 Value Object
+ *
+ * <p>ICAO PKD Collection 번호를 나타내는 도메인 객체입니다.
+ * 3자리 숫자 형식(001, 002, 003)으로 구성됩니다.</p>
+ *
+ * <h3>비즈니스 규칙</h3>
+ * <ul>
+ *   <li>정확히 3자리 숫자여야 함</li>
+ *   <li>001~999 범위</li>
+ * </ul>
+ *
+ * <h3>사용 예시</h3>
+ * <pre>{@code
+ * CollectionNumber collection = CollectionNumber.of("002");
+ * boolean isEmrtd = collection.isEmrtd();  // true
+ * }</pre>
+ *
+ * @author SmartCore Inc.
+ * @version 1.0
+ * @since 2025-10-22
+ */
+```
+
+---
+
+### Aggregate Root 작성 규칙
+
+#### 1. **JPearl 기반 타입 안전 ID** (필수)
+```java
+@Entity
+@Table(name = "uploaded_file")
+public class UploadedFile extends AbstractAggregateRoot<UploadId> {
+
+    @EmbeddedId  // JPearl ID
+    private UploadId id;
+
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "file_name"))
+    private FileName fileName;
+
+    // ✅ Value Objects는 @Embedded + @AttributeOverride
+}
+```
+
+#### 2. **생성자 패턴** (필수)
+```java
+public class UploadedFile {
+
+    // ✅ Protected 기본 생성자 (JPA용)
+    protected UploadedFile() {
+    }
+
+    // ✅ Private 비즈니스 생성자
+    private UploadedFile(UploadId id, FileName fileName, ...) {
+        this.id = id;
+        this.fileName = fileName;
+        // 초기 상태 설정
+        this.status = UploadStatus.RECEIVED;
+        this.uploadedAt = LocalDateTime.now();
+    }
+
+    // ✅ 정적 팩토리 메서드 (도메인 이벤트 발행)
+    public static UploadedFile create(UploadId id, FileName fileName, ...) {
+        UploadedFile file = new UploadedFile(id, fileName, ...);
+        file.registerEvent(new FileUploadedEvent(id));  // 이벤트 발행
+        return file;
+    }
+}
+```
+
+---
+
+### 예외 처리 규칙
+
+#### 1. **DomainException 사용** (필수)
+```java
+// ✅ 도메인 규칙 위반
+throw new DomainException(
+    "INVALID_COLLECTION_NUMBER",  // 에러 코드
+    "Collection number must be exactly 3 digits, but got: " + value  // 메시지
+);
+
+// ❌ 일반 예외 사용 금지
+throw new IllegalArgumentException("Invalid value");  // ❌
+throw new RuntimeException("Error");  // ❌
+```
+
+#### 2. **InfrastructureException 사용** (필수)
+```java
+// ✅ Infrastructure Layer에서 발생하는 예외
+try {
+    Files.write(targetPath, content);
+} catch (IOException e) {
+    throw new InfrastructureException(
+        "FILE_SAVE_ERROR",
+        "파일 저장 중 오류가 발생했습니다: " + e.getMessage()
+    );
+}
+```
+
+---
+
+### 테스트 작성 규칙 (권장)
+
+```java
+@Test
+@DisplayName("CollectionNumber는 3자리 숫자 형식을 검증한다")
+void testValidation() {
+    // Given
+    String invalidValue = "12";
+
+    // When & Then
+    assertThatThrownBy(() -> CollectionNumber.of(invalidValue))
+        .isInstanceOf(DomainException.class)
+        .hasMessageContaining("exactly 3 digits");
+}
+
+@Test
+@DisplayName("CollectionNumber는 값 기반 동등성을 가진다")
+void testEquality() {
+    // Given
+    CollectionNumber col1 = CollectionNumber.of("002");
+    CollectionNumber col2 = CollectionNumber.of("002");
+
+    // Then
+    assertThat(col1).isEqualTo(col2);
+    assertThat(col1.hashCode()).isEqualTo(col2.hashCode());
+}
+```
+
+---
+
+## 🚨 주의사항 (Common Pitfalls)
+
+### ❌ 하지 말아야 할 것
+
+1. **Value Object에 final 필드 사용**
+   ```java
+   private final String value;  // ❌ JPA가 값 설정 불가
+   ```
+
+2. **public 기본 생성자 사용**
+   ```java
+   public CollectionNumber() { }  // ❌ 외부 직접 생성 가능
+   ```
+
+3. **Setter 메서드 추가**
+   ```java
+   public void setValue(String value) { ... }  // ❌ 불변성 위반
+   ```
+
+4. **검증 없는 생성자**
+   ```java
+   private CollectionNumber(String value) {
+       this.value = value;  // ❌ 검증 누락
+   }
+   ```
+
+5. **일반 예외 사용**
+   ```java
+   throw new IllegalArgumentException("Invalid");  // ❌ DomainException 사용
+   ```
+
+---
+
+**Document Version**: 5.1 (Coding Rules 추가)
+**Last Updated**: 2025-10-22
+**Status**: Phase 8 완료 + Coding Rules 정립
+
+---
+
+*이 문서는 DDD 아키텍처와 모던 UI가 완성된 버전입니다. Phase 1-8의 모든 구현이 완료되었으며, 코딩 규칙이 정립되었습니다.*

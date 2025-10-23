@@ -3,6 +3,8 @@ package com.smartcoreinc.localpkd.fileupload.infrastructure.web;
 import com.smartcoreinc.localpkd.fileupload.application.query.GetUploadHistoryQuery;
 import com.smartcoreinc.localpkd.fileupload.application.response.UploadHistoryResponse;
 import com.smartcoreinc.localpkd.fileupload.application.usecase.GetUploadHistoryUseCase;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -63,10 +65,17 @@ public class UploadHistoryWebController {
             // Model에 데이터 추가
             model.addAttribute("historyPage", historyPage);
             model.addAttribute("currentPage", page);
+            model.addAttribute("totalPages", historyPage.getTotalPages());
+            model.addAttribute("totalElements", historyPage.getTotalElements());
+            model.addAttribute("size", size);
             model.addAttribute("search", search);
             model.addAttribute("status", status);
             model.addAttribute("format", format);
             model.addAttribute("highlightId", id);
+
+            // Filter Options
+            model.addAttribute("fileFormatTypes", FileFormat.Type.values());
+            model.addAttribute("uploadStatuses", UploadStatus.values());
 
             // Flash 메시지
             if (success != null) {

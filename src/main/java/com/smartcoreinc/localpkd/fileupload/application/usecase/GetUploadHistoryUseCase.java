@@ -95,6 +95,8 @@ public class GetUploadHistoryUseCase {
             uploadedFile.getStatus().name(),
             uploadedFile.isDuplicate(),
             uploadedFile.getIsNewerVersion(),
+            uploadedFile.getExpectedChecksum() != null ? uploadedFile.getExpectedChecksum().getValue() : null,
+            uploadedFile.getCalculatedChecksum() != null ? uploadedFile.getCalculatedChecksum().getValue() : null,
             uploadedFile.getErrorMessage()
         );
     }
