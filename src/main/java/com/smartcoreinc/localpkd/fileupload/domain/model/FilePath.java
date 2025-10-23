@@ -1,8 +1,11 @@
 package com.smartcoreinc.localpkd.fileupload.domain.model;
 
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,12 +55,13 @@ import java.nio.file.Paths;
  */
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FilePath {
 
     /**
      * 파일 경로 문자열
      */
-    private final String value;
+    private String value;
 
     /**
      * Private 생성자 - 정적 팩토리 메서드를 통해서만 생성

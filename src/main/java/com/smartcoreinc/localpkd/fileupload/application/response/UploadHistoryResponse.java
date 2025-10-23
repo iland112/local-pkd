@@ -23,6 +23,8 @@ import java.util.UUID;
  *   <li>상태</li>
  *   <li>중복 여부</li>
  *   <li>신규 버전 여부</li>
+ *   <li>예상 체크섬 (SHA-1, optional)</li>
+ *   <li>계산된 체크섬 (SHA-1, optional)</li>
  *   <li>에러 메시지 (optional)</li>
  * </ul>
  *
@@ -63,6 +65,8 @@ public record UploadHistoryResponse(
         String status,              // UploadStatus name
         Boolean isDuplicate,
         Boolean isNewerVersion,
+        String expectedChecksum,    // optional - SHA-1 expected checksum
+        String calculatedChecksum,  // optional - SHA-1 calculated checksum
         String errorMessage         // optional
 ) {
     /**
@@ -81,6 +85,8 @@ public record UploadHistoryResponse(
             String status,
             Boolean isDuplicate,
             Boolean isNewerVersion,
+            String expectedChecksum,
+            String calculatedChecksum,
             String errorMessage
     ) {
         return UploadHistoryResponse.builder()
@@ -96,6 +102,8 @@ public record UploadHistoryResponse(
                 .status(status)
                 .isDuplicate(isDuplicate)
                 .isNewerVersion(isNewerVersion)
+                .expectedChecksum(expectedChecksum)
+                .calculatedChecksum(calculatedChecksum)
                 .errorMessage(errorMessage)
                 .build();
     }

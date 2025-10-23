@@ -1,8 +1,11 @@
 package com.smartcoreinc.localpkd.fileupload.domain.model;
 
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
  * Checksum - 체크섬 Value Object
@@ -49,12 +52,13 @@ import lombok.Getter;
  */
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Checksum {
 
     /**
      * SHA-1 체크섬 값 (40자 16진수, 소문자)
      */
-    private final String value;
+    private String value;
 
     /**
      * Private 생성자 - 정적 팩토리 메서드를 통해서만 생성

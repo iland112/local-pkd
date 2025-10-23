@@ -2,15 +2,129 @@
 
 ## 📊 진행 상황 요약
 
-- **완료:** 6개 항목
+- **완료:** 10개 항목 (Phase 1-9 완료)
 - **진행 중:** 0개 항목
-- **예정:** 15개 항목
+- **예정:** 11개 항목
 
 ---
 
-## 🔴 우선순위 1 (High Priority) - 다음 Sprint
+## ✅ 최근 완료 (Phase 9)
 
-### 1. 파일 업로드 이력 조회 페이지 구현 ⭐⭐⭐
+### ✅ Phase 9: Server-Sent Events (SSE) for Real-Time Progress Tracking
+
+**완료 날짜:** 2025-10-23
+**소요 시간:** 1일
+
+#### 백엔드 작업 완료
+
+- ✅ ProcessingStage Enum 구현 (12단계 처리 상태)
+- ✅ ProcessingProgress Value Object 구현 (DDD 패턴)
+- ✅ ProgressService 구현 (SSE 연결 관리, Thread-safe)
+- ✅ ProgressController REST API (3개 엔드포인트)
+- ✅ SchedulingConfig 구현 (Heartbeat mechanism, 30초마다)
+
+#### 프론트엔드 작업 완료
+
+- ✅ LDIF Upload Page - Progress Modal (DaisyUI)
+- ✅ Master List Upload Page - Progress Modal (DaisyUI)
+- ✅ SSE 클라이언트 구현 (EventSource API)
+- ✅ 진행률 바 UI (동적 퍼센티지)
+- ✅ Auto-reconnection 로직 (3초 후 재시도)
+
+#### 핵심 기능
+
+- ✅ 12단계 처리 상태 추적 (UPLOAD_COMPLETED → PARSING → VALIDATION → LDAP_SAVE → COMPLETED)
+- ✅ 동적 퍼센티지 계산 (각 단계별 범위 내에서)
+- ✅ Thread-safe SSE emitter 관리 (CopyOnWriteArrayList, ConcurrentHashMap)
+- ✅ Heartbeat mechanism (30초마다, 연결 유지)
+- ✅ Auto-cleanup (connection close/timeout/error 시)
+
+#### 통계
+
+- **Created Files:** 5개 (ProcessingStage, ProcessingProgress, ProgressService, ProgressController, SchedulingConfig)
+- **Modified Files:** 2개 (upload-ldif.html, upload-ml.html)
+- **Total Lines Added:** ~800 lines (Java: ~500, HTML/JS: ~300)
+- **SSE Events:** 3개 타입 (connected, progress, heartbeat)
+- **Processing Stages:** 12개 단계
+- **Build Status:** ✅ SUCCESS (73 source files)
+
+---
+
+## ✅ Phase 8 완료 (Sprint 2)
+
+### ✅ Phase 8.1: 파일 업로드 이력 조회 페이지 구현
+
+**완료 날짜:** 2025-10-22
+**소요 시간:** 2일
+
+#### 백엔드 작업 완료
+
+- ✅ GetUploadHistoryUseCase 구현
+- ✅ UploadHistoryResponse DTO (checksum 필드 포함)
+- ✅ UploadHistoryWebController 구현
+- ✅ Repository 검색 메서드 (파일명, 상태, 포맷 필터)
+
+#### 프론트엔드 작업 완료
+
+- ✅ DaisyUI 기반 upload-history/list.html (422 lines)
+- ✅ 통계 카드 (전체/성공/실패/진행중)
+- ✅ 검색 및 필터링 UI
+- ✅ 페이지네이션 (20/50/100개씩)
+- ✅ 상세 정보 모달 with 체크섬 검증
+
+---
+
+### ✅ Phase 8.2: 중복 파일 업로드 처리 UI
+
+**완료 날짜:** 2025-10-22
+**소요 시간:** 1.5일
+
+#### 백엔드 작업 완료
+
+- ✅ CheckDuplicateFileUseCase (재사용)
+- ✅ LdifUploadWebController - /ldif/api/check-duplicate
+- ✅ MasterListUploadWebController - /masterlist/api/check-duplicate
+
+#### 프론트엔드 작업 완료
+
+- ✅ LDIF Upload Page (ldif/upload-ldif.html, 383 lines)
+  - Client-side SHA-256 hash calculation
+  - Duplicate check API integration
+  - DaisyUI warning modal
+  - Progress bar (hash → check → upload)
+  - 4-step process visualization
+- ✅ Master List Upload Page (masterlist/upload-ml.html, 382 lines)
+  - Same features as LDIF page
+  - Consistent UI/UX
+
+---
+
+### ✅ Phase 8.3: 체크섬 검증 결과 표시 UI
+
+**완료 날짜:** 2025-10-22
+**소요 시간:** 0.5일
+
+#### 백엔드 작업 완료
+
+- ✅ UploadHistoryResponse에 checksum 필드 추가
+  - expectedChecksum (SHA-1)
+  - calculatedChecksum (SHA-1)
+- ✅ GetUploadHistoryUseCase 업데이트
+
+#### 프론트엔드 작업 완료
+
+- ✅ 업로드 이력 상세 모달 개선
+  - Checksum verification section
+  - Success alert (일치 시)
+  - Error alert (불일치 시)
+  - Copy to clipboard buttons
+  - Expected vs Calculated 비교 표시
+
+---
+
+## 🔴 우선순위 1 (High Priority) - 다음 Sprint (Phase 9)
+
+### 1. Server-Sent Events (SSE) for Real-time Progress ⭐⭐⭐
 **예상 소요 시간:** 2-3일
 
 #### 백엔드 작업
@@ -460,7 +574,7 @@
 - **Backend:** Spring Boot 3.x, Java 17+
 - **Database:** PostgreSQL 15.x
 - **Migration:** Flyway
-- **Frontend:** Thymeleaf, HTMX, Tailwind CSS, Chart.js
+- **Frontend:** Thymeleaf, HTMX, Daisy UI(Tailwind CSS), Chart.js
 - **Real-time:** Server-Sent Events (SSE)
 - **Storage:** Local FileSystem (향후 S3)
 
