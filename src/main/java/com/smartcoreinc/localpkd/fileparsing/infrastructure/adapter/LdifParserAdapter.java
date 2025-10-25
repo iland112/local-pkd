@@ -78,7 +78,7 @@ public class LdifParserAdapter implements FileParserPort {
 
     private static final Pattern DN_PATTERN = Pattern.compile("^dn: (.+)$");
     private static final Pattern CERT_VALUE_PATTERN = Pattern.compile("^certificateValue;binary:: (.+)$");
-    private static final Pattern CRL_PATTERN = Pattern.compile("^cRLDistributionPoint;binary:: (.+)$");
+    private static final Pattern CRL_PATTERN = Pattern.compile("^certificateRevocationList;binary:: (.+)$");
     private static final Pattern OBJECT_CLASS_PATTERN = Pattern.compile("^objectClass: (.+)$");
 
     @Override

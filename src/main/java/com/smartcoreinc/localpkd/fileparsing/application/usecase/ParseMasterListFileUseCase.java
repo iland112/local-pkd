@@ -8,6 +8,9 @@ import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileReposit
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,6 +63,7 @@ public class ParseMasterListFileUseCase {
 
     private final ParsedFileRepository repository;
     private final FileParserPort fileParserPort;
+    private final ProgressService progressService;
 
     /**
      * Master List 파일 파싱 실행
@@ -97,11 +101,16 @@ public class ParseMasterListFileUseCase {
 
             log.info("Parsing started: parsedFileId={}", parsedFileId.getId());
 
-            // 6. FileParserPort를 통해 파일 파싱
+            // 6. SSE 진행 상황 전송: PARSING_STARTED (10%)
+            progressService.sendProgress(
+                ProcessingProgress.parsingStarted(uploadId.getId(), command.fileFormat())
+            );
+
+            // 7. FileParserPort를 통해 파일 파싱
             try {
                 fileParserPort.parse(command.fileBytes(), fileFormat, parsedFile);
 
-                // 7. 파싱 완료 (통계 계산, CertificatesExtractedEvent, FileParsingCompletedEvent 발행)
+                // 8. 파싱 완료 (통계 계산, CertificatesExtractedEvent, FileParsingCompletedEvent 발행)
                 int totalEntries = parsedFile.getCertificates().size()
                                  + parsedFile.getCrls().size()
                                  + parsedFile.getErrors().size();
@@ -111,16 +120,33 @@ public class ParseMasterListFileUseCase {
                     parsedFile.getCertificates().size(),
                     parsedFile.getErrors().size());
 
+                // 9. SSE 진행 상황 전송: PARSING_COMPLETED (60%)
+                progressService.sendProgress(
+                    ProcessingProgress.parsingCompleted(
+                        uploadId.getId(),
+                        totalEntries
+                    )
+                );
+
             } catch (FileParserPort.ParsingException e) {
                 // 파싱 실패 (FAILED 상태로 전환, ParsingFailedEvent 발행)
                 log.error("Parsing failed: {}", e.getMessage(), e);
                 parsedFile.failParsing(e.getMessage());
+
+                // SSE 진행 상황 전송: FAILED
+                progressService.sendProgress(
+                    ProcessingProgress.failed(
+                        uploadId.getId(),
+                        ProcessingStage.PARSING_IN_PROGRESS,
+                        e.getMessage()
+                    )
+                );
             }
 
-            // 8. Repository 저장 (모든 Domain Events 발행)
+            // 10. Repository 저장 (모든 Domain Events 발행)
             ParsedFile saved = repository.save(parsedFile);
 
-            // 9. Response 생성
+            // 11. Response 생성
             return ParseFileResponse.success(
                 saved.getId().getId(),
                 saved.getUploadId().getId(),

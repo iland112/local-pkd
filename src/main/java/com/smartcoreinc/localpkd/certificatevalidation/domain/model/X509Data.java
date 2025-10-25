@@ -259,4 +259,26 @@ public class X509Data implements ValueObject {
             fingerprintSha256, serialNumber, getCertificateSizeDisplay(), getPublicKeyAlgorithm()
         );
     }
+
+    // ========== Test-Only Factory Methods ==========
+
+    /**
+     * 테스트용 X509Data 생성 (Static Factory Method)
+     *
+     * <p><b>⚠️ 이 메서드는 테스트 코드에서만 사용하세요!</b></p>
+     *
+     * @param certificateBinary 인증서 바이너리 (간단한 mock 데이터)
+     * @param serialNumber 일련 번호
+     * @param isCA CA 인증서 여부 (현재는 사용하지 않음)
+     * @return X509Data (테스트용)
+     */
+    public static X509Data createForTest(byte[] certificateBinary, String serialNumber, boolean isCA) {
+        X509Data data = new X509Data();
+        data.certificateBinary = certificateBinary;
+        data.serialNumber = serialNumber;
+        // 간단한 지문 생성 (실제로는 SHA-256 해시)
+        data.fingerprintSha256 = String.format("%064x", Arrays.hashCode(certificateBinary));
+        data.publicKey = null;  // 테스트에서는 null
+        return data;
+    }
 }
