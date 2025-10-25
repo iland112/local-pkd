@@ -1,9 +1,13 @@
 package com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapSyncService;
+import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapUploadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -13,8 +17,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 /**
  * SpringLdapSyncAdapterTest - Unit tests for LDAP sync adapter
@@ -37,11 +43,25 @@ class SpringLdapSyncAdapterTest {
     @Mock
     private LdapTemplate ldapTemplate;
 
+    @Mock
+    private LdapUploadService ldapUploadService;
+
+    @Mock
+    private CertificateRepository certificateRepository;
+
+    @Mock
+    private CertificateRevocationListRepository crlRepository;
+
     private SpringLdapSyncAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new SpringLdapSyncAdapter(ldapTemplate);
+        adapter = new SpringLdapSyncAdapter(
+                ldapTemplate,
+                ldapUploadService,
+                certificateRepository,
+                crlRepository
+        );
     }
 
     // ======================== Sync Initiation Tests ========================
@@ -311,5 +331,304 @@ class SpringLdapSyncAdapterTest {
         assertThat(session1.getId()).isNotEqualTo(session2.getId());
         assertThat(session1.getMode()).isEqualTo("FULL");
         assertThat(session2.getMode()).isEqualTo("INCREMENTAL");
+    }
+
+    // ======================== Async Execution Tests ========================
+
+    @Test
+    @DisplayName("Full sync should execute asynchronously and complete")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testFullSyncAsyncExecution() throws Exception {
+        // When: Start full sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Then: Session created immediately (non-blocking)
+        assertThat(session).isNotNull();
+        assertThat(session.getState()).isIn(
+                LdapSyncService.SyncStatus.State.PENDING,
+                LdapSyncService.SyncStatus.State.IN_PROGRESS
+        );
+
+        // When: Wait for completion with timeout
+        LdapSyncService.SyncResult result = adapter.waitForCompletion(sessionId, 5);
+
+        // Then: Sync completed successfully
+        assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getStartedAt()).isNotNull();
+        assertThat(result.getFinishedAt()).isNotNull();
+        assertThat(result.getDurationSeconds()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("Incremental sync should execute asynchronously and complete")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testIncrementalSyncAsyncExecution() throws Exception {
+        // When: Start incremental sync
+        LdapSyncService.SyncSession session = adapter.startIncrementalSync();
+        UUID sessionId = session.getId();
+
+        // Then: Returns immediately
+        assertThat(session).isNotNull();
+
+        // When: Wait for completion
+        LdapSyncService.SyncResult result = adapter.waitForCompletion(sessionId, 5);
+
+        // Then: Completed successfully
+        assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Selective sync should execute asynchronously and complete")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testSelectiveSyncAsyncExecution() throws Exception {
+        // Given
+        String filter = "countryCode=KR";
+
+        // When: Start selective sync
+        LdapSyncService.SyncSession session = adapter.startSelectiveSync(filter);
+        UUID sessionId = session.getId();
+
+        // Then: Returns immediately
+        assertThat(session).isNotNull();
+
+        // When: Wait for completion
+        LdapSyncService.SyncResult result = adapter.waitForCompletion(sessionId, 5);
+
+        // Then: Completed successfully
+        assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Sync status should transition from PENDING to IN_PROGRESS to SUCCESS")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testSyncStateTransitions() {
+        // When: Start full sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Then: Initial state is PENDING
+        assertThat(session.getState()).isEqualTo(LdapSyncService.SyncStatus.State.PENDING);
+
+        // Wait for state to transition to IN_PROGRESS (async execution started)
+        await()
+                .atMost(2, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .until(() -> {
+                    Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(sessionId);
+                    return status.isPresent() &&
+                           status.get().getState() == LdapSyncService.SyncStatus.State.IN_PROGRESS;
+                });
+
+        // Wait for completion
+        await()
+                .atMost(5, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .until(() -> {
+                    Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(sessionId);
+                    return status.isPresent() &&
+                           status.get().getState() == LdapSyncService.SyncStatus.State.SUCCESS;
+                });
+
+        // Verify final state
+        Optional<LdapSyncService.SyncStatus> finalStatus = adapter.getSyncStatus(sessionId);
+        assertThat(finalStatus).isPresent();
+        assertThat(finalStatus.get().getState()).isEqualTo(LdapSyncService.SyncStatus.State.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("getSyncStatus should return current status during execution")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testGetSyncStatusDuringExecution() {
+        // When: Start sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Then: Status should be available
+        Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(sessionId);
+        assertThat(status).isPresent();
+        assertThat(status.get().getSessionId()).isEqualTo(sessionId);
+        assertThat(status.get().getState()).isIn(
+                LdapSyncService.SyncStatus.State.PENDING,
+                LdapSyncService.SyncStatus.State.IN_PROGRESS
+        );
+        assertThat(status.get().getTotalCount()).isGreaterThanOrEqualTo(0);
+        assertThat(status.get().getProcessedCount()).isGreaterThanOrEqualTo(0);
+    }
+
+    // ======================== Cancellation Tests ========================
+
+    @Test
+    @DisplayName("cancelSync should successfully cancel a running sync")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testCancelRunningSync() {
+        // When: Start full sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Allow sync to start
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // When: Cancel sync
+        boolean cancelled = adapter.cancelSync(sessionId);
+
+        // Then: Cancellation successful
+        assertThat(cancelled).isTrue();
+
+        // Wait for state to update
+        await()
+                .atMost(2, TimeUnit.SECONDS)
+                .pollInterval(50, TimeUnit.MILLISECONDS)
+                .until(() -> {
+                    Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(sessionId);
+                    return status.isPresent() &&
+                           status.get().getState() == LdapSyncService.SyncStatus.State.CANCELLED;
+                });
+
+        // Verify cancelled state
+        Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(sessionId);
+        assertThat(status).isPresent();
+        assertThat(status.get().getState()).isEqualTo(LdapSyncService.SyncStatus.State.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("cancelSync should return false when sync already completed")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testCancelCompletedSync() throws Exception {
+        // Given: Completed sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+        adapter.waitForCompletion(sessionId, 5);
+
+        // When: Try to cancel completed sync
+        boolean cancelled = adapter.cancelSync(sessionId);
+
+        // Then: Cannot cancel
+        assertThat(cancelled).isFalse();
+    }
+
+    @Test
+    @DisplayName("cancelSync should return false when cancelling already cancelled sync")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testCancelAlreadyCancelledSync() {
+        // Given: Cancelled sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+        adapter.cancelSync(sessionId);
+
+        // When: Try to cancel again
+        boolean cancelled = adapter.cancelSync(sessionId);
+
+        // Then: Cannot cancel
+        assertThat(cancelled).isFalse();
+    }
+
+    // ======================== Timeout Tests ========================
+
+    @Test
+    @DisplayName("waitForCompletion should timeout if sync takes too long")
+    void testWaitForCompletionTimeout() {
+        // When: Start sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Then: Timeout with very short timeout (0 seconds)
+        assertThatThrownBy(() -> adapter.waitForCompletion(sessionId, 0))
+                .isInstanceOf(LdapSyncService.LdapSyncTimeoutException.class)
+                .hasMessageContaining("timeout");
+    }
+
+    @Test
+    @DisplayName("waitForCompletion should succeed within timeout")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testWaitForCompletionWithinTimeout() throws Exception {
+        // When: Start sync
+        LdapSyncService.SyncSession session = adapter.startFullSync();
+        UUID sessionId = session.getId();
+
+        // Then: Should complete within reasonable timeout
+        LdapSyncService.SyncResult result = adapter.waitForCompletion(sessionId, 5);
+        assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("waitForCompletion should throw exception when session not found")
+    void testWaitForCompletionSessionNotFound() {
+        // Given
+        UUID nonExistentSessionId = UUID.randomUUID();
+
+        // When & Then
+        assertThatThrownBy(() -> adapter.waitForCompletion(nonExistentSessionId, 5))
+                .isInstanceOf(LdapSyncService.LdapSyncException.class);
+    }
+
+    // ======================== Concurrent Sync Tests ========================
+
+    @Test
+    @DisplayName("Only one sync should be allowed at a time")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testOnlyOneSyncAllowed() {
+        // Given: First sync running
+        LdapSyncService.SyncSession session1 = adapter.startFullSync();
+
+        // When: Try to start another sync
+        assertThatThrownBy(() -> adapter.startFullSync())
+                .isInstanceOf(LdapSyncService.LdapSyncException.class)
+                .hasMessageContaining("already in progress");
+    }
+
+    @Test
+    @DisplayName("Should allow new sync after previous sync completes")
+    @Timeout(value = 20, unit = TimeUnit.SECONDS)
+    void testAllowSyncAfterCompletion() throws Exception {
+        // Given: First sync completed
+        LdapSyncService.SyncSession session1 = adapter.startFullSync();
+        adapter.waitForCompletion(session1.getId(), 5);
+
+        // When: Start second sync
+        LdapSyncService.SyncSession session2 = adapter.startFullSync();
+
+        // Then: Second sync should succeed
+        assertThat(session2).isNotNull();
+        assertThat(session2.getId()).isNotEqualTo(session1.getId());
+
+        // Wait for second sync to complete
+        LdapSyncService.SyncResult result = adapter.waitForCompletion(session2.getId(), 5);
+        assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should allow new sync after previous sync is cancelled")
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void testAllowSyncAfterCancellation() {
+        // Given: First sync cancelled
+        LdapSyncService.SyncSession session1 = adapter.startFullSync();
+        adapter.cancelSync(session1.getId());
+
+        // Wait for cancellation to complete
+        await()
+                .atMost(2, TimeUnit.SECONDS)
+                .pollInterval(50, TimeUnit.MILLISECONDS)
+                .until(() -> {
+                    Optional<LdapSyncService.SyncStatus> status = adapter.getSyncStatus(session1.getId());
+                    return status.isPresent() &&
+                           status.get().getState() == LdapSyncService.SyncStatus.State.CANCELLED;
+                });
+
+        // When: Start second sync
+        LdapSyncService.SyncSession session2 = adapter.startFullSync();
+
+        // Then: Second sync should succeed
+        assertThat(session2).isNotNull();
+        assertThat(session2.getId()).isNotEqualTo(session1.getId());
     }
 }
