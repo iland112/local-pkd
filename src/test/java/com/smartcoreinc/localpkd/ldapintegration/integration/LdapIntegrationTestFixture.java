@@ -294,7 +294,10 @@ public class LdapIntegrationTestFixture {
      */
     public List<Entry> getAllEntries(String baseDn) {
         try {
-            return directoryServer.search(baseDn, SearchScope.SUB, "(objectClass=*)").getSearchEntries();
+            return directoryServer.search(baseDn, SearchScope.SUB, "(objectClass=*)").getSearchEntries()
+                    .stream()
+                    .map(searchResultEntry -> (Entry) searchResultEntry)
+                    .collect(java.util.stream.Collectors.toList());
         } catch (LDAPException e) {
             log.error("Error retrieving entries from {}", baseDn, e);
             return Collections.emptyList();
@@ -310,7 +313,10 @@ public class LdapIntegrationTestFixture {
      */
     public List<Entry> searchEntries(String baseDn, String filter) {
         try {
-            return directoryServer.search(baseDn, SearchScope.SUB, filter).getSearchEntries();
+            return directoryServer.search(baseDn, SearchScope.SUB, filter).getSearchEntries()
+                    .stream()
+                    .map(searchResultEntry -> (Entry) searchResultEntry)
+                    .collect(java.util.stream.Collectors.toList());
         } catch (LDAPException e) {
             log.error("Error searching directory: baseDn={}, filter={}", baseDn, filter, e);
             return Collections.emptyList();
