@@ -33,6 +33,56 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.ldap")
 public class LdapProperties {
 
+    // ========== Spring LDAP 기본 설정 ==========
+
+    /**
+     * LDAP 서버 URL
+     * 예: ldap://localhost:389 또는 ldaps://localhost:636
+     */
+    private String urls = "ldap://localhost:389";
+
+    /**
+     * LDAP 기본 Distinguished Name (Base DN)
+     * 예: dc=ldap,dc=smartcoreinc,dc=com
+     */
+    private String base = "dc=ldap,dc=smartcoreinc,dc=com";
+
+    /**
+     * LDAP 바인드 사용자명 (DN)
+     * 예: cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+     */
+    private String username = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
+
+    /**
+     * LDAP 바인드 비밀번호
+     */
+    private String password = "";
+
+    /**
+     * LDAP 연결 풀 설정
+     */
+    private PoolConfig pool = new PoolConfig();
+
+    /**
+     * LDAP 연결 타임아웃 (밀리초)
+     * 기본값: 30000 (30초)
+     */
+    private int connectTimeout = 30000;
+
+    /**
+     * LDAP 읽기 타임아웃 (밀리초)
+     * 기본값: 60000 (60초)
+     */
+    private int readTimeout = 60000;
+
+    /**
+     * LDAP 연결 풀 타임아웃 (밀리초)
+     * 기본값: 5000 (5초)
+     */
+    private int poolTimeout = 5000;
+
+    // ========== 애플리케이션 커스텀 설정 ==========
+
     /**
      * LDAP에서 인증서를 저장할 기본 OU
      * 기본값: ou=certificates
@@ -72,6 +122,76 @@ public class LdapProperties {
      * LDAP 배치 처리 설정
      */
     private BatchConfig batch = new BatchConfig();
+
+    /**
+     * LDAP 연결 풀 설정
+     *
+     * @author SmartCore Inc.
+     */
+    @Data
+    @NoArgsConstructor
+    public static class PoolConfig {
+
+        /**
+         * 최대 활성 연결 수
+         * 기본값: 8
+         */
+        private int maxActive = 8;
+
+        /**
+         * 최대 대기 연결 수
+         * 기본값: 4
+         */
+        private int maxIdle = 4;
+
+        /**
+         * 총 최대 연결 수
+         * 기본값: 12
+         */
+        private int maxTotal = 12;
+
+        /**
+         * 최소 대기 연결 수
+         * 기본값: 2
+         */
+        private int minIdle = 2;
+
+        /**
+         * 연결 고갈 시 대기 정책
+         * 기본값: true (대기), false (예외 발생)
+         */
+        private boolean blockWhenExhausted = true;
+
+        /**
+         * 유휴 연결 검증 여부
+         * 기본값: true
+         */
+        private boolean testOnBorrow = true;
+
+        /**
+         * 반환된 연결 검증 여부
+         * 기본값: true
+         */
+        private boolean testOnReturn = true;
+
+        /**
+         * 유휴 상태에서 연결 검증 여부
+         * 기본값: true
+         */
+        private boolean testWhileIdle = true;
+
+        /**
+         * 유휴 연결 제거 간격 (밀리초)
+         * 기본값: 600000 (10분)
+         */
+        private long evictionIntervalMillis = 600000L;
+
+        /**
+         * 유휴 연결 최소 유지 시간 (밀리초)
+         * 기본값: 300000 (5분)
+         */
+        private long minEvictableIdleTimeMillis = 300000L;
+    }
 
     /**
      * LDAP 동기화 설정

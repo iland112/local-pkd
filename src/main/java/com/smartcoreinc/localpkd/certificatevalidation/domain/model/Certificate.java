@@ -573,4 +573,46 @@ public class Certificate extends AggregateRoot<CertificateId> {
             createdAt
         );
     }
+
+    // ========== Test-Only Factory Methods ==========
+
+    /**
+     * 테스트용 Certificate 생성 (Static Factory Method)
+     *
+     * <p><b>⚠️ 이 메서드는 테스트 코드에서만 사용하세요!</b></p>
+     *
+     * <p>프로덕션 코드에서는 {@link #create(X509Data, SubjectInfo, IssuerInfo, ValidityPeriod, CertificateType, String)}
+     * 메서드를 사용하세요.</p>
+     *
+     * @param id 인증서 ID (테스트용)
+     * @param certificateType 인증서 타입
+     * @param subjectInfo 주체 정보
+     * @param issuerInfo 발급자 정보
+     * @param validity 유효기간
+     * @param x509Data X.509 데이터
+     * @param status 초기 상태
+     * @return Certificate (테스트용)
+     */
+    public static Certificate createForTest(
+            CertificateId id,
+            CertificateType certificateType,
+            SubjectInfo subjectInfo,
+            IssuerInfo issuerInfo,
+            ValidityPeriod validity,
+            X509Data x509Data,
+            CertificateStatus status
+    ) {
+        Certificate cert = new Certificate();
+        cert.id = id;
+        cert.certificateType = certificateType;
+        cert.subjectInfo = subjectInfo;
+        cert.issuerInfo = issuerInfo;
+        cert.validity = validity;
+        cert.x509Data = x509Data;
+        cert.status = status;
+        cert.signatureAlgorithm = "SHA256WithRSA";
+        cert.createdAt = LocalDateTime.now();
+        cert.uploadedToLdap = false;
+        return cert;
+    }
 }
