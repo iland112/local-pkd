@@ -5,12 +5,19 @@ import com.smartcoreinc.localpkd.ldapintegration.domain.model.LdapCertificateEnt
 import com.smartcoreinc.localpkd.ldapintegration.domain.model.LdapCrlEntry;
 import com.smartcoreinc.localpkd.ldapintegration.domain.model.LdapSearchFilter;
 import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapQueryService;
+import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ldap.core.AttributesMapper;
+import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.stereotype.Component;
 
+import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
+import javax.naming.ldap.LdapName;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,16 +66,39 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Finding certificate by DN started ===");
         log.debug("DN: {}", dn.getValue());
 
-        try {
-            // TODO: Implement actual LDAP bind operation using LdapTemplate.lookup()
-            // 현재는 stub 구현
-            log.warn("Certificate lookup stub implementation - DN: {}", dn.getValue());
+        long startTime = System.currentTimeMillis();
 
+        try {
+            // Validate input
+            if (dn == null || dn.getValue() == null || dn.getValue().isBlank()) {
+                throw new IllegalArgumentException("DN must not be null or blank");
+            }
+
+            // 1. Create LDAP DN
+            LdapName ldapDn = new LdapName(dn.getValue());
+            log.debug("Created LDAP DN: {}", ldapDn);
+
+            // 2. Lookup the entry in LDAP
+            DirContextAdapter context = (DirContextAdapter) ldapTemplate.lookup(ldapDn);
+            log.debug("Found LDAP entry: {}", ldapDn);
+
+            // 3. Extract certificate data from attributes
+            LdapCertificateEntry entry = extractCertificateFromContext(context, dn);
+
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Certificate found successfully. Duration: {}ms", duration);
+
+            return Optional.of(entry);
+
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("Certificate entry not found: {}. Duration: {}ms", dn.getValue(), duration);
             return Optional.empty();
 
         } catch (Exception e) {
-            log.error("Certificate lookup failed", e);
-            throw new LdapQueryException("Certificate lookup failed: " + e.getMessage(), e);
+            log.error("Certificate lookup failed: {}", dn.getValue(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Certificate lookup failed: " + e.getMessage(), e);
         }
     }
 
@@ -79,15 +109,39 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Finding CRL by DN started ===");
         log.debug("DN: {}", dn.getValue());
 
-        try {
-            // TODO: Implement actual LDAP bind operation using LdapTemplate.lookup()
-            log.warn("CRL lookup stub implementation - DN: {}", dn.getValue());
+        long startTime = System.currentTimeMillis();
 
+        try {
+            // Validate input
+            if (dn == null || dn.getValue() == null || dn.getValue().isBlank()) {
+                throw new IllegalArgumentException("DN must not be null or blank");
+            }
+
+            // 1. Create LDAP DN
+            LdapName ldapDn = new LdapName(dn.getValue());
+            log.debug("Created LDAP DN: {}", ldapDn);
+
+            // 2. Lookup the entry in LDAP
+            DirContextAdapter context = (DirContextAdapter) ldapTemplate.lookup(ldapDn);
+            log.debug("Found LDAP CRL entry: {}", ldapDn);
+
+            // 3. Extract CRL data from attributes
+            LdapCrlEntry entry = extractCrlFromContext(context, dn);
+
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("CRL found successfully. Duration: {}ms", duration);
+
+            return Optional.of(entry);
+
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.debug("CRL entry not found: {}. Duration: {}ms", dn.getValue(), duration);
             return Optional.empty();
 
         } catch (Exception e) {
-            log.error("CRL lookup failed", e);
-            throw new LdapQueryException("CRL lookup failed: " + e.getMessage(), e);
+            log.error("CRL lookup failed: {}", dn.getValue(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "CRL lookup failed: " + e.getMessage(), e);
         }
     }
 
@@ -98,21 +152,35 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Searching certificates by CN started ===");
         log.debug("CN: {}", cn);
 
+        long startTime = System.currentTimeMillis();
+
         try {
             if (cn == null || cn.isBlank()) {
                 throw new DomainException("INVALID_CN", "Common Name must not be null or blank");
             }
 
-            // TODO: Implement actual search using LdapSearchFilter.forCertificateWithCn()
-            log.warn("Certificate search by CN stub implementation - CN: {}", cn);
+            // 1. Create search filter for certificates by CN
+            // Note: We need a base DN - use default certificate base
+            DistinguishedName baseDn = DistinguishedName.of("ou=certificates,dc=ldap,dc=smartcoreinc,dc=com");
+            LdapSearchFilter filter = LdapSearchFilter.forCertificateWithCn(baseDn, cn);
+            log.debug("Created search filter: {}", filter.getFilterString());
 
-            return Collections.emptyList();
+            // 2. Execute search
+            List<LdapCertificateEntry> results = searchCertificatesInternal(filter);
 
-        } catch (LdapQueryException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Certificate search completed. Found: {}, Duration: {}ms", results.size(), duration);
+
+            return results;
+
+        } catch (DomainException e) {
+            throw new LdapQueryService.LdapQueryException(e.getMessage(), e);
+        } catch (LdapQueryService.LdapQueryException e) {
             throw e;
         } catch (Exception e) {
             log.error("Certificate search by CN failed", e);
-            throw new LdapQueryException("Certificate search failed: " + e.getMessage(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Certificate search failed: " + e.getMessage(), e);
         }
     }
 
@@ -120,6 +188,8 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
     public List<LdapCertificateEntry> searchCertificatesByCountry(String countryCode) {
         log.info("=== Searching certificates by country started ===");
         log.debug("Country code: {}", countryCode);
+
+        long startTime = System.currentTimeMillis();
 
         try {
             if (countryCode == null || countryCode.length() != 2) {
@@ -129,16 +199,28 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
                 );
             }
 
-            // TODO: Implement actual search using LdapSearchFilter.forCertificateWithCountry()
-            log.warn("Certificate search by country stub implementation - Country: {}", countryCode);
+            // 1. Create search filter for certificates by country
+            DistinguishedName baseDn = DistinguishedName.of("ou=certificates,dc=ldap,dc=smartcoreinc,dc=com");
+            LdapSearchFilter filter = LdapSearchFilter.forCertificateWithCountry(baseDn, countryCode);
+            log.debug("Created search filter: {}", filter.getFilterString());
 
-            return Collections.emptyList();
+            // 2. Execute search
+            List<LdapCertificateEntry> results = searchCertificatesInternal(filter);
 
-        } catch (LdapQueryException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Certificate search by country completed. Found: {}, Duration: {}ms",
+                results.size(), duration);
+
+            return results;
+
+        } catch (DomainException e) {
+            throw new LdapQueryService.LdapQueryException(e.getMessage(), e);
+        } catch (LdapQueryService.LdapQueryException e) {
             throw e;
         } catch (Exception e) {
             log.error("Certificate search by country failed", e);
-            throw new LdapQueryException("Certificate search failed: " + e.getMessage(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Certificate search failed: " + e.getMessage(), e);
         }
     }
 
@@ -149,6 +231,8 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Searching CRLs by issuer DN started ===");
         log.debug("Issuer DN: {}", issuerDn);
 
+        long startTime = System.currentTimeMillis();
+
         try {
             if (issuerDn == null || issuerDn.isBlank()) {
                 throw new DomainException(
@@ -157,16 +241,27 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
                 );
             }
 
-            // TODO: Implement actual search using LdapSearchFilter.forCrlWithIssuer()
-            log.warn("CRL search by issuer DN stub implementation - Issuer: {}", issuerDn);
+            // 1. Create search filter for CRLs by issuer
+            DistinguishedName baseDn = DistinguishedName.of("ou=certificates,dc=ldap,dc=smartcoreinc,dc=com");
+            LdapSearchFilter filter = LdapSearchFilter.forCrlWithIssuer(baseDn, issuerDn);
+            log.debug("Created search filter: {}", filter.getFilterString());
 
-            return Collections.emptyList();
+            // 2. Execute search
+            List<LdapCrlEntry> results = searchCrlsInternal(filter);
 
-        } catch (LdapQueryException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("CRL search by issuer completed. Found: {}, Duration: {}ms", results.size(), duration);
+
+            return results;
+
+        } catch (DomainException e) {
+            throw new LdapQueryService.LdapQueryException(e.getMessage(), e);
+        } catch (LdapQueryService.LdapQueryException e) {
             throw e;
         } catch (Exception e) {
             log.error("CRL search by issuer DN failed", e);
-            throw new LdapQueryException("CRL search failed: " + e.getMessage(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "CRL search failed: " + e.getMessage(), e);
         }
     }
 
@@ -285,21 +380,45 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Counting certificates started ===");
         log.debug("Base DN: {}", baseDn.getValue());
 
+        long startTime = System.currentTimeMillis();
+
         try {
             if (baseDn == null) {
                 throw new DomainException("INVALID_BASE_DN", "Base DN must not be null");
             }
 
-            // TODO: Implement actual count using LDAP search with size limit 0
-            log.warn("Count certificates stub implementation");
+            // 1. Create count filter for all certificate entries
+            String filter = "(objectClass=inetOrgPerson)";
+            log.debug("Using filter: {}", filter);
 
+            // 2. Execute search to count entries
+            List<String> dns = new ArrayList<>();
+            ldapTemplate.search(
+                    baseDn.getValue(),
+                    filter,
+                    (AttributesMapper<Object>) attributes -> {
+                        dns.add(baseDn.getValue());  // Just count, we don't need attributes
+                        return null;
+                    }
+            );
+
+            long count = dns.size();
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Certificate count completed: {} certificates. Duration: {}ms", count, duration);
+
+            return count;
+
+        } catch (DomainException e) {
+            throw new LdapQueryService.LdapQueryException(e.getMessage(), e);
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            log.debug("Base DN not found: {}", baseDn.getValue());
             return 0L;
-
-        } catch (LdapQueryException e) {
+        } catch (LdapQueryService.LdapQueryException e) {
             throw e;
         } catch (Exception e) {
             log.error("Count certificates failed", e);
-            throw new LdapQueryException("Count certificates failed: " + e.getMessage(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Count certificates failed: " + e.getMessage(), e);
         }
     }
 
@@ -308,21 +427,45 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Counting CRLs started ===");
         log.debug("Base DN: {}", baseDn.getValue());
 
+        long startTime = System.currentTimeMillis();
+
         try {
             if (baseDn == null) {
                 throw new DomainException("INVALID_BASE_DN", "Base DN must not be null");
             }
 
-            // TODO: Implement actual count using LDAP search with size limit 0
-            log.warn("Count CRLs stub implementation");
+            // 1. Create count filter for all CRL entries
+            String filter = "(objectClass=x509crl)";
+            log.debug("Using filter: {}", filter);
 
+            // 2. Execute search to count CRL entries
+            List<String> dns = new ArrayList<>();
+            ldapTemplate.search(
+                    baseDn.getValue(),
+                    filter,
+                    (AttributesMapper<Object>) attributes -> {
+                        dns.add(baseDn.getValue());
+                        return null;
+                    }
+            );
+
+            long count = dns.size();
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("CRL count completed: {} CRLs. Duration: {}ms", count, duration);
+
+            return count;
+
+        } catch (DomainException e) {
+            throw new LdapQueryService.LdapQueryException(e.getMessage(), e);
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            log.debug("Base DN not found: {}", baseDn.getValue());
             return 0L;
-
-        } catch (LdapQueryException e) {
+        } catch (LdapQueryService.LdapQueryException e) {
             throw e;
         } catch (Exception e) {
             log.error("Count CRLs failed", e);
-            throw new LdapQueryException("Count CRLs failed: " + e.getMessage(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Count CRLs failed: " + e.getMessage(), e);
         }
     }
 
@@ -390,11 +533,14 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         log.info("=== Testing LDAP connection ===");
 
         try {
-            // TODO: Implement actual connection test
-            // Use ldapTemplate to execute a simple search or context lookup
-            log.warn("Test LDAP connection stub implementation");
+            // 1. Attempt to lookup the root DSE (root DN)
+            Object result = ldapTemplate.lookup("");
+            log.info("LDAP connection test successful. Root DSE accessible.");
+            return true;
 
-            return ldapTemplate != null;
+        } catch (org.springframework.ldap.CommunicationException e) {
+            log.error("LDAP connection failed: cannot communicate with server", e);
+            return false;
 
         } catch (Exception e) {
             log.error("LDAP connection test failed", e);
@@ -416,6 +562,269 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         } catch (Exception e) {
             log.error("Get server info failed", e);
             throw new LdapQueryException("Get server info failed: " + e.getMessage(), e);
+        }
+    }
+
+    // ======================== Helper Methods ========================
+
+    /**
+     * DirContextAdapter에서 인증서 정보를 추출하여 LdapCertificateEntry로 변환
+     *
+     * @param context DirContextAdapter (LDAP 엔트리 데이터)
+     * @param dn Distinguished Name
+     * @return 변환된 LdapCertificateEntry
+     */
+    private LdapCertificateEntry extractCertificateFromContext(
+            DirContextAdapter context, DistinguishedName dn) {
+
+        log.debug("=== Extracting certificate data from LDAP context ===");
+        log.debug("DN: {}", dn.getValue());
+
+        try {
+            // 1. 필수 속성 추출
+            String cn = context.getStringAttribute("cn");
+            String x509CertBase64 = context.getStringAttribute("x509certificatedata");
+            String fingerprint = context.getStringAttribute("certificateFingerprint");
+            String serialNumber = context.getStringAttribute("serialNumber");
+            String issuerDn = context.getStringAttribute("issuerDN");
+
+            // 2. 옵션 속성 추출
+            String validationStatus = context.getStringAttribute("validationStatus");
+            if (validationStatus == null || validationStatus.isBlank()) {
+                validationStatus = "VALID";
+            }
+
+            String typeStr = context.getStringAttribute("certificateType");
+            String notBeforeStr = context.getStringAttribute("notBefore");
+            String notAfterStr = context.getStringAttribute("notAfter");
+
+            log.debug("Extracted attributes - CN: {}, fingerprint: {}, serialNumber: {}",
+                cn, fingerprint, serialNumber);
+
+            // 3. LdapCertificateEntry 빌드
+            return LdapCertificateEntry.builder()
+                    .dn(dn)
+                    .x509CertificateBase64(x509CertBase64)
+                    .fingerprint(fingerprint)
+                    .serialNumber(serialNumber)
+                    .issuerDn(issuerDn)
+                    .validationStatus(validationStatus)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to extract certificate from LDAP context: {}", dn.getValue(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Failed to extract certificate data: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * DirContextAdapter에서 CRL 정보를 추출하여 LdapCrlEntry로 변환
+     *
+     * @param context DirContextAdapter (LDAP 엔트리 데이터)
+     * @param dn Distinguished Name
+     * @return 변환된 LdapCrlEntry
+     */
+    private LdapCrlEntry extractCrlFromContext(DirContextAdapter context, DistinguishedName dn) {
+
+        log.debug("=== Extracting CRL data from LDAP context ===");
+        log.debug("DN: {}", dn.getValue());
+
+        try {
+            // 1. 필수 속성 추출
+            String cn = context.getStringAttribute("cn");
+            String x509CrlBase64 = context.getStringAttribute("x509crldata");
+            String issuerDn = context.getStringAttribute("issuerDN");
+
+            // 2. 옵션 속성 추출
+            String countryCode = context.getStringAttribute("countryCode");
+            String thisUpdateStr = context.getStringAttribute("thisUpdate");
+            String nextUpdateStr = context.getStringAttribute("nextUpdate");
+
+            log.debug("Extracted attributes - CN: {}, issuerDn: {}, thisUpdate: {}",
+                cn, issuerDn, thisUpdateStr);
+
+            // 3. LdapCrlEntry 빌드
+            return LdapCrlEntry.builder()
+                    .dn(dn)
+                    .x509CrlBase64(x509CrlBase64)
+                    .issuerDn(issuerDn)
+                    .countryCode(countryCode)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to extract CRL from LDAP context: {}", dn.getValue(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Failed to extract CRL data: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 검색 필터를 사용하여 인증서를 검색하고 List<LdapCertificateEntry>로 반환
+     *
+     * @param filter LdapSearchFilter (검색 조건)
+     * @return 검색된 인증서 목록
+     */
+    private List<LdapCertificateEntry> searchCertificatesInternal(LdapSearchFilter filter) {
+
+        log.debug("=== Internal certificate search started ===");
+        log.debug("Filter: {}", filter.getFilterString());
+        log.debug("Base DN: {}", filter.getBaseDn().getValue());
+
+        try {
+            List<LdapCertificateEntry> results = new ArrayList<>();
+
+            // 1. LdapTemplate.search() 실행
+            ldapTemplate.search(
+                    filter.getBaseDn().getValue(),
+                    filter.getFilterString(),
+                    (AttributesMapper<Object>) attributes -> {
+                        try {
+                            // 2. Attributes에서 직접 값 추출
+                            String dnValue = getAttribute(attributes, "entryDN");
+                            if (dnValue == null) {
+                                dnValue = filter.getBaseDn().getValue();
+                            }
+                            DistinguishedName entryDn = DistinguishedName.of(dnValue);
+
+                            // 3. Attributes에서 인증서 데이터 추출
+                            String x509CertBase64 = getAttribute(attributes, "x509certificatedata");
+                            String fingerprint = getAttribute(attributes, "certificateFingerprint");
+                            String serialNumber = getAttribute(attributes, "serialNumber");
+                            String issuerDn = getAttribute(attributes, "issuerDN");
+                            String validationStatus = getAttribute(attributes, "validationStatus");
+                            if (validationStatus == null || validationStatus.isBlank()) {
+                                validationStatus = "VALID";
+                            }
+
+                            // 4. LdapCertificateEntry 빌드 및 결과에 추가
+                            LdapCertificateEntry entry = LdapCertificateEntry.builder()
+                                    .dn(entryDn)
+                                    .x509CertificateBase64(x509CertBase64)
+                                    .fingerprint(fingerprint)
+                                    .serialNumber(serialNumber)
+                                    .issuerDn(issuerDn)
+                                    .validationStatus(validationStatus)
+                                    .build();
+                            results.add(entry);
+                            log.debug("Certificate extracted from DN: {}", dnValue);
+
+                        } catch (Exception e) {
+                            log.warn("Failed to extract certificate from search result", e);
+                            // 한 개 엔트리 실패 시 계속 진행 (graceful degradation)
+                        }
+
+                        return null;
+                    }
+            );
+
+            log.debug("Certificate search completed. Found: {} certificates", results.size());
+            return results;
+
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            log.debug("Base DN not found in LDAP: {}", filter.getBaseDn().getValue());
+            return Collections.emptyList();
+
+        } catch (Exception e) {
+            log.error("Certificate search failed: {}", filter.getFilterString(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "Certificate search failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 검색 필터를 사용하여 CRL을 검색하고 List<LdapCrlEntry>로 반환
+     *
+     * @param filter LdapSearchFilter (검색 조건)
+     * @return 검색된 CRL 목록
+     */
+    private List<LdapCrlEntry> searchCrlsInternal(LdapSearchFilter filter) {
+
+        log.debug("=== Internal CRL search started ===");
+        log.debug("Filter: {}", filter.getFilterString());
+        log.debug("Base DN: {}", filter.getBaseDn().getValue());
+
+        try {
+            List<LdapCrlEntry> results = new ArrayList<>();
+
+            // 1. LdapTemplate.search() 실행
+            ldapTemplate.search(
+                    filter.getBaseDn().getValue(),
+                    filter.getFilterString(),
+                    (AttributesMapper<Object>) attributes -> {
+                        try {
+                            // 2. Attributes에서 직접 값 추출
+                            String dnValue = getAttribute(attributes, "entryDN");
+                            if (dnValue == null) {
+                                dnValue = filter.getBaseDn().getValue();
+                            }
+                            DistinguishedName entryDn = DistinguishedName.of(dnValue);
+
+                            // 3. Attributes에서 CRL 데이터 추출
+                            String x509CrlBase64 = getAttribute(attributes, "x509crldata");
+                            String issuerDn = getAttribute(attributes, "issuerDN");
+                            String countryCode = getAttribute(attributes, "countryCode");
+
+                            // 4. LdapCrlEntry 빌드 및 결과에 추가
+                            LdapCrlEntry entry = LdapCrlEntry.builder()
+                                    .dn(entryDn)
+                                    .x509CrlBase64(x509CrlBase64)
+                                    .issuerDn(issuerDn)
+                                    .countryCode(countryCode)
+                                    .build();
+                            results.add(entry);
+                            log.debug("CRL extracted from DN: {}", dnValue);
+
+                        } catch (Exception e) {
+                            log.warn("Failed to extract CRL from search result", e);
+                            // 한 개 엔트리 실패 시 계속 진행 (graceful degradation)
+                        }
+
+                        return null;
+                    }
+            );
+
+            log.debug("CRL search completed. Found: {} CRLs", results.size());
+            return results;
+
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            log.debug("Base DN not found in LDAP: {}", filter.getBaseDn().getValue());
+            return Collections.emptyList();
+
+        } catch (Exception e) {
+            log.error("CRL search failed: {}", filter.getFilterString(), e);
+            throw new LdapQueryService.LdapQueryException(
+                "CRL search failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * LDAP Attributes에서 문자열 값을 안전하게 추출하는 헬퍼 메서드
+     *
+     * @param attributes Attributes 객체
+     * @param attributeName 속성명
+     * @return 속성값 (없으면 null)
+     */
+    private String getAttribute(Attributes attributes, String attributeName) {
+        try {
+            javax.naming.directory.Attribute attr = attributes.get(attributeName);
+            if (attr != null && attr.size() > 0) {
+                Object value = attr.get(0);
+                if (value != null) {
+                    if (value instanceof String) {
+                        return (String) value;
+                    } else if (value instanceof byte[]) {
+                        // Base64 바이트 배열인 경우 String으로 변환
+                        return new String((byte[]) value);
+                    } else {
+                        return value.toString();
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Failed to extract attribute '{}': {}", attributeName, e.getMessage());
+            return null;
         }
     }
 
@@ -501,20 +910,4 @@ public class SpringLdapQueryAdapter implements LdapQueryService {
         }
     }
 
-    /**
-     * Domain Exception - Import from shared module
-     * (DomainException from shared.exception package)
-     */
-    private static class DomainException extends RuntimeException {
-        private final String code;
-
-        DomainException(String code, String message) {
-            super(message);
-            this.code = code;
-        }
-
-        public String getCode() {
-            return code;
-        }
-    }
 }
