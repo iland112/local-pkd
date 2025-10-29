@@ -231,6 +231,42 @@ public class LocalFileStorageAdapter implements FileStoragePort {
     }
 
     /**
+     * 파일 읽기
+     *
+     * 저장된 파일의 전체 내용을 바이트 배열로 읽어 반환합니다.
+     * 파일 파싱이나 재처리 시 사용합니다.
+     *
+     * @param filePath 읽을 파일 경로
+     * @return 파일 내용 (byte array)
+     * @throws InfrastructureException 파일이 존재하지 않거나 읽기 실패 시
+     */
+    @Override
+    public byte[] readFile(FilePath filePath) {
+        log.debug("Reading file: {}", filePath.getValue());
+
+        try {
+            Path path = Paths.get(filePath.getValue());
+            if (!Files.exists(path)) {
+                throw new InfrastructureException(
+                    "FILE_NOT_FOUND",
+                    "File does not exist: " + filePath.getValue()
+                );
+            }
+
+            byte[] fileBytes = Files.readAllBytes(path);
+            log.debug("File read successfully: path={}, size={} bytes",
+                     filePath.getValue(), fileBytes.length);
+
+            return fileBytes;
+
+        } catch (IOException e) {
+            String errorMessage = "Failed to read file: " + filePath.getValue();
+            log.error(errorMessage, e);
+            throw new InfrastructureException("FILE_READ_FAILED", errorMessage, e);
+        }
+    }
+
+    /**
      * 업로드 디렉토리 생성
      *
      * FileFormat의 storagePath를 기반으로 디렉토리를 생성합니다.

@@ -2,10 +2,17 @@ package com.smartcoreinc.localpkd.certificatevalidation.application.event;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateRevokedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateValidatedEvent;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.TrustChainVerifiedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.ValidationFailedEvent;
+import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
+import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
@@ -48,6 +55,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Service
 @RequiredArgsConstructor
 public class CertificateValidationEventHandler {
+
+    private final ProgressService progressService;
+    private final UploadToLdapUseCase uploadToLdapUseCase;
 
     /**
      * CertificateValidatedEvent 동기 핸들러
@@ -346,6 +356,102 @@ public class CertificateValidationEventHandler {
         } catch (Exception e) {
             // 비동기 작업이므로 예외를 로깅하고 계속 진행
             log.error("Error in validation failed async handler (will not affect main flow)", e);
+        }
+    }
+
+    /**
+     * CertificatesValidatedEvent 동기 핸들러 (Phase 16: 배치 검증 완료)
+     *
+     * <p><b>처리 내용</b>:</p>
+     * <ul>
+     *   <li>배치 검증 완료 로깅</li>
+     *   <li>검증 통계 업데이트 (성공률, 실패율)</li>
+     *   <li>SSE 진행 상황 업데이트</li>
+     * </ul>
+     *
+     * <p><b>실행 시점</b>: 트랜잭션 커밋 전 (읽기 전용)</p>
+     *
+     * @param event 배치 검증 완료 이벤트
+     */
+    @EventListener
+    public void handleCertificatesValidated(CertificatesValidatedEvent event) {
+        log.info("=== [Event-Sync] CertificatesValidated (Batch Validation Completed) ===");
+        log.info("Upload ID: {}", event.getUploadId());
+        log.info("Validation Summary:");
+        log.info("  - Valid Certificates: {}", event.getValidCertificateCount());
+        log.info("  - Invalid Certificates: {}", event.getInvalidCertificateCount());
+        log.info("  - Valid CRLs: {}", event.getValidCrlCount());
+        log.info("  - Invalid CRLs: {}", event.getInvalidCrlCount());
+        log.info("  - Total Validated: {}", event.getTotalValidated());
+        log.info("  - Success Rate: {}%", event.getSuccessRate());
+    }
+
+    /**
+     * CertificatesValidatedEvent 비동기 핸들러 (Phase 16: 배치 검증 완료 후 LDAP 업로드 트리거)
+     *
+     * <p><b>처리 내용</b>:</p>
+     * <ul>
+     *   <li>LDAP Integration: 검증된 인증서들을 LDAP 서버에 업로드</li>
+     *   <li>배치 처리: 대량의 인증서/CRL을 효율적으로 업로드</li>
+     *   <li>진행 상황 추적: SSE를 통해 실시간 업로드 진행률 전송</li>
+     * </ul>
+     *
+     * <p><b>실행 시점</b>: 트랜잭션 커밋 후 (별도 스레드)</p>
+     *
+     * <p><b>Event Chain</b>:</p>
+     * <pre>
+     * FileParsingCompletedEvent
+     *   → LdifParsingEventHandler
+     *     → ValidateCertificatesUseCase
+     *       → CertificatesValidatedEvent
+     *         → handleCertificatesValidatedAndTriggerLdapUpload()  [THIS METHOD]
+     *           → UploadToLdapUseCase
+     *             → LdapUploadCompletedEvent
+     *               → LdapUploadEventHandler
+     * </pre>
+     *
+     * @param event 배치 검증 완료 이벤트
+     */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCertificatesValidatedAndTriggerLdapUpload(CertificatesValidatedEvent event) {
+        log.info("=== [Event-Async] CertificatesValidated (Triggering LDAP upload) ===");
+        log.info("Upload ID: {}", event.getUploadId());
+        log.info("Triggering LDAP upload for {} valid certificates + {} valid CRLs",
+            event.getValidCertificateCount(), event.getValidCrlCount());
+
+        try {
+            // 1. UploadToLdapCommand 생성
+            UploadToLdapCommand command = UploadToLdapCommand.create(
+                event.getUploadId(),
+                event.getValidCertificateCount(),
+                event.getValidCrlCount()
+            );
+
+            // 2. LDAP 업로드 실행 (UploadToLdapUseCase)
+            log.info("Executing LDAP upload: uploadId={}, total items={}",
+                event.getUploadId(), command.getTotalCount());
+            var response = uploadToLdapUseCase.execute(command);
+
+            if (response.success()) {
+                log.info("LDAP upload completed successfully: uploadId={}, uploaded={}, failed={}",
+                    event.getUploadId(), response.getTotalUploaded(), response.getTotalFailed());
+            } else {
+                log.error("LDAP upload failed: uploadId={}, error={}",
+                    event.getUploadId(), response.errorMessage());
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to trigger LDAP upload for uploadId: {}",
+                event.getUploadId(), e);
+
+            progressService.sendProgress(
+                ProcessingProgress.failed(
+                    event.getUploadId(),
+                    ProcessingStage.FAILED,
+                    "LDAP 업로드 트리거 실패: " + e.getMessage()
+                )
+            );
         }
     }
 
