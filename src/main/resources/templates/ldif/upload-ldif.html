@@ -345,9 +345,9 @@
               return; // Modal shown, user needs to decide
             }
 
-            // Step 3: Submit form
+            // Step 3: Submit form via AJAX to capture uploadId
             showProgress('파일 업로드 중...', 90);
-            document.getElementById('uploadForm').submit();
+            await submitFormAjax();
 
           } catch (error) {
             console.error('Upload error:', error);
@@ -448,6 +448,84 @@
 
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Submit form via AJAX and start certificate validation
+        async function submitFormAjax() {
+          const formData = new FormData(document.getElementById('uploadForm'));
+
+          const response = await fetch('/ldif/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error('파일 업로드 실패');
+          }
+
+          // Parse HTML response to extract uploadId from redirect
+          const html = await response.text();
+          const match = html.match(/\/upload-history\?id=([a-f0-9-]+)/);
+          let uploadId = match ? match[1] : null;
+
+          if (!uploadId && response.redirected) {
+            const urlParams = new URL(response.url).searchParams;
+            uploadId = urlParams.get('id');
+          }
+
+          if (!uploadId) {
+            // Try to extract from HTML if it contains uploadId
+            const idMatch = html.match(/id["\']?\s*[:=]\s*["\']?([a-f0-9\-]+)["\']?/);
+            uploadId = idMatch ? idMatch[1] : null;
+          }
+
+          if (uploadId) {
+            hideProgress();
+            showToast('파일 업로드 완료. 인증서 검증을 시작합니다.', 'success');
+
+            // Start certificate validation
+            await triggerCertificateValidation(uploadId);
+          } else {
+            // Fallback: redirect after a short delay
+            hideProgress();
+            showToast('파일 업로드 완료', 'success');
+            setTimeout(() => {
+              window.location.href = '/upload-history';
+            }, 2000);
+          }
+        }
+
+        // Trigger certificate validation via API and start SSE progress
+        async function triggerCertificateValidation(uploadId) {
+          try {
+            // Start SSE progress modal (before API call)
+            startSSEProgress(uploadId);
+
+            // Call certificate validation API
+            const response = await fetch('/api/certificates/validate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                uploadId: uploadId,
+                parsedFileId: uploadId, // Use same ID for now
+                certificateCount: 0, // Will be determined during parsing
+                crlCount: 0 // Will be determined during parsing
+              })
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.message || '인증서 검증 API 호출 실패');
+            }
+
+            const result = await response.json();
+            console.log('Certificate validation initiated:', result);
+
+          } catch (error) {
+            console.error('Certificate validation error:', error);
+            closeProgressModal(false);
+            showToast('인증서 검증 중 오류: ' + error.message, 'error');
+          }
         }
 
         // ==================== SSE Progress Tracking ====================
