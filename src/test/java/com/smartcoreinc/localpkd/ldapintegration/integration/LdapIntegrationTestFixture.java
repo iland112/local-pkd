@@ -280,7 +280,7 @@ public class LdapIntegrationTestFixture {
                     "nextUpdate", String.valueOf(System.currentTimeMillis() + 86400000)
             ));
             log.debug("Added test CRL: {}", dn);
-        } catch (LDAPException | LDIFException e) {
+        } catch (LDAPException e) {
             log.error("Error adding test CRL: {}", dn, e);
             throw new RuntimeException("Failed to add test CRL", e);
         }

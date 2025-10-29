@@ -1,7 +1,17 @@
 package com.smartcoreinc.localpkd.fileupload.application.event;
 
+import com.smartcoreinc.localpkd.fileparsing.application.command.ParseLdifFileCommand;
+import com.smartcoreinc.localpkd.fileparsing.application.response.ParseFileResponse;
+import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.domain.event.DuplicateFileDetectedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.event.FileUploadedEvent;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
+import com.smartcoreinc.localpkd.fileupload.domain.port.FileStoragePort;
+import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -9,6 +19,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.Optional;
 
 /**
  * File Upload Event Handler - 파일 업로드 도메인 이벤트 핸들러
@@ -57,10 +69,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class FileUploadEventHandler {
 
-    // TODO: Phase 4에서 추가될 Use Cases
-    // private final ParseFileUseCase parseFileUseCase;
-    // private final UpdateStatisticsUseCase updateStatisticsUseCase;
-    // private final SendNotificationUseCase sendNotificationUseCase;
+    private final UploadedFileRepository uploadedFileRepository;
+    private final FileStoragePort fileStoragePort;
+    private final ParseLdifFileUseCase parseLdifFileUseCase;
+    private final ProgressService progressService;
 
     /**
      * 파일 업로드 완료 이벤트 처리 (동기)
@@ -99,8 +111,10 @@ public class FileUploadEventHandler {
      *
      * <h4>처리 내용</h4>
      * <ul>
-     *   <li>TODO: 파일 파싱 트리거 (Phase 4)</li>
-     *   <li>TODO: LDAP 업로드 트리거 (Phase 5)</li>
+     *   <li>UploadedFile 조회 (file path, format 정보)</li>
+     *   <li>파일 bytes 읽기 (FileStoragePort)</li>
+     *   <li>SSE 진행 상황 전송 (UPLOAD_COMPLETED)</li>
+     *   <li>파일 파싱 트리거 (ParseLdifFileUseCase)</li>
      * </ul>
      *
      * @param event 파일 업로드 이벤트
@@ -112,20 +126,69 @@ public class FileUploadEventHandler {
         log.info("Upload ID: {}", event.uploadId().getId());
 
         try {
-            // TODO: Phase 4 - 파일 파싱 Context 연동
-            // ParseFileCommand command = new ParseFileCommand(
-            //     event.uploadId().getId().toString(),
-            //     event.fileName(),
-            //     event.fileHash()
-            // );
-            // parseFileUseCase.execute(command);
+            // 1. UploadedFile 조회 (file path, format 필요)
+            Optional<UploadedFile> uploadedFileOpt = uploadedFileRepository.findById(event.uploadId());
+            if (uploadedFileOpt.isEmpty()) {
+                log.error("UploadedFile not found: uploadId={}", event.uploadId().getId());
+                progressService.sendProgress(
+                    ProcessingProgress.failed(
+                        event.uploadId().getId(),
+                        ProcessingStage.FAILED,
+                        "업로드된 파일 정보를 찾을 수 없습니다"
+                    )
+                );
+                return;
+            }
 
-            log.info("File parsing would be triggered here (Phase 4)");
+            UploadedFile uploadedFile = uploadedFileOpt.get();
+            log.info("UploadedFile retrieved: fileName={}, format={}, path={}",
+                    uploadedFile.getFileName().getValue(),
+                    uploadedFile.getFileFormatType(),
+                    uploadedFile.getFilePath().getValue());
+
+            // 2. SSE 진행 상황 전송: UPLOAD_COMPLETED (5%)
+            progressService.sendProgress(
+                ProcessingProgress.uploadCompleted(
+                    event.uploadId().getId(),
+                    event.fileName()
+                )
+            );
+
+            // 3. 파일 bytes 읽기
+            byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
+            log.info("File bytes read: size={} bytes", fileBytes.length);
+
+            // 4. ParseLdifFileCommand 생성
+            ParseLdifFileCommand command = ParseLdifFileCommand.builder()
+                .uploadId(event.uploadId().getId())
+                .fileBytes(fileBytes)
+                .fileFormat(uploadedFile.getFileFormatType())  // e.g., "CSCA_COMPLETE_LDIF"
+                .build();
+
+            // 5. 파일 파싱 실행 (Use Case가 자동으로 SSE progress 전송)
+            log.info("Triggering LDIF parsing: uploadId={}", event.uploadId().getId());
+            ParseFileResponse response = parseLdifFileUseCase.execute(command);
+
+            if (response.success()) {
+                log.info("Parsing completed successfully: uploadId={}, certificates={}, CRLs={}",
+                        event.uploadId().getId(), response.certificateCount(), response.crlCount());
+            } else {
+                log.error("Parsing failed: uploadId={}, error={}",
+                        event.uploadId().getId(), response.errorMessage());
+            }
 
         } catch (Exception e) {
             log.error("Failed to trigger file parsing for uploadId: {}",
                     event.uploadId().getId(), e);
-            // TODO: 실패 시 재시도 로직 또는 Dead Letter Queue
+
+            // SSE 진행 상황 전송: FAILED
+            progressService.sendProgress(
+                ProcessingProgress.failed(
+                    event.uploadId().getId(),
+                    ProcessingStage.FAILED,
+                    "파일 파싱 트리거 실패: " + e.getMessage()
+                )
+            );
         }
     }
 

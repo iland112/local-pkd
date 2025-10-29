@@ -153,4 +153,26 @@ public interface FileStoragePort {
      * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException 파일이 존재하지 않거나 읽을 수 없는 경우
      */
     long getFileSize(FilePath filePath);
+
+    /**
+     * 파일 읽기
+     *
+     * <p>저장된 파일의 내용을 바이트 배열로 읽어 반환합니다.
+     * 파일 파싱이나 재처리 시 사용합니다.</p>
+     *
+     * <h4>사용 예시</h4>
+     * <pre>{@code
+     * byte[] fileBytes = fileStoragePort.readFile(filePath);
+     * ParseLdifFileCommand command = ParseLdifFileCommand.builder()
+     *     .uploadId(uploadId)
+     *     .fileBytes(fileBytes)
+     *     .fileFormat(fileFormat)
+     *     .build();
+     * }</pre>
+     *
+     * @param filePath 읽을 파일 경로
+     * @return 파일 내용 (바이트 배열)
+     * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException 파일이 존재하지 않거나 읽을 수 없는 경우
+     */
+    byte[] readFile(FilePath filePath);
 }
