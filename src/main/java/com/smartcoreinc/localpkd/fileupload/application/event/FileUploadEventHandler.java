@@ -106,10 +106,23 @@ public class FileUploadEventHandler {
     /**
      * 파일 업로드 완료 이벤트 처리 (비동기, 트랜잭션 커밋 후)
      *
-     * <p>트랜잭션 커밋 후 비동기적으로 파일 파싱을 트리거합니다.
-     * 파싱이 실패해도 업로드 트랜잭션에 영향을 주지 않습니다.</p>
+     * <p>트랜잭션 커밋 후 비동기적으로 처리 모드에 따라 다르게 동작합니다.
      *
-     * <h4>처리 내용</h4>
+     * <h4>AUTO 모드</h4>
+     * <ul>
+     *   <li>자동으로 파일 파싱을 트리거합니다</li>
+     *   <li>파싱 완료 후 검증도 자동으로 시작</li>
+     *   <li>검증 완료 후 LDAP 업로드도 자동으로 시작</li>
+     * </ul>
+     *
+     * <h4>MANUAL 모드</h4>
+     * <ul>
+     *   <li>파일 업로드 완료까지만 처리</li>
+     *   <li>사용자가 "파싱 시작" 버튼을 클릭할 때까지 대기</li>
+     *   <li>ProcessingController의 POST /api/processing/parse/{uploadId}로 수동 트리거</li>
+     * </ul>
+     *
+     * <h4>처리 내용 (AUTO 모드)</h4>
      * <ul>
      *   <li>UploadedFile 조회 (file path, format 정보)</li>
      *   <li>파일 bytes 읽기 (FileStoragePort)</li>
@@ -117,12 +130,20 @@ public class FileUploadEventHandler {
      *   <li>파일 파싱 트리거 (ParseLdifFileUseCase)</li>
      * </ul>
      *
-     * @param event 파일 업로드 이벤트
+     * <h4>처리 내용 (MANUAL 모드)</h4>
+     * <ul>
+     *   <li>UploadedFile 조회</li>
+     *   <li>SSE 진행 상황 전송 (UPLOAD_COMPLETED + 사용자 액션 대기 메시지)</li>
+     *   <li>사용자 입력 대기 (UI에서 파싱 시작 버튼 클릭)</li>
+     * </ul>
+     *
+     * @param event 파일 업로드 이벤트 (processingMode 포함)
      */
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleFileUploadedAsync(FileUploadedEvent event) {
-        log.info("=== [Event-Async] FileUploaded (Triggering parsing) ===");
+        log.info("=== [Event-Async] FileUploaded (Processing Mode: {}) ===",
+                event.processingMode().getDisplayName());
         log.info("Upload ID: {}", event.uploadId().getId());
 
         try {
@@ -154,18 +175,31 @@ public class FileUploadEventHandler {
                 )
             );
 
-            // 3. 파일 bytes 읽기
+            // 3. 처리 모드 확인: AUTO vs MANUAL
+            if (event.processingMode().isManual()) {
+                // MANUAL 모드: 사용자 액션 대기
+                log.info("MANUAL mode: Waiting for user to trigger parsing for uploadId={}",
+                        event.uploadId().getId());
+                log.info("User must click '파싱 시작' button in UI to proceed with parsing");
+                return;  // 사용자 액션 대기, 자동 파싱 안 함
+            }
+
+            // AUTO 모드: 자동으로 파싱 시작
+            log.info("AUTO mode: Automatically starting file parsing for uploadId={}",
+                    event.uploadId().getId());
+
+            // 4. 파일 bytes 읽기
             byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
             log.info("File bytes read: size={} bytes", fileBytes.length);
 
-            // 4. ParseLdifFileCommand 생성
+            // 5. ParseLdifFileCommand 생성
             ParseLdifFileCommand command = ParseLdifFileCommand.builder()
                 .uploadId(event.uploadId().getId())
                 .fileBytes(fileBytes)
                 .fileFormat(uploadedFile.getFileFormatType())  // e.g., "CSCA_COMPLETE_LDIF"
                 .build();
 
-            // 5. 파일 파싱 실행 (Use Case가 자동으로 SSE progress 전송)
+            // 6. 파일 파싱 실행 (Use Case가 자동으로 SSE progress 전송)
             log.info("Triggering LDIF parsing: uploadId={}", event.uploadId().getId());
             ParseFileResponse response = parseLdifFileUseCase.execute(command);
 

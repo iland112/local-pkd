@@ -84,6 +84,17 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
     boolean existsByX509Data_FingerprintSha256(String fingerprintSha256);
 
     /**
+     * 업로드 ID로 Certificate 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 인증서를 조회합니다.</p>
+     * <p>Phase 16-17 Use Case 구현에 필요합니다.</p>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return Certificate 목록 (빈 리스트 가능)
+     */
+    List<Certificate> findByUploadId(java.util.UUID uploadId);
+
+    /**
      * 상태별 Certificate 목록 조회
      *
      * @param status 인증서 상태

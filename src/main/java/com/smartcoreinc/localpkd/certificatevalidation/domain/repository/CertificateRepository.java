@@ -162,6 +162,30 @@ public interface CertificateRepository {
     boolean existsByFingerprint(String fingerprintSha256);
 
     /**
+     * 업로드 ID로 Certificate 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 인증서를 조회합니다.</p>
+     * <p>Phase 16-17에서 Use Case 구현에 필요합니다.</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * UUID uploadId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+     * List<Certificate> certificates = certificateRepository.findByUploadId(uploadId);
+     *
+     * // ValidateCertificatesUseCase에서 사용
+     * for (Certificate cert : certificates) {
+     *     ValidationResult result = trustChainValidator.validate(cert);
+     *     cert.recordValidation(result);
+     * }
+     * }</pre>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return Certificate 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     */
+    List<Certificate> findByUploadId(java.util.UUID uploadId);
+
+    /**
      * 상태별 Certificate 목록 조회
      *
      * <p>특정 상태의 인증서들을 조회합니다.</p>

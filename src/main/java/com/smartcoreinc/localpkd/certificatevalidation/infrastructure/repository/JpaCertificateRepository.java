@@ -202,6 +202,31 @@ public class JpaCertificateRepository implements CertificateRepository {
     }
 
     /**
+     * 업로드 ID로 Certificate 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 인증서를 조회합니다.</p>
+     * <p>Phase 16-17 ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return Certificate 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findByUploadId(java.util.UUID uploadId) {
+        if (uploadId == null) {
+            log.warn("Cannot find Certificates by uploadId: uploadId is null");
+            throw new IllegalArgumentException("uploadId must not be null");
+        }
+
+        log.debug("Finding Certificates by uploadId: {}", uploadId);
+        List<Certificate> certificates = jpaRepository.findByUploadId(uploadId);
+        log.debug("Found {} Certificate(s) for uploadId: {}", certificates.size(), uploadId);
+
+        return certificates;
+    }
+
+    /**
      * 상태별 Certificate 목록 조회
      *
      * @param status 인증서 상태 (VALID, EXPIRED, REVOKED 등)

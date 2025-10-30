@@ -154,6 +154,7 @@ class CrlExtractionIntegrationTest {
             for (var crlData : parsedFile.getCrls()) {
                 try {
                     CertificateRevocationList crl = CertificateRevocationList.create(
+                        parsedFile.getId().getId(),  // uploadId (Phase 17)
                         CrlId.newId(),
                         IssuerName.of(extractIssuerName(crlData.getIssuerDN())),
                         CountryCode.of(crlData.getCountryCode()),
@@ -309,6 +310,7 @@ class CrlExtractionIntegrationTest {
         for (var crlData : parsedFile.getCrls()) {
             try {
                 CertificateRevocationList crl = CertificateRevocationList.create(
+                    parsedFile.getId().getId(),  // uploadId (Phase 17)
                     CrlId.newId(),
                     IssuerName.of(extractIssuerName(crlData.getIssuerDN())),
                     CountryCode.of(crlData.getCountryCode()),

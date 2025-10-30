@@ -6,6 +6,7 @@ import com.smartcoreinc.localpkd.fileupload.application.response.CheckDuplicateR
 import com.smartcoreinc.localpkd.fileupload.application.response.UploadFileResponse;
 import com.smartcoreinc.localpkd.fileupload.application.usecase.CheckDuplicateFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.application.usecase.UploadMasterListFileUseCase;
+import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -46,6 +47,10 @@ public class MasterListUploadWebController {
 
     /**
      * Master List 파일 업로드 처리
+     *
+     * <p>processingMode 파라미터로 AUTO 또는 MANUAL 모드를 선택할 수 있습니다.
+     * - AUTO: 파일 업로드 후 자동으로 파싱, 검증, LDAP 등록 진행
+     * - MANUAL: 각 단계를 사용자가 수동으로 트리거</p>
      */
     @PostMapping("/upload")
     public String uploadFile(
@@ -53,13 +58,23 @@ public class MasterListUploadWebController {
             @RequestParam(value = "forceUpload", defaultValue = "false") boolean forceUpload,
             @RequestParam(value = "expectedChecksum", required = false) String expectedChecksum,
             @RequestParam("fileHash") String fileHash,
+            @RequestParam(value = "processingMode", defaultValue = "AUTO") String processingModeStr,
             RedirectAttributes redirectAttributes
     ) {
         log.info("=== Master List file upload request ===");
-        log.info("File: {}, Size: {}, ForceUpload: {}", 
-                 file.getOriginalFilename(), file.getSize(), forceUpload);
+        log.info("File: {}, Size: {}, ProcessingMode: {}, ForceUpload: {}",
+                 file.getOriginalFilename(), file.getSize(), processingModeStr, forceUpload);
 
         try {
+            // 처리 모드 파싱
+            ProcessingMode processingMode;
+            try {
+                processingMode = ProcessingMode.valueOf(processingModeStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid processing mode: {}, using AUTO", processingModeStr);
+                processingMode = ProcessingMode.AUTO;
+            }
+
             // 파일 내용 읽기
             byte[] fileContent = file.getBytes();
 
@@ -71,6 +86,7 @@ public class MasterListUploadWebController {
                     .fileHash(fileHash)
                     .expectedChecksum(expectedChecksum)
                     .forceUpload(forceUpload)
+                    .processingMode(processingMode)
                     .build();
 
             // Use Case 실행

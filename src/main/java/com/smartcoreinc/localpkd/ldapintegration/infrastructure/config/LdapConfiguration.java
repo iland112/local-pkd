@@ -11,7 +11,10 @@ import org.springframework.ldap.pool.factory.PoolingContextSource;
 import org.springframework.ldap.pool.validation.DefaultDirContextValidator;
 
 /**
- * LdapConfiguration - Spring LDAP 설정 클래스
+ * LdapConfiguration - Spring LDAP 설정 클래스 (LEGACY - DO NOT USE)
+ *
+ * <p><b>⚠️ DEPRECATED</b>: This is a legacy LDAP configuration with pooling support.</p>
+ * <p><b>Use instead</b>: {@code com.smartcoreinc.localpkd.config.LdapConfig}</p>
  *
  * <p><b>책임</b>:</p>
  * <ul>
@@ -49,11 +52,13 @@ import org.springframework.ldap.pool.validation.DefaultDirContextValidator;
  * @author SmartCore Inc.
  * @version 1.0
  * @since 2025-10-25
+ * @deprecated Use {@code config.LdapConfig} instead
  */
 @Slf4j
-@Configuration
+// @Configuration  // REMOVED: Conflicts with config.LdapConfig (Phase 17)
 @EnableConfigurationProperties(LdapProperties.class)
 @RequiredArgsConstructor
+@Deprecated(since = "Phase 17", forRemoval = true)
 public class LdapConfiguration {
 
     private final LdapProperties ldapProperties;

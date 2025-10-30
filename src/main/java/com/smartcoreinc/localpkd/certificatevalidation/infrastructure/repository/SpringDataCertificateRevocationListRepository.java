@@ -78,6 +78,24 @@ public interface SpringDataCertificateRevocationListRepository extends JpaReposi
     List<CertificateRevocationList> findByCountryCode_Value(String countryCode);
 
     /**
+     * 업로드 ID로 CRL 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 CRL을 조회합니다.</p>
+     * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * <p><b>Query Method Naming Convention</b>:</p>
+     * <ul>
+     *   <li>Field name: uploadId (UUID 타입)</li>
+     *   <li>Generated SQL: SELECT ... WHERE upload_id = :uploadId</li>
+     * </ul>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return CRL 목록 (빈 리스트 가능)
+     * @since Phase 17 Task 1.2
+     */
+    List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId);
+
+    /**
      * 발급자명과 국가 코드로 존재 여부 확인
      *
      * @param issuerName CSCA 발급자명

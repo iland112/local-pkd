@@ -11,8 +11,8 @@ import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,12 +58,24 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ParseMasterListFileUseCase {
 
     private final ParsedFileRepository repository;
     private final FileParserPort fileParserPort;
     private final ProgressService progressService;
+
+    /**
+     * Constructor with @Qualifier to specify which FileParserPort bean to inject
+     */
+    public ParseMasterListFileUseCase(
+            ParsedFileRepository repository,
+            @Qualifier("masterListParserAdapter") FileParserPort fileParserPort,
+            ProgressService progressService
+    ) {
+        this.repository = repository;
+        this.fileParserPort = fileParserPort;
+        this.progressService = progressService;
+    }
 
     /**
      * Master List 파일 파싱 실행

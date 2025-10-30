@@ -275,6 +275,32 @@ public class JpaCertificateRevocationListRepository implements CertificateRevoca
     }
 
     /**
+     * 업로드 ID로 CRL 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 CRL을 조회합니다.</p>
+     * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return CRL 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     * @since Phase 17 Task 1.2
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId) {
+        if (uploadId == null) {
+            log.warn("Cannot find CRLs by uploadId: uploadId is null");
+            throw new IllegalArgumentException("uploadId must not be null");
+        }
+
+        log.debug("Finding CRLs by uploadId: {}", uploadId);
+        List<CertificateRevocationList> crls = jpaRepository.findByUploadId(uploadId);
+        log.debug("Found {} CRL(s) for uploadId: {}", crls.size(), uploadId);
+
+        return crls;
+    }
+
+    /**
      * CRL ID로 존재 여부 확인
      *
      * @param id CRL ID

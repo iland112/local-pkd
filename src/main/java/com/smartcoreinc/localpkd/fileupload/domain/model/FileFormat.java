@@ -1,8 +1,14 @@
 package com.smartcoreinc.localpkd.fileupload.domain.model;
 
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 
 /**
  * FileFormat - 파일 포맷 Value Object
@@ -45,8 +51,10 @@ import lombok.Getter;
  * @version 1.0
  * @since 2025-10-19
  */
+@Embeddable
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)  // JPA requires no-args constructor
 public class FileFormat {
 
     /**
@@ -89,7 +97,11 @@ public class FileFormat {
         }
     }
 
-    private final Type type;
+    /**
+     * 파일 포맷 타입 (non-final for JPA compatibility)
+     */
+    @Enumerated(EnumType.STRING)
+    private Type type;
 
     /**
      * Private 생성자 - 정적 팩토리 메서드를 통해서만 생성
