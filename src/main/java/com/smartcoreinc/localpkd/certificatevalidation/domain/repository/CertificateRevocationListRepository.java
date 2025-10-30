@@ -149,6 +149,33 @@ public interface CertificateRevocationListRepository {
     List<CertificateRevocationList> findByCountryCode(String countryCode);
 
     /**
+     * 업로드 ID로 CRL 목록 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 모든 CRL을 조회합니다.</p>
+     * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * UUID uploadId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+     * List<CertificateRevocationList> crls = repository.findByUploadId(uploadId);
+     *
+     * // ValidateCertificatesUseCase에서 사용
+     * for (CertificateRevocationList crl : crls) {
+     *     // CRL 유효성 검증
+     *     if (crl.isExpired()) {
+     *         log.warn("CRL expired: {}", crl.getId());
+     *     }
+     * }
+     * }</pre>
+     *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
+     * @return CRL 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     * @since Phase 17 Task 1.2
+     */
+    List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId);
+
+    /**
      * CRL ID로 존재 여부 확인
      *
      * @param id CRL ID

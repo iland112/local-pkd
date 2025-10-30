@@ -41,6 +41,7 @@ class CertificateRevocationListRepositoryTest {
 
     private CertificateRevocationList createTestCrl(String issuerName, String countryCode) {
         return CertificateRevocationList.create(
+            java.util.UUID.randomUUID(),  // uploadId (Phase 17)
             CrlId.newId(),
             IssuerName.of(issuerName),
             CountryCode.of(countryCode),
@@ -388,6 +389,161 @@ class CertificateRevocationListRepositoryTest {
         // then
         assertThat(all).isNotEmpty();
         assertThat(all).allMatch(crl -> crl.getId() != null);
+    }
+
+    // ========== FindByUploadId Tests (Phase 17 Task 1.4) ==========
+
+    @Test
+    @DisplayName("업로드 ID로 CRL 조회 - 존재하는 경우")
+    void findByUploadId_WithExistingUploadId_ReturnsCrls() {
+        // given
+        java.util.UUID uploadId = java.util.UUID.randomUUID();
+        CertificateRevocationList crl1 = CertificateRevocationList.create(
+            uploadId,
+            CrlId.newId(),
+            IssuerName.of("CSCA-IE"),
+            CountryCode.of("IE"),
+            ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+            X509CrlData.of(new byte[]{1, 2, 3}, 5),
+            RevokedCertificates.empty()
+        );
+        CertificateRevocationList crl2 = CertificateRevocationList.create(
+            uploadId,
+            CrlId.newId(),
+            IssuerName.of("CSCA-BE"),
+            CountryCode.of("BE"),
+            ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(2)),
+            X509CrlData.of(new byte[]{4, 5, 6}, 8),
+            RevokedCertificates.empty()
+        );
+
+        // when
+        crlRepository.save(crl1);
+        crlRepository.save(crl2);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<CertificateRevocationList> found = crlRepository.findByUploadId(uploadId);
+
+        // then
+        assertThat(found).isNotEmpty();
+        assertThat(found).hasSize(2);
+        assertThat(found).allMatch(crl -> crl.getUploadId().equals(uploadId));
+        assertThat(found.stream().map(crl -> crl.getIssuerName().getValue()))
+            .containsExactlyInAnyOrder("CSCA-IE", "CSCA-BE");
+    }
+
+    @Test
+    @DisplayName("업로드 ID로 CRL 조회 - 존재하지 않는 경우")
+    void findByUploadId_WithNonExistingUploadId_ReturnsEmptyList() {
+        // given
+        java.util.UUID uploadId = java.util.UUID.randomUUID();
+
+        // when
+        List<CertificateRevocationList> found = crlRepository.findByUploadId(uploadId);
+
+        // then
+        assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("업로드 ID로 CRL 조회 - 같은 업로드에 여러 CRL")
+    void findByUploadId_WithMultipleCrlsInSameUpload_ReturnsAll() {
+        // given
+        java.util.UUID uploadId = java.util.UUID.randomUUID();
+        List<CertificateRevocationList> crls = List.of(
+            CertificateRevocationList.create(
+                uploadId,
+                CrlId.newId(),
+                IssuerName.of("CSCA-AT"),
+                CountryCode.of("AT"),
+                ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+                X509CrlData.of(new byte[]{1}, 3),
+                RevokedCertificates.empty()
+            ),
+            CertificateRevocationList.create(
+                uploadId,
+                CrlId.newId(),
+                IssuerName.of("CSCA-LU"),
+                CountryCode.of("LU"),
+                ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+                X509CrlData.of(new byte[]{2}, 4),
+                RevokedCertificates.empty()
+            ),
+            CertificateRevocationList.create(
+                uploadId,
+                CrlId.newId(),
+                IssuerName.of("CSCA-MT"),
+                CountryCode.of("MT"),
+                ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+                X509CrlData.of(new byte[]{3}, 5),
+                RevokedCertificates.empty()
+            )
+        );
+
+        // when
+        crlRepository.saveAll(crls);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<CertificateRevocationList> found = crlRepository.findByUploadId(uploadId);
+
+        // then
+        assertThat(found).hasSize(3);
+        assertThat(found).allMatch(crl -> crl.getUploadId().equals(uploadId));
+    }
+
+    @Test
+    @DisplayName("업로드 ID로 CRL 조회 - 다른 업로드와 구분")
+    void findByUploadId_IsolatesResultsByUploadId() {
+        // given
+        java.util.UUID uploadId1 = java.util.UUID.randomUUID();
+        java.util.UUID uploadId2 = java.util.UUID.randomUUID();
+
+        crlRepository.save(CertificateRevocationList.create(
+            uploadId1,
+            CrlId.newId(),
+            IssuerName.of("CSCA-PT"),
+            CountryCode.of("PT"),
+            ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+            X509CrlData.of(new byte[]{1}, 2),
+            RevokedCertificates.empty()
+        ));
+
+        crlRepository.save(CertificateRevocationList.create(
+            uploadId2,
+            CrlId.newId(),
+            IssuerName.of("CSCA-EL"),
+            CountryCode.of("EL"),
+            ValidityPeriod.of(LocalDateTime.now(), LocalDateTime.now().plusMonths(1)),
+            X509CrlData.of(new byte[]{2}, 3),
+            RevokedCertificates.empty()
+        ));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // when
+        List<CertificateRevocationList> foundUpload1 = crlRepository.findByUploadId(uploadId1);
+        List<CertificateRevocationList> foundUpload2 = crlRepository.findByUploadId(uploadId2);
+
+        // then
+        assertThat(foundUpload1).hasSize(1);
+        assertThat(foundUpload1.get(0).getUploadId()).isEqualTo(uploadId1);
+        assertThat(foundUpload1.get(0).getIssuerName().getValue()).isEqualTo("CSCA-PT");
+
+        assertThat(foundUpload2).hasSize(1);
+        assertThat(foundUpload2.get(0).getUploadId()).isEqualTo(uploadId2);
+        assertThat(foundUpload2.get(0).getIssuerName().getValue()).isEqualTo("CSCA-EL");
+    }
+
+    @Test
+    @DisplayName("업로드 ID로 CRL 조회 - null uploadId 시 예외 발생")
+    void findByUploadId_WithNullUploadId_ThrowsException() {
+        // when & then
+        assertThatThrownBy(() -> crlRepository.findByUploadId(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("uploadId must not be null");
     }
 
     // ========== Parameter Validation Tests ==========

@@ -95,7 +95,7 @@ import java.util.Objects;
     @Index(name = "idx_crl_issuer_country", columnList = "issuer_name,country_code"),
     @Index(name = "idx_crl_issuer", columnList = "issuer_name"),
     @Index(name = "idx_crl_country", columnList = "country_code"),
-    @Index(name = "idx_crl_next_update", columnList = "next_update DESC")
+    @Index(name = "idx_crl_not_after", columnList = "not_after DESC")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -140,6 +140,18 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
     private RevokedCertificates revokedCertificates;
 
     /**
+     * 원본 업로드 파일 ID (File Upload Context)
+     *
+     * <p>이 CRL이 추출된 원본 LDIF/ML 파일의 uploadId입니다.</p>
+     * <p>Cross-Context Reference: UploadedFile Aggregate와 연결</p>
+     * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * @since Phase 17 Task 1.2
+     */
+    @Column(name = "upload_id", nullable = false)
+    private java.util.UUID uploadId;
+
+    /**
      * CRL 저장 일시
      */
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -156,6 +168,7 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      *
      * <p>LDIF 파싱 후 CRL 데이터를 Aggregate Root로 변환합니다.</p>
      *
+     * @param uploadId 원본 업로드 파일 ID (File Upload Context)
      * @param id CRL ID
      * @param issuerName CSCA 발급자명 (예: CSCA-QA)
      * @param countryCode 국가 코드 (QA)
@@ -166,6 +179,7 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      * @throws DomainException 입력 값이 유효하지 않은 경우
      */
     public static CertificateRevocationList create(
+            java.util.UUID uploadId,
             CrlId id,
             IssuerName issuerName,
             CountryCode countryCode,
@@ -174,6 +188,7 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
             RevokedCertificates revokedCertificates
     ) {
         // 입력 값 검증
+        Objects.requireNonNull(uploadId, "Upload ID cannot be null");
         Objects.requireNonNull(id, "CRL ID cannot be null");
         Objects.requireNonNull(issuerName, "Issuer name cannot be null");
         Objects.requireNonNull(countryCode, "Country code cannot be null");
@@ -193,6 +208,7 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
         // CRL Aggregate 생성
         CertificateRevocationList crl = new CertificateRevocationList();
         crl.id = id;
+        crl.uploadId = uploadId;
         crl.issuerName = issuerName;
         crl.countryCode = countryCode;
         crl.validityPeriod = validityPeriod;
@@ -320,6 +336,19 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
             return false;
         }
         return this.countryCode.equals(countryCode);
+    }
+
+    /**
+     * 원본 업로드 파일 ID 조회
+     *
+     * <p>이 CRL이 추출된 원본 LDIF/ML 파일의 uploadId를 반환합니다.</p>
+     * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
+     *
+     * @return 원본 업로드 파일 ID (File Upload Context)
+     * @since Phase 17 Task 1.2
+     */
+    public java.util.UUID getUploadId() {
+        return uploadId;
     }
 
     /**

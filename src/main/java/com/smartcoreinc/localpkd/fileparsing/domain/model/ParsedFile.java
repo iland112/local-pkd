@@ -89,9 +89,13 @@ public class ParsedFile extends AggregateRoot<ParsedFileId> {
 
     /**
      * 파일 포맷 (LDIF, Master List)
+     *
+     * <p>FileFormat은 Value Object이므로 @Embedded 사용</p>
      */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "file_format", length = 50, nullable = false)
+    @Embedded
+    @AttributeOverrides({
+        @AttributeOverride(name = "type", column = @Column(name = "file_format", length = 50, nullable = false))
+    })
     private FileFormat fileFormat;
 
     /**

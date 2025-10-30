@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileupload.domain.event;
 
+import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.shared.domain.DomainEvent;
 
@@ -110,12 +111,19 @@ import java.util.UUID;
  * @param fileHash 파일 해시 (SHA-256)
  * @param fileSizeBytes 파일 크기 (바이트)
  * @param uploadedAt 업로드 일시
+ * @param processingMode 파일 처리 방식 (AUTO: 자동 처리, MANUAL: 수동 처리)
+ *
+ * <h3>Phase 18 업데이트 (Dual Mode Processing Support)</h3>
+ * <p>ProcessingMode 필드가 추가되었습니다.
+ * AUTO 모드일 경우 이벤트 핸들러가 자동으로 다음 단계(파싱)를 시작합니다.
+ * MANUAL 모드일 경우 사용자가 수동으로 파싱을 트리거할 때까지 대기합니다.</p>
  *
  * @author SmartCore Inc.
- * @version 1.0
- * @since 2025-10-18
+ * @version 1.1 (Phase 18)
+ * @since 2025-10-18, updated 2025-10-24
  * @see DomainEvent
  * @see UploadedFile
+ * @see ProcessingMode
  */
 public record FileUploadedEvent(
         UUID eventId,
@@ -124,11 +132,12 @@ public record FileUploadedEvent(
         String fileName,
         String fileHash,
         long fileSizeBytes,
-        LocalDateTime uploadedAt
+        LocalDateTime uploadedAt,
+        ProcessingMode processingMode
 ) implements DomainEvent {
 
     /**
-     * FileUploadedEvent 생성자
+     * FileUploadedEvent 생성자 (ProcessingMode 미포함, 기본값 AUTO)
      *
      * @param uploadId 업로드 ID
      * @param fileName 파일명
@@ -143,6 +152,27 @@ public record FileUploadedEvent(
             long fileSizeBytes,
             LocalDateTime uploadedAt
     ) {
+        this(uploadId, fileName, fileHash, fileSizeBytes, uploadedAt, ProcessingMode.AUTO);
+    }
+
+    /**
+     * FileUploadedEvent 생성자 (ProcessingMode 포함)
+     *
+     * @param uploadId 업로드 ID
+     * @param fileName 파일명
+     * @param fileHash 파일 해시
+     * @param fileSizeBytes 파일 크기 (바이트)
+     * @param uploadedAt 업로드 일시
+     * @param processingMode 파일 처리 방식 (AUTO 또는 MANUAL)
+     */
+    public FileUploadedEvent(
+            UploadId uploadId,
+            String fileName,
+            String fileHash,
+            long fileSizeBytes,
+            LocalDateTime uploadedAt,
+            ProcessingMode processingMode
+    ) {
         this(
                 UUID.randomUUID(),
                 LocalDateTime.now(),
@@ -150,7 +180,8 @@ public record FileUploadedEvent(
                 fileName,
                 fileHash,
                 fileSizeBytes,
-                uploadedAt
+                uploadedAt,
+                processingMode
         );
     }
 

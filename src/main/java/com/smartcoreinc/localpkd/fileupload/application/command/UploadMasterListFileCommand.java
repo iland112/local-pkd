@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileupload.application.command;
 
+import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
 import lombok.Builder;
 
 /**
@@ -15,6 +16,7 @@ import lombok.Builder;
  *   <li>파일 해시 (SHA-256, 중복 검사용)</li>
  *   <li>예상 체크섬 (SHA-1, optional)</li>
  *   <li>강제 업로드 여부 (forceUpload)</li>
+ *   <li>처리 모드 (AUTO 또는 MANUAL)</li>
  * </ul>
  *
  * <h3>사용 예시</h3>
@@ -26,6 +28,7 @@ import lombok.Builder;
  *     .fileHash("b2c3d4e5...")
  *     .expectedChecksum("sha1-checksum")  // optional
  *     .forceUpload(false)
+ *     .processingMode(ProcessingMode.AUTO)  // AUTO 또는 MANUAL
  *     .build();
  *
  * UploadFileResponse response = uploadMasterListFileUseCase.execute(command);
@@ -42,10 +45,11 @@ public record UploadMasterListFileCommand(
         Long fileSize,
         String fileHash,
         String expectedChecksum,  // optional
-        boolean forceUpload
+        boolean forceUpload,
+        ProcessingMode processingMode  // AUTO (default) or MANUAL
 ) {
     /**
-     * 기본 생성자 (forceUpload = false)
+     * 기본 생성자 (forceUpload = false, processingMode = AUTO)
      */
     public UploadMasterListFileCommand(
             String fileName,
@@ -54,7 +58,21 @@ public record UploadMasterListFileCommand(
             String fileHash,
             String expectedChecksum
     ) {
-        this(fileName, fileContent, fileSize, fileHash, expectedChecksum, false);
+        this(fileName, fileContent, fileSize, fileHash, expectedChecksum, false, ProcessingMode.AUTO);
+    }
+
+    /**
+     * 생성자 (processingMode 포함, forceUpload = false)
+     */
+    public UploadMasterListFileCommand(
+            String fileName,
+            byte[] fileContent,
+            Long fileSize,
+            String fileHash,
+            String expectedChecksum,
+            ProcessingMode processingMode
+    ) {
+        this(fileName, fileContent, fileSize, fileHash, expectedChecksum, false, processingMode);
     }
 
     /**

@@ -217,6 +217,24 @@ public class UploadedFile extends AggregateRoot<UploadId> {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    // ===== Dual Mode Processing 필드 (Phase 18) =====
+
+    /**
+     * 파일 처리 방식 (AUTO: 자동 처리, MANUAL: 수동 처리)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_mode", nullable = false, length = 20)
+    private ProcessingMode processingMode = ProcessingMode.AUTO;
+
+    /**
+     * MANUAL 모드에서 사용자 액션 대기 중인 단계
+     *
+     * <p>MANUAL 모드일 때만 사용됩니다.
+     * 값: UPLOAD_COMPLETED, PARSING_STARTED, PARSING_COMPLETED, VALIDATION_STARTED, VALIDATION_COMPLETED, LDAP_SAVING_STARTED</p>
+     */
+    @Column(name = "manual_pause_at_step", length = 50)
+    private String manualPauseAtStep;
+
     /**
      * 생성자 (protected)
      *
@@ -315,6 +333,40 @@ public class UploadedFile extends AggregateRoot<UploadId> {
             FileVersion version,
             FilePath filePath
     ) {
+        return createWithMetadata(
+            id, fileName, fileHash, fileSize, fileFormat,
+            collectionNumber, version, filePath, ProcessingMode.AUTO
+        );
+    }
+
+    /**
+     * 신규 파일 업로드 생성 (Factory Method) - 확장 버전 + ProcessingMode
+     *
+     * <p>모든 메타데이터와 처리 방식을 포함한 완전한 파일 업로드 생성.
+     * AUTO/MANUAL 모드를 지정할 수 있습니다.</p>
+     *
+     * @param id 업로드 ID
+     * @param fileName 파일명
+     * @param fileHash 파일 해시 (SHA-256)
+     * @param fileSize 파일 크기
+     * @param fileFormat 파일 포맷
+     * @param collectionNumber Collection 번호
+     * @param version 파일 버전
+     * @param filePath 파일 저장 경로
+     * @param processingMode 파일 처리 방식 (AUTO 또는 MANUAL)
+     * @return 업로드된 파일 객체
+     */
+    public static UploadedFile createWithMetadata(
+            UploadId id,
+            FileName fileName,
+            FileHash fileHash,
+            FileSize fileSize,
+            FileFormat fileFormat,
+            CollectionNumber collectionNumber,
+            FileVersion version,
+            FilePath filePath,
+            ProcessingMode processingMode
+    ) {
         UploadedFile uploadedFile = new UploadedFile(
                 id,
                 fileName,
@@ -331,6 +383,12 @@ public class UploadedFile extends AggregateRoot<UploadId> {
         uploadedFile.filePath = filePath;
         uploadedFile.status = UploadStatus.RECEIVED;
         uploadedFile.isNewerVersion = false;
+        uploadedFile.processingMode = processingMode;
+
+        // MANUAL 모드일 경우 초기 pause step 설정
+        if (processingMode.isManual()) {
+            uploadedFile.manualPauseAtStep = "UPLOAD_COMPLETED";
+        }
 
         // 도메인 이벤트 발행
         uploadedFile.addDomainEvent(new FileUploadedEvent(
@@ -338,7 +396,8 @@ public class UploadedFile extends AggregateRoot<UploadId> {
                 fileName.getValue(),
                 fileHash.getValue(),
                 fileSize.getBytes(),
-                uploadedFile.uploadedAt
+                uploadedFile.uploadedAt,
+                processingMode
         ));
 
         return uploadedFile;
@@ -634,5 +693,103 @@ public class UploadedFile extends AggregateRoot<UploadId> {
             return false;
         }
         return this.collectionNumber.equals(other.collectionNumber);
+    }
+
+    // ===== Dual Mode Processing 메서드 (Phase 18) =====
+
+    /**
+     * 처리 모드 조회
+     *
+     * @return ProcessingMode (AUTO 또는 MANUAL)
+     */
+    public ProcessingMode getProcessingMode() {
+        return processingMode != null ? processingMode : ProcessingMode.AUTO;
+    }
+
+    /**
+     * AUTO 모드 여부 확인
+     *
+     * @return AUTO 모드면 true
+     */
+    public boolean isAutoMode() {
+        return getProcessingMode().isAuto();
+    }
+
+    /**
+     * MANUAL 모드 여부 확인
+     *
+     * @return MANUAL 모드면 true
+     */
+    public boolean isManualMode() {
+        return getProcessingMode().isManual();
+    }
+
+    /**
+     * MANUAL 모드에서 사용자 액션 대기 중인 단계 조회
+     *
+     * <p>MANUAL 모드일 때만 의미가 있습니다.</p>
+     *
+     * @return 대기 중인 단계 (예: "UPLOAD_COMPLETED", "PARSING_COMPLETED")
+     */
+    public String getManualPauseAtStep() {
+        return manualPauseAtStep;
+    }
+
+    /**
+     * MANUAL 모드에서 다음 단계로 진행
+     *
+     * <p>MANUAL 모드에서만 사용됩니다.
+     * 파싱/검증/LDAP 등록 등의 단계 완료 후 사용자 액션을 기다리기 위해 호출됩니다.</p>
+     *
+     * @param nextStep 다음 대기 단계 (예: "PARSING_STARTED")
+     */
+    public void setManualPauseAtStep(String nextStep) {
+        if (this.isManualMode()) {
+            this.manualPauseAtStep = nextStep;
+        }
+    }
+
+    /**
+     * MANUAL 모드 초기화
+     *
+     * <p>파일 업로드 직후 MANUAL 모드를 설정할 때 호출됩니다.</p>
+     */
+    public void initializeManualMode() {
+        if (this.isManualMode()) {
+            this.manualPauseAtStep = "UPLOAD_COMPLETED";
+        }
+    }
+
+    /**
+     * MANUAL 모드에서 파싱 준비 상태로 전환
+     *
+     * <p>사용자가 "파싱 시작" 버튼을 클릭했을 때 호출됩니다.</p>
+     */
+    public void markReadyForParsing() {
+        if (this.isManualMode()) {
+            this.manualPauseAtStep = "PARSING_STARTED";
+        }
+    }
+
+    /**
+     * MANUAL 모드에서 검증 준비 상태로 전환
+     *
+     * <p>파싱 완료 후 사용자가 "검증 시작" 버튼을 클릭했을 때 호출됩니다.</p>
+     */
+    public void markReadyForValidation() {
+        if (this.isManualMode()) {
+            this.manualPauseAtStep = "VALIDATION_STARTED";
+        }
+    }
+
+    /**
+     * MANUAL 모드에서 LDAP 업로드 준비 상태로 전환
+     *
+     * <p>검증 완료 후 사용자가 "LDAP 업로드" 버튼을 클릭했을 때 호출됩니다.</p>
+     */
+    public void markReadyForLdapUpload() {
+        if (this.isManualMode()) {
+            this.manualPauseAtStep = "LDAP_SAVING_STARTED";
+        }
     }
 }

@@ -1,0 +1,199 @@
+package com.smartcoreinc.localpkd.certificatevalidation.application.event;
+
+import com.smartcoreinc.localpkd.certificatevalidation.application.command.UploadToLdapCommand;
+import com.smartcoreinc.localpkd.certificatevalidation.application.response.UploadToLdapResponse;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * UploadToLdapEventHandler - LDAP 업로드 이벤트 핸들러
+ *
+ * <p><b>목적</b>: `CertificatesValidatedEvent`를 리스닝하고 LDAP 업로드를 자동으로 트리거합니다.</p>
+ *
+ * <p><b>이벤트 구독</b>:
+ * <ul>
+ *   <li>CertificatesValidatedEvent: 인증서 검증 완료 시 발행</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>처리 방식</b>:
+ * <ul>
+ *   <li>동기: handleCertificatesValidated() - 트랜잭션 커밋 후 즉시 처리</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>처리 흐름</b>:
+ * <ol>
+ *   <li>CertificatesValidatedEvent 수신</li>
+ *   <li>UploadToLdapCommand 생성</li>
+ *   <li>UploadToLdapUseCase.execute() 호출</li>
+ *   <li>LDAP 업로드 결과 로깅</li>
+ *   <li>UploadToLdapCompletedEvent 발행 (향후 구현)</li>
+ * </ol>
+ * </p>
+ *
+ * <p><b>에러 처리</b>:
+ * <ul>
+ *   <li>LDAP 업로드 실패: 로깅 후 계속 진행</li>
+ *   <li>Exception: 로깅, 사용자에게 영향 최소화</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>Phase 17</b>: Event-Driven 파이프라인 완성 (자동 LDAP 업로드)</p>
+ *
+ * @see CertificatesValidatedEvent
+ * @see UploadToLdapUseCase
+ * @see UploadToLdapCommand
+ * @author SmartCore Inc.
+ * @version 1.0
+ * @since 2025-10-30 (Phase 17 Task 1.6)
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class UploadToLdapEventHandler {
+
+    private final UploadToLdapUseCase uploadToLdapUseCase;
+    private final CertificateRepository certificateRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${spring.ldap.base:dc=ldap,dc=smartcoreinc,dc=com}")
+    private String defaultBaseDn;
+
+    /**
+     * CertificatesValidatedEvent 동기 처리
+     *
+     * <p><b>실행 시점</b>: 트랜잭션 커밋 직후</p>
+     *
+     * <p><b>처리</b>:
+     * <ol>
+     *   <li>이벤트 로깅</li>
+     *   <li>UploadToLdapCommand 생성</li>
+     *   <li>LDAP 업로드 실행</li>
+     *   <li>결과 로깅</li>
+     * </ol>
+     * </p>
+     *
+     * @param event CertificatesValidatedEvent
+     * @since Phase 17 Task 1.6
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCertificatesValidated(CertificatesValidatedEvent event) {
+        log.info("=== CertificatesValidatedEvent received ===");
+        log.info("Upload ID: {}, Valid certificates: {}, Invalid certificates: {}",
+            event.getUploadId(),
+            event.getValidCertificateCount(),
+            event.getInvalidCertificateCount()
+        );
+
+        try {
+            // 1. 해당 업로드의 모든 인증서 조회 (Task 1.1 findByUploadId 활용)
+            List<Certificate> certificates = certificateRepository.findByUploadId(event.getUploadId());
+
+            if (certificates.isEmpty()) {
+                log.warn("No certificates found for upload ID: {}", event.getUploadId());
+                return;
+            }
+
+            // 2. 인증서 ID 추출
+            List<java.util.UUID> certificateIds = certificates.stream()
+                .map(cert -> cert.getId().getId())
+                .collect(Collectors.toList());
+
+            log.debug("Found {} certificates to upload to LDAP", certificateIds.size());
+
+            // 3. UploadToLdapCommand 생성
+            UploadToLdapCommand command = UploadToLdapCommand.builder()
+                .uploadId(event.getUploadId())
+                .certificateIds(certificateIds)
+                .baseDn(defaultBaseDn)
+                .isBatch(certificateIds.size() > 1)
+                .build();
+
+            log.debug("Executing UploadToLdapUseCase with {} certificates", certificateIds.size());
+
+            // 4. LDAP 업로드 실행
+            UploadToLdapResponse response = uploadToLdapUseCase.execute(command);
+
+            // 5. 결과 로깅
+            logUploadResult(response);
+
+            // 6. 성공 이벤트 발행 (향후 구현)
+            // publishUploadCompletedEvent(response);
+
+        } catch (Exception e) {
+            log.error("Error handling CertificatesValidatedEvent for upload ID: {}", event.getUploadId(), e);
+            // 실패 이벤트 발행 (향후 구현)
+            // publishUploadFailedEvent(event, e);
+        }
+    }
+
+    // ========== Helper Methods ==========
+
+    /**
+     * LDAP 업로드 결과 로깅
+     *
+     * @param response 업로드 응답
+     */
+    private void logUploadResult(UploadToLdapResponse response) {
+        if (response.isSuccess()) {
+            log.info("✅ LDAP upload success: {}/{} certificates uploaded",
+                response.getSuccessCount(),
+                response.getTotalCount()
+            );
+        } else if (response.isPartialSuccess()) {
+            log.warn("⚠️ LDAP upload partial success: {}/{} certificates uploaded ({} failed)",
+                response.getSuccessCount(),
+                response.getTotalCount(),
+                response.getFailureCount()
+            );
+            response.getFailedCertificateIds().forEach(id ->
+                log.debug("Failed certificate ID: {}", id)
+            );
+        } else {
+            log.error("❌ LDAP upload failed: {}",
+                response.getErrorMessage() != null ?
+                    response.getErrorMessage() :
+                    "Unknown error"
+            );
+        }
+
+        // 성공한 DN 로깅
+        if (response.getSuccessCount() > 0) {
+            log.debug("Uploaded LDAP DNs:");
+            response.getUploadedDns().forEach(dn ->
+                log.debug("  - {}", dn)
+            );
+        }
+    }
+
+    /**
+     * 업로드 완료 이벤트 발행 (향후 구현)
+     *
+     * @param response 업로드 응답
+     */
+    private void publishUploadCompletedEvent(UploadToLdapResponse response) {
+        // TODO: UploadToLdapCompletedEvent 구현 및 발행
+        log.debug("Publishing UploadToLdapCompletedEvent (TODO)");
+    }
+
+    /**
+     * 업로드 실패 이벤트 발행 (향후 구현)
+     *
+     * @param event 원본 이벤트
+     * @param exception 발생한 예외
+     */
+    private void publishUploadFailedEvent(CertificatesValidatedEvent event, Exception exception) {
+        // TODO: UploadToLdapFailedEvent 구현 및 발행
+        log.debug("Publishing UploadToLdapFailedEvent (TODO): {}", exception.getMessage());
+    }
+}

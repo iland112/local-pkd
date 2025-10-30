@@ -16,7 +16,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.time.LocalDateTime;
 
 /**
- * UploadToLdapUseCase - LDAP 서버 업로드 Use Case
+ * UploadToLdapUseCase - LDAP 서버 업로드 Use Case (LEGACY - DO NOT USE)
+ *
+ * <p><b>⚠️ DEPRECATED</b>: This is a legacy simulation implementation from earlier phases.</p>
+ * <p><b>Use instead</b>: {@code com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase}</p>
  *
  * <p><b>Application Service</b>: 검증된 인증서들을 LDAP 서버에 업로드합니다.</p>
  *
@@ -61,10 +64,13 @@ import java.time.LocalDateTime;
  *     log.error("LDAP upload failed: {}", response.errorMessage());
  * }
  * </pre>
+ *
+ * @deprecated Use {@code certificatevalidation.application.usecase.UploadToLdapUseCase} instead
  */
 @Slf4j
-@Service
+@Service("ldapintegrationUploadToLdapUseCase")  // Renamed bean to avoid conflict with Phase 17 version
 @RequiredArgsConstructor
+@Deprecated(since = "Phase 17", forRemoval = true)
 public class UploadToLdapUseCase {
 
     private final ProgressService progressService;

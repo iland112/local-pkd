@@ -202,6 +202,15 @@ public class Certificate extends AggregateRoot<CertificateId> {
     private LocalDateTime updatedAt;
 
     /**
+     * 원본 업로드 파일 ID (File Upload Context)
+     *
+     * <p>이 인증서가 추출된 원본 LDIF/ML 파일의 uploadId입니다.</p>
+     * <p>Cross-Context Reference: UploadedFile Aggregate와 연결</p>
+     */
+    @Column(name = "upload_id", nullable = false)
+    private java.util.UUID uploadId;
+
+    /**
      * 인증서가 LDAP 디렉토리에 저장되었는지 여부
      */
     @Column(name = "uploaded_to_ldap", nullable = false)
@@ -226,6 +235,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
      */
     private Certificate(
             CertificateId id,
+            java.util.UUID uploadId,
             X509Data x509Data,
             SubjectInfo subjectInfo,
             IssuerInfo issuerInfo,
@@ -234,6 +244,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
             String signatureAlgorithm
     ) {
         this.id = id;
+        this.uploadId = uploadId;
         this.x509Data = x509Data;
         this.subjectInfo = subjectInfo;
         this.issuerInfo = issuerInfo;
@@ -250,6 +261,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
     /**
      * 새로운 Certificate 생성 (Static Factory Method)
      *
+     * @param uploadId 원본 업로드 파일 ID
      * @param x509Data X.509 인증서 데이터
      * @param subjectInfo 주체 정보
      * @param issuerInfo 발급자 정보
@@ -260,6 +272,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
      * @throws IllegalArgumentException 필수 필드가 null인 경우
      */
     public static Certificate create(
+            java.util.UUID uploadId,
             X509Data x509Data,
             SubjectInfo subjectInfo,
             IssuerInfo issuerInfo,
@@ -267,6 +280,9 @@ public class Certificate extends AggregateRoot<CertificateId> {
             CertificateType certificateType,
             String signatureAlgorithm
     ) {
+        if (uploadId == null) {
+            throw new IllegalArgumentException("uploadId cannot be null");
+        }
         if (x509Data == null) {
             throw new IllegalArgumentException("x509Data cannot be null");
         }
@@ -288,7 +304,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
 
         CertificateId id = CertificateId.newId();
         Certificate cert = new Certificate(
-            id, x509Data, subjectInfo, issuerInfo, validity, certificateType, signatureAlgorithm
+            id, uploadId, x509Data, subjectInfo, issuerInfo, validity, certificateType, signatureAlgorithm
         );
 
         // Domain Event 발행: 인증서 생성됨
@@ -346,6 +362,10 @@ public class Certificate extends AggregateRoot<CertificateId> {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public java.util.UUID getUploadId() {
+        return uploadId;
     }
 
     public Boolean isUploadedToLdap() {
