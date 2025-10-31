@@ -10,7 +10,7 @@
        <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}">
   -->
 
-  <th:block th:fragment="mode-selector(selected='AUTO')">
+  <th:block th:fragment="mode-selector(selected)">
     <div class="form-control w-full">
       <label class="label">
         <span class="label-text font-semibold">
@@ -27,7 +27,7 @@
             name="processingMode"
             value="AUTO"
             class="radio radio-primary"
-            th:checked="${selected == 'AUTO'}"
+            th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
             x-model="processingMode"
           />
           <span class="label-text flex-1">
@@ -51,7 +51,7 @@
             name="processingMode"
             value="MANUAL"
             class="radio radio-secondary"
-            th:checked="${selected == 'MANUAL'}"
+            th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
             x-model="processingMode"
           />
           <span class="label-text flex-1">

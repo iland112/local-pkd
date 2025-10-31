@@ -10,7 +10,7 @@
        <th:block th:replace="~{fragments/manual-mode-control-panel :: control-panel(uploadId='abc-123')}">
   -->
 
-  <th:block th:fragment="control-panel(uploadId='')">
+  <th:block th:fragment="control-panel(uploadId)">
     <!-- Panel only visible in MANUAL mode -->
     <div x-show="processingMode === 'MANUAL'" x-transition class="mt-6">
       <div class="card bg-secondary bg-opacity-10 border-2 border-secondary">
