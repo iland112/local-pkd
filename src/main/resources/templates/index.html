@@ -35,187 +35,165 @@
         </div>
 
         <!-- 시스템 상태 카드 -->
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
           <!-- PostgreSQL 데이터베이스 상태 -->
-          <div class="bg-white rounded-lg shadow-md p-6 border-l-4" :class="dbConnected ? 'border-green-500' : 'border-red-500'">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">
+          <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4" :class="dbConnected ? 'border-green-500' : 'border-red-500'">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex-1">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   PostgreSQL 상태
                 </h3>
-                <div class="mt-2">
+                <div class="flex items-baseline gap-2">
                   <span class="text-2xl font-bold" :class="dbConnected ? 'text-green-600' : 'text-red-600'" x-text="dbConnected ? '연결됨' : '연결 안됨'"></span>
-                  <p class="text-sm text-gray-600 mt-1" x-text="dbMessage"></p>
                 </div>
+                <p class="text-xs text-gray-500 mt-1" x-text="dbMessage"></p>
               </div>
-              <div class="flex-shrink-0">
-                <i class="fas fa-database text-3xl" :class="dbConnected ? 'text-green-500' : 'text-red-500'"></i>
+              <div class="flex-shrink-0 ml-3">
+                <i class="fas fa-database text-4xl" :class="dbConnected ? 'text-green-500' : 'text-red-500'"></i>
               </div>
             </div>
-            <div class="mt-4">
-              <button
-                @click="testDatabaseConnection()"
-                :disabled="dbTesting"
-                class="w-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                <i class="fas mr-2" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
-                <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
-              </button>
-            </div>
+            <button
+              @click="testDatabaseConnection()"
+              :disabled="dbTesting"
+              class="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              <i class="fas mr-1" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
+              <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
+            </button>
           </div>
 
-          <!-- 업로드 통계 -->
-          <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+          <!-- 총 업로드 -->
+          <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-indigo-500">
             <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">
+              <div class="flex-1">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   총 업로드
                 </h3>
-                <div class="mt-2">
-                  <span class="text-2xl font-bold text-blue-600" x-text="statistics.totalCount"></span>
-                  <p class="text-sm text-gray-600 mt-1">파일 수</p>
+                <div class="flex items-baseline gap-2">
+                  <span class="text-3xl font-bold text-indigo-600" x-text="statistics.totalCount"></span>
+                  <span class="text-sm text-gray-500">files</span>
                 </div>
+                <p class="text-xs text-gray-500 mt-1">전체 파일 수</p>
               </div>
-              <div class="flex-shrink-0">
-                <i class="fas fa-upload text-3xl text-blue-500"></i>
+              <div class="flex-shrink-0 ml-3">
+                <i class="fas fa-upload text-4xl text-indigo-500"></i>
               </div>
             </div>
           </div>
 
           <!-- 성공률 -->
-          <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+          <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-green-500">
             <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">
+              <div class="flex-1">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   성공률
                 </h3>
-                <div class="mt-2">
-                  <span class="text-2xl font-bold text-green-600" x-text="statistics.successRate.toFixed(1) + '%'"></span>
-                  <p class="text-sm text-gray-600 mt-1"><span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span></p>
+                <div class="flex items-baseline gap-2">
+                  <span class="text-3xl font-bold text-green-600" x-text="statistics.successRate.toFixed(1) + '%'"></span>
                 </div>
+                <p class="text-xs text-gray-500 mt-1">
+                  <span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span> 파일
+                </p>
               </div>
-              <div class="flex-shrink-0">
-                <i class="fas fa-check-circle text-3xl text-green-500"></i>
+              <div class="flex-shrink-0 ml-3">
+                <i class="fas fa-check-circle text-4xl text-green-500"></i>
               </div>
             </div>
           </div>
 
           <!-- 실패 수 -->
-          <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+          <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-red-500">
             <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">
+              <div class="flex-1">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   실패
                 </h3>
-                <div class="mt-2">
-                  <span class="text-2xl font-bold text-red-600" x-text="statistics.failedCount"></span>
-                  <p class="text-sm text-gray-600 mt-1">파일 수</p>
+                <div class="flex items-baseline gap-2">
+                  <span class="text-3xl font-bold text-red-600" x-text="statistics.failedCount"></span>
+                  <span class="text-sm text-gray-500">files</span>
                 </div>
+                <p class="text-xs text-gray-500 mt-1">실패한 파일 수</p>
               </div>
-              <div class="flex-shrink-0">
-                <i class="fas fa-times-circle text-3xl text-red-500"></i>
+              <div class="flex-shrink-0 ml-3">
+                <i class="fas fa-times-circle text-4xl text-red-500"></i>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 메인 기능 메뉴 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <!-- Master List 업로드 -->
+        <div class="max-w-5xl mx-auto mb-8">
+          <!-- 통합 파일 업로드 (LDIF & Master List) -->
           <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-            <div class="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
               <div class="flex items-center">
-                <i class="fas fa-file-upload text-2xl text-blue-100 mr-4"></i>
+                <i class="fas fa-file-upload text-2xl text-indigo-100 mr-4"></i>
                 <div>
                   <h2 class="text-xl font-bold text-white">
-                    Master List 업로드
+                    파일 업로드 (통합)
                   </h2>
-                  <p class="text-blue-100 text-sm">
-                    ICAO CSCA Master List 파일 업로드
+                  <p class="text-indigo-100 text-sm">
+                    LDIF 및 Master List 파일 업로드 (자동 형식 감지)
                   </p>
                 </div>
               </div>
             </div>
             <div class="p-6">
-              <div class="space-y-3">
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-file-alt text-blue-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">Master List 파일 업로드</p>
-                    <p class="text-sm text-gray-600">.ml 파일 형식 지원</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-3">
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-file-alt text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">다중 형식 지원</p>
+                      <p class="text-sm text-gray-600">.ldif 및 .ml 파일 자동 감지</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-fingerprint text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">중복 파일 검사</p>
+                      <p class="text-sm text-gray-600">SHA-256 해시 기반 검증</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-history text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">업로드 이력 관리</p>
+                      <p class="text-sm text-gray-600">파일 정보 및 상태 추적</p>
+                    </div>
                   </div>
                 </div>
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-fingerprint text-blue-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">중복 파일 검사</p>
-                    <p class="text-sm text-gray-600">SHA-256 해시 기반 검증</p>
+                <div class="space-y-3">
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-cogs text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">이중 모드 처리</p>
+                      <p class="text-sm text-gray-600">AUTO (자동) / MANUAL (수동) 선택</p>
+                    </div>
                   </div>
-                </div>
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-history text-blue-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">업로드 이력 관리</p>
-                    <p class="text-sm text-gray-600">파일 정보 및 상태 추적</p>
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-chart-line text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">실시간 진행 상황</p>
+                      <p class="text-sm text-gray-600">SSE 기반 진행률 표시</p>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div class="mt-6 pt-4 border-t border-gray-200">
-                <a
-                  href="/masterlist/upload"
-                  class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
-                >
-                  <i class="fas fa-upload"></i>
-                  Master List 업로드
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- LDIF 파일 업로드 -->
-          <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-            <div class="bg-gradient-to-r from-green-500 to-green-600 px-6 py-4">
-              <div class="flex items-center">
-                <i class="fas fa-file-code text-2xl text-green-100 mr-4"></i>
-                <div>
-                  <h2 class="text-xl font-bold text-white">LDIF 파일 업로드</h2>
-                  <p class="text-green-100 text-sm">
-                    LDAP 데이터 교환 형식 파일 업로드
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div class="p-6">
-              <div class="space-y-3">
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-file-alt text-green-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">LDIF 파일 업로드</p>
-                    <p class="text-sm text-gray-600">.ldif 파일 형식 지원</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-fingerprint text-green-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">중복 파일 검사</p>
-                    <p class="text-sm text-gray-600">SHA-256 해시 기반 검증</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-3">
-                  <i class="fas fa-history text-green-500 mt-1"></i>
-                  <div>
-                    <p class="font-medium text-gray-900">업로드 이력 관리</p>
-                    <p class="text-sm text-gray-600">파일 정보 및 상태 추적</p>
+                  <div class="flex items-start gap-3">
+                    <i class="fas fa-shield-alt text-indigo-500 mt-1"></i>
+                    <div>
+                      <p class="font-medium text-gray-900">체크섬 검증</p>
+                      <p class="text-sm text-gray-600">SHA-1 체크섬 검증 지원</p>
+                    </div>
                   </div>
                 </div>
               </div>
               <div class="mt-6 pt-4 border-t border-gray-200">
                 <a
-                  href="/ldif/upload"
-                  class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
+                  href="/file/upload"
+                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
                 >
                   <i class="fas fa-upload"></i>
-                  LDIF 파일 업로드
+                  파일 업로드 (LDIF / Master List)
                 </a>
               </div>
             </div>
@@ -223,44 +201,44 @@
         </div>
 
         <!-- 최근 활동 및 바로가기 -->
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
           <!-- 최근 활동 -->
           <div class="xl:col-span-2">
-            <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
               <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                  <i class="fas fa-history text-blue-500 mr-3"></i>
+                <h3 class="text-lg font-bold text-gray-900 flex items-center">
+                  <i class="fas fa-history text-indigo-500 mr-3"></i>
                   최근 업로드 이력
                 </h3>
                 <button
                   @click="loadRecentActivity()"
                   :disabled="loadingRecent"
-                  class="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                  class="text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50 p-2 rounded-md hover:bg-indigo-50"
                 >
                   <i class="fas" :class="loadingRecent ? 'fa-spinner animate-spin' : 'fa-sync-alt'"></i>
                 </button>
               </div>
 
-              <div x-show="recentActivity.length === 0 && !loadingRecent" class="text-center py-8 text-gray-500">
-                <i class="fas fa-inbox text-4xl mb-4"></i>
-                <p>최근 업로드 이력이 없습니다.</p>
+              <div x-show="recentActivity.length === 0 && !loadingRecent" class="text-center py-12 text-gray-500">
+                <i class="fas fa-inbox text-5xl mb-4 text-gray-300"></i>
+                <p class="font-medium">최근 업로드 이력이 없습니다.</p>
                 <p class="text-sm mt-2">파일을 업로드하여 시작하세요.</p>
               </div>
 
-              <div x-show="loadingRecent" class="text-center py-8">
-                <i class="fas fa-spinner animate-spin text-4xl text-blue-500 mb-4"></i>
+              <div x-show="loadingRecent" class="text-center py-12">
+                <i class="fas fa-spinner animate-spin text-5xl text-indigo-500 mb-4"></i>
                 <p class="text-gray-500">로딩 중...</p>
               </div>
 
               <div x-show="recentActivity.length > 0 && !loadingRecent" class="space-y-3">
                 <template x-for="item in recentActivity" :key="item.id">
-                  <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i class="fas fa-file text-blue-500 mr-3"></i>
-                    <div class="flex-1">
-                      <p class="font-medium text-gray-900" x-text="item.filename"></p>
-                      <p class="text-sm text-gray-500" x-text="formatDateTime(item.uploadedAt)"></p>
+                  <div class="flex items-center p-4 bg-gray-50 rounded-lg hover:bg-indigo-50 hover:shadow-md transition-all duration-200 cursor-pointer">
+                    <i class="fas fa-file text-indigo-500 mr-4 text-lg"></i>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-semibold text-gray-900 truncate" x-text="item.filename"></p>
+                      <p class="text-xs text-gray-500 mt-0.5" x-text="formatDateTime(item.uploadedAt)"></p>
                     </div>
-                    <span class="badge" :class="{
+                    <span class="badge ml-3 flex-shrink-0" :class="{
                       'badge-success': item.status === 'COMPLETED',
                       'badge-error': item.status === 'FAILED',
                       'badge-warning': item.status !== 'COMPLETED' && item.status !== 'FAILED'
@@ -269,9 +247,9 @@
                 </template>
               </div>
 
-              <div x-show="recentActivity.length > 0" class="mt-4 text-center">
-                <a href="/upload-history" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                  전체 이력 보기 <i class="fas fa-arrow-right ml-1"></i>
+              <div x-show="recentActivity.length > 0" class="mt-6 text-center">
+                <a href="/upload-history" class="inline-flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-semibold hover:underline">
+                  전체 이력 보기 <i class="fas fa-arrow-right ml-2"></i>
                 </a>
               </div>
             </div>
@@ -279,61 +257,54 @@
 
           <!-- 바로가기 -->
           <div class="space-y-6">
-            <div class="bg-white rounded-lg shadow-lg p-6">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
                 <i class="fas fa-bolt text-indigo-500 mr-3"></i>
                 빠른 메뉴
               </h3>
               <div class="space-y-2">
                 <a
-                  href="/masterlist/upload"
-                  class="flex items-center p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  href="/file/upload"
+                  class="flex items-center p-3 text-gray-700 font-medium hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all duration-200 hover:shadow-sm"
                 >
-                  <i class="fas fa-file-upload mr-3"></i>
-                  Master List 업로드
-                </a>
-                <a
-                  href="/ldif/upload"
-                  class="flex items-center p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                >
-                  <i class="fas fa-file-code mr-3"></i>
-                  LDIF 파일 업로드
+                  <i class="fas fa-file-upload mr-3 w-5"></i>
+                  파일 업로드 (LDIF/ML)
                 </a>
                 <a
                   href="/upload-history"
-                  class="flex items-center p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                  class="flex items-center p-3 text-gray-700 font-medium hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:shadow-sm"
                 >
-                  <i class="fas fa-history mr-3"></i>
+                  <i class="fas fa-history mr-3 w-5"></i>
                   업로드 이력
                 </a>
                 <button
                   @click="$store.app.testLdapConnection()"
-                  class="w-full flex items-center p-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                  class="w-full flex items-center p-3 text-gray-700 font-medium hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all duration-200 hover:shadow-sm"
                 >
-                  <i class="fas fa-plug mr-3"></i>
+                  <i class="fas fa-plug mr-3 w-5"></i>
                   LDAP 연결 테스트
                 </button>
               </div>
             </div>
 
             <!-- 시스템 정보 -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <i class="fas fa-info-circle text-blue-500 mr-3"></i>
+            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <i class="fas fa-info-circle text-indigo-500 mr-3"></i>
                 시스템 정보
               </h3>
-              <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                  <span class="text-gray-600">버전:</span>
-                  <span class="font-medium">v1.0.0</span>
+              <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                  <span class="text-gray-600 font-medium">버전</span>
+                  <span class="font-semibold text-gray-900">v1.0.0</span>
                 </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-600">최대 파일 크기:</span>
-                  <span class="font-medium">100MB</span>
+                <div class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                  <span class="text-gray-600 font-medium">최대 파일 크기</span>
+                  <span class="font-semibold text-gray-900">100MB</span>
                 </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-600">지원 형식:</span>
-                  <span class="font-medium">LDIF, ML</span>
+                <div class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                  <span class="text-gray-600 font-medium">지원 형식</span>
+                  <span class="font-semibold text-gray-900">LDIF, ML</span>
                 </div>
               </div>
             </div>
@@ -530,18 +501,13 @@
 
         // 키보드 단축키
         document.addEventListener('keydown', function(e) {
-          // Ctrl+1: Master List
+          // Ctrl+1: File Upload (Unified)
           if (e.ctrlKey && e.key === '1') {
             e.preventDefault();
-            window.location.href = '/masterlist/upload';
+            window.location.href = '/file/upload';
           }
-          // Ctrl+2: LDIF
+          // Ctrl+2: Upload History
           if (e.ctrlKey && e.key === '2') {
-            e.preventDefault();
-            window.location.href = '/ldif/upload';
-          }
-          // Ctrl+3: Upload History
-          if (e.ctrlKey && e.key === '3') {
             e.preventDefault();
             window.location.href = '/upload-history';
           }
