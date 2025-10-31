@@ -457,8 +457,8 @@
             // Check duplicate via API
             async checkDuplicate() {
               const apiEndpoint = this.fileType === 'ldif'
-                ? '/ldif/api/check-duplicate'
-                : '/masterlist/api/check-duplicate';
+                ? '/file/ldif/api/check-duplicate'
+                : '/file/masterlist/api/check-duplicate';
 
               const response = await fetch(apiEndpoint, {
                 method: 'POST',
