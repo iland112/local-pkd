@@ -7,9 +7,280 @@
 >
   <body>
     <div layout:fragment="content">
+      <!-- Alpine.js Component Registration (must be before x-data usage) -->
+      <script>
+        document.addEventListener('alpine:init', () => {
+          Alpine.data('uploadPageState', () => ({
+            // File type detection
+            fileType: 'unknown', // 'ldif' or 'ml'
+            fileTypeIcon: 'fas fa-question-circle',
+            fileTypeTitle: '파일 업로드',
+            fileTypeDescription: '파일을 선택해주세요',
+            fileTypeInfoText: 'LDIF (LDAP Data Interchange Format) 또는 Master List 파일',
+            fileAccept: '.ldif,.ml',
+            isValidFileType: true,
+            fileInfo: '',
+
+            // Upload state
+            selectedFile: null,
+            calculatedHash: null,
+            existingFileId: null,
+
+            // Processing mode
+            processingMode: 'AUTO',
+
+            // Initialize state
+            init() {
+              console.log('Upload page initialized via Alpine.data()');
+            },
+
+            // Handle file selection
+            handleFileSelection(event) {
+              this.selectedFile = event.target.files[0];
+              if (!this.selectedFile) return;
+
+              // Detect file type
+              const fileName = this.selectedFile.name.toLowerCase();
+              if (fileName.endsWith('.ldif')) {
+                this.setFileLdif();
+              } else if (fileName.endsWith('.ml')) {
+                this.setFileMasterList();
+              } else {
+                this.setFileUnknown();
+              }
+
+              // Update file info
+              this.fileInfo = `${this.selectedFile.name} (${formatFileSize(this.selectedFile.size)})`;
+            },
+
+            // Set to LDIF mode
+            setFileLdif() {
+              this.fileType = 'ldif';
+              this.fileTypeIcon = 'fas fa-file-code';
+              this.fileTypeTitle = 'LDIF 파일 업로드';
+              this.fileTypeDescription = 'LDIF (LDAP Data Interchange Format) 파일을 업로드합니다.';
+              this.fileTypeInfoText = 'RFC 2849 표준 LDIF';
+              this.isValidFileType = true;
+              this.updateFormAction();
+            },
+
+            // Set to Master List mode
+            setFileMasterList() {
+              this.fileType = 'ml';
+              this.fileTypeIcon = 'fas fa-file-signature';
+              this.fileTypeTitle = 'Master List 파일 업로드';
+              this.fileTypeDescription = 'ICAO CSCA Master List (CMS 서명 파일)을 업로드합니다.';
+              this.fileTypeInfoText = 'CMS (Cryptographic Message Syntax)';
+              this.isValidFileType = true;
+              this.updateFormAction();
+            },
+
+            // Set to unknown file
+            setFileUnknown() {
+              this.fileType = 'unknown';
+              this.fileTypeIcon = 'fas fa-question-circle';
+              this.fileTypeTitle = '지원하지 않는 파일 형식';
+              this.fileTypeDescription = 'LDIF (.ldif) 또는 Master List (.ml) 파일만 업로드 가능합니다.';
+              this.isValidFileType = false;
+              this.fileInfo = '';
+            },
+
+            // Update form action (unified endpoint)
+            updateFormAction() {
+              const form = document.getElementById('uploadForm');
+              form.action = '/file/upload';
+            },
+
+            // Main upload handler
+            async handleUpload() {
+              console.log('handleUpload called');
+              console.log('selectedFile:', this.selectedFile);
+              console.log('processingMode:', this.processingMode);
+
+              if (!this.selectedFile) {
+                console.log('No file selected, showing toast');
+                showToast('파일을 선택해주세요.', 'warning');
+                return;
+              }
+
+              if (!this.isValidFileType) {
+                showToast('지원하지 않는 파일 형식입니다.', 'error');
+                return;
+              }
+
+              // Validate file size
+              const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+              if (this.selectedFile.size > MAX_FILE_SIZE) {
+                showToast('파일 크기는 100MB 이하여야 합니다.', 'error');
+                return;
+              }
+
+              try {
+                // Step 1: Calculate SHA-256 hash
+                showProgress('파일 해시 계산 중...', 30);
+                this.calculatedHash = await calculateSHA256(this.selectedFile);
+                document.getElementById('fileHashInput').value = this.calculatedHash;
+
+                // Step 2: Check duplicate
+                showProgress('중복 파일 검사 중...', 60);
+                const isDuplicate = await this.checkDuplicate();
+
+                if (isDuplicate) {
+                  hideProgress();
+                  return; // Modal shown, user needs to decide
+                }
+
+                // Step 3: Submit form via AJAX to capture uploadId
+                showProgress('파일 업로드 중...', 90);
+                await this.submitFormAjax();
+
+              } catch (error) {
+                console.error('Upload error:', error);
+                hideProgress();
+                showToast('업로드 중 오류가 발생했습니다: ' + error.message, 'error');
+              }
+            },
+
+            // Check duplicate via API
+            async checkDuplicate() {
+              const apiEndpoint = this.fileType === 'ldif'
+                ? '/file/ldif/api/check-duplicate'
+                : '/file/masterlist/api/check-duplicate';
+
+              const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileName: this.selectedFile.name,
+                  fileSize: this.selectedFile.size,
+                  fileHash: this.calculatedHash
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error('중복 검사 실패');
+              }
+
+              const result = await response.json();
+
+              if (result.isDuplicate) {
+                // Show duplicate modal
+                document.getElementById('duplicateMessage').textContent = result.message;
+                document.getElementById('dupFileName').textContent = result.existingFileName || '-';
+                document.getElementById('dupFileId').textContent = result.existingFileId || '-';
+                document.getElementById('dupUploadDate').textContent = result.existingUploadDate
+                  ? new Date(result.existingUploadDate).toLocaleString('ko-KR')
+                  : '-';
+                document.getElementById('dupVersion').textContent = result.existingVersion || '-';
+                document.getElementById('dupStatus').textContent = result.existingStatus || '-';
+
+                this.existingFileId = result.existingFileId;
+
+                document.getElementById('duplicateModal').showModal();
+                return true;
+              }
+
+              return false;
+            },
+
+            // Submit form via AJAX
+            async submitFormAjax() {
+              const formData = new FormData(document.getElementById('uploadForm'));
+
+              const response = await fetch(document.getElementById('uploadForm').action, {
+                method: 'POST',
+                body: formData
+              });
+
+              if (!response.ok) {
+                throw new Error('파일 업로드 실패');
+              }
+
+              // Parse HTML response to extract uploadId from redirect
+              const html = await response.text();
+              const match = html.match(/\/upload-history\?id=([a-f0-9-]+)/);
+              let uploadId = match ? match[1] : null;
+
+              if (!uploadId && response.redirected) {
+                const urlParams = new URL(response.url).searchParams;
+                uploadId = urlParams.get('id');
+              }
+
+              if (!uploadId) {
+                const idMatch = html.match(/id["\']?\s*[:=]\s*["\']?([a-f0-9\-]+)["\']?/);
+                uploadId = idMatch ? idMatch[1] : null;
+              }
+
+              if (uploadId) {
+                hideProgress();
+                showToast('파일 업로드 완료. 처리를 시작합니다.', 'success');
+
+                // Trigger certificate validation (future)
+                await this.triggerProcessing(uploadId);
+              } else {
+                // Fallback: redirect after a short delay
+                hideProgress();
+                showToast('파일 업로드 완료', 'success');
+                setTimeout(() => {
+                  window.location.href = '/upload-history';
+                }, 2000);
+              }
+            },
+
+            // Trigger processing based on mode
+            async triggerProcessing(uploadId) {
+              if (this.processingMode === 'AUTO') {
+                // AUTO mode: Start SSE progress
+                await this.triggerCertificateValidation(uploadId);
+              } else {
+                // MANUAL mode: Wait for user action
+                hideProgress();
+                showToast('파일 업로드 완료. 수동 모드에서 다음 단계를 진행하세요.', 'info');
+                setTimeout(() => {
+                  window.location.href = '/upload-history?id=' + uploadId;
+                }, 2000);
+              }
+            },
+
+            // Trigger certificate validation (AUTO mode)
+            async triggerCertificateValidation(uploadId) {
+              try {
+                // Start SSE progress modal
+                startSSEProgress(uploadId);
+
+                // Call certificate validation API
+                const response = await fetch('/api/certificates/validate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    uploadId: uploadId,
+                    parsedFileId: uploadId,
+                    certificateCount: 0,
+                    crlCount: 0
+                  })
+                });
+
+                if (!response.ok) {
+                  const error = await response.json();
+                  throw new Error(error.message || '인증서 검증 API 호출 실패');
+                }
+
+                const result = await response.json();
+                console.log('Certificate validation initiated:', result);
+
+              } catch (error) {
+                console.error('Certificate validation error:', error);
+                closeProgressModal(false);
+                showToast('인증서 검증 중 오류: ' + error.message, 'error');
+              }
+            }
+          }));
+        });
+      </script>
+
       <div
         class="container mx-auto px-4 py-8 max-w-5xl"
-        x-data="uploadPageState()"
+        x-data="uploadPageState"
         @alpine:init="init()"
       >
 
@@ -41,11 +312,11 @@
 
                 <!-- Processing Mode Selector Fragment -->
                 <div class="mb-6 pb-6 border-b">
-                  <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}" />
+                  <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector('AUTO')}" />
                 </div>
 
                 <!-- Manual Mode Control Panel Fragment -->
-                <th:block th:replace="~{fragments/manual-mode-control-panel :: control-panel(uploadId='')}" />
+                <th:block th:replace="~{fragments/manual-mode-control-panel :: control-panel('')}" />
 
                 <!-- Upload Form -->
                 <form id="uploadForm" method="post" enctype="multipart/form-data">
@@ -329,278 +600,6 @@
 
     <th:block layout:fragment="script-content">
       <script>
-        /**
-         * Alpine.js State Management for Unified Upload Page
-         */
-        function uploadPageState() {
-          return {
-            // File type detection
-            fileType: 'unknown', // 'ldif' or 'ml'
-            fileTypeIcon: 'fas fa-question-circle',
-            fileTypeTitle: '파일 업로드',
-            fileTypeDescription: '파일을 선택해주세요',
-            fileTypeInfoText: 'LDIF (LDAP Data Interchange Format) 또는 Master List 파일',
-            fileAccept: '.ldif,.ml',
-            isValidFileType: true,
-            fileInfo: '',
-
-            // Upload state
-            selectedFile: null,
-            calculatedHash: null,
-            existingFileId: null,
-
-            // Processing mode
-            processingMode: 'AUTO',
-
-            // Initialize state
-            init() {
-              console.log('Upload page initialized');
-            },
-
-            // Handle file selection
-            handleFileSelection(event) {
-              this.selectedFile = event.target.files[0];
-              if (!this.selectedFile) return;
-
-              // Detect file type
-              const fileName = this.selectedFile.name.toLowerCase();
-              if (fileName.endsWith('.ldif')) {
-                this.setFileLdif();
-              } else if (fileName.endsWith('.ml')) {
-                this.setFileMasterList();
-              } else {
-                this.setFileUnknown();
-              }
-
-              // Update file info
-              this.fileInfo = `${this.selectedFile.name} (${formatFileSize(this.selectedFile.size)})`;
-            },
-
-            // Set to LDIF mode
-            setFileLdif() {
-              this.fileType = 'ldif';
-              this.fileTypeIcon = 'fas fa-file-code';
-              this.fileTypeTitle = 'LDIF 파일 업로드';
-              this.fileTypeDescription = 'LDIF (LDAP Data Interchange Format) 파일을 업로드합니다.';
-              this.fileTypeInfoText = 'RFC 2849 표준 LDIF';
-              this.isValidFileType = true;
-              this.updateFormAction();
-            },
-
-            // Set to Master List mode
-            setFileMasterList() {
-              this.fileType = 'ml';
-              this.fileTypeIcon = 'fas fa-file-signature';
-              this.fileTypeTitle = 'Master List 파일 업로드';
-              this.fileTypeDescription = 'ICAO CSCA Master List (CMS 서명 파일)을 업로드합니다.';
-              this.fileTypeInfoText = 'CMS (Cryptographic Message Syntax)';
-              this.isValidFileType = true;
-              this.updateFormAction();
-            },
-
-            // Set to unknown file
-            setFileUnknown() {
-              this.fileType = 'unknown';
-              this.fileTypeIcon = 'fas fa-question-circle';
-              this.fileTypeTitle = '지원하지 않는 파일 형식';
-              this.fileTypeDescription = 'LDIF (.ldif) 또는 Master List (.ml) 파일만 업로드 가능합니다.';
-              this.isValidFileType = false;
-              this.fileInfo = '';
-            },
-
-            // Update form action (unified endpoint)
-            updateFormAction() {
-              const form = document.getElementById('uploadForm');
-              // Use unified upload endpoint
-              form.action = '/file/upload';
-            },
-
-            // Main upload handler
-            async handleUpload() {
-              console.log('handleUpload called');
-              console.log('selectedFile:', this.selectedFile);
-              console.log('processingMode:', this.processingMode);
-
-              if (!this.selectedFile) {
-                console.log('No file selected, showing toast');
-                showToast('파일을 선택해주세요.', 'warning');
-                return;
-              }
-
-              if (!this.isValidFileType) {
-                showToast('지원하지 않는 파일 형식입니다.', 'error');
-                return;
-              }
-
-              // Validate file size
-              const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-              if (this.selectedFile.size > MAX_FILE_SIZE) {
-                showToast('파일 크기는 100MB 이하여야 합니다.', 'error');
-                return;
-              }
-
-              try {
-                // Step 1: Calculate SHA-256 hash
-                showProgress('파일 해시 계산 중...', 30);
-                this.calculatedHash = await calculateSHA256(this.selectedFile);
-                document.getElementById('fileHashInput').value = this.calculatedHash;
-
-                // Step 2: Check duplicate
-                showProgress('중복 파일 검사 중...', 60);
-                const isDuplicate = await this.checkDuplicate();
-
-                if (isDuplicate) {
-                  hideProgress();
-                  return; // Modal shown, user needs to decide
-                }
-
-                // Step 3: Submit form via AJAX to capture uploadId
-                showProgress('파일 업로드 중...', 90);
-                await this.submitFormAjax();
-
-              } catch (error) {
-                console.error('Upload error:', error);
-                hideProgress();
-                showToast('업로드 중 오류가 발생했습니다: ' + error.message, 'error');
-              }
-            },
-
-            // Check duplicate via API
-            async checkDuplicate() {
-              const apiEndpoint = this.fileType === 'ldif'
-                ? '/file/ldif/api/check-duplicate'
-                : '/file/masterlist/api/check-duplicate';
-
-              const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  fileName: this.selectedFile.name,
-                  fileSize: this.selectedFile.size,
-                  fileHash: this.calculatedHash
-                })
-              });
-
-              if (!response.ok) {
-                throw new Error('중복 검사 실패');
-              }
-
-              const result = await response.json();
-
-              if (result.isDuplicate) {
-                // Show duplicate modal
-                document.getElementById('duplicateMessage').textContent = result.message;
-                document.getElementById('dupFileName').textContent = result.existingFileName || '-';
-                document.getElementById('dupFileId').textContent = result.existingFileId || '-';
-                document.getElementById('dupUploadDate').textContent = result.existingUploadDate
-                  ? new Date(result.existingUploadDate).toLocaleString('ko-KR')
-                  : '-';
-                document.getElementById('dupVersion').textContent = result.existingVersion || '-';
-                document.getElementById('dupStatus').textContent = result.existingStatus || '-';
-
-                this.existingFileId = result.existingFileId;
-
-                document.getElementById('duplicateModal').showModal();
-                return true;
-              }
-
-              return false;
-            },
-
-            // Submit form via AJAX
-            async submitFormAjax() {
-              const formData = new FormData(document.getElementById('uploadForm'));
-
-              const response = await fetch(document.getElementById('uploadForm').action, {
-                method: 'POST',
-                body: formData
-              });
-
-              if (!response.ok) {
-                throw new Error('파일 업로드 실패');
-              }
-
-              // Parse HTML response to extract uploadId from redirect
-              const html = await response.text();
-              const match = html.match(/\/upload-history\?id=([a-f0-9-]+)/);
-              let uploadId = match ? match[1] : null;
-
-              if (!uploadId && response.redirected) {
-                const urlParams = new URL(response.url).searchParams;
-                uploadId = urlParams.get('id');
-              }
-
-              if (!uploadId) {
-                const idMatch = html.match(/id["\']?\s*[:=]\s*["\']?([a-f0-9\-]+)["\']?/);
-                uploadId = idMatch ? idMatch[1] : null;
-              }
-
-              if (uploadId) {
-                hideProgress();
-                showToast('파일 업로드 완료. 처리를 시작합니다.', 'success');
-
-                // Trigger certificate validation (future)
-                await this.triggerProcessing(uploadId);
-              } else {
-                // Fallback: redirect after a short delay
-                hideProgress();
-                showToast('파일 업로드 완료', 'success');
-                setTimeout(() => {
-                  window.location.href = '/upload-history';
-                }, 2000);
-              }
-            },
-
-            // Trigger processing based on mode
-            async triggerProcessing(uploadId) {
-              if (this.processingMode === 'AUTO') {
-                // AUTO mode: Start SSE progress
-                await this.triggerCertificateValidation(uploadId);
-              } else {
-                // MANUAL mode: Wait for user action
-                hideProgress();
-                showToast('파일 업로드 완료. 수동 모드에서 다음 단계를 진행하세요.', 'info');
-                setTimeout(() => {
-                  window.location.href = '/upload-history?id=' + uploadId;
-                }, 2000);
-              }
-            },
-
-            // Trigger certificate validation (AUTO mode)
-            async triggerCertificateValidation(uploadId) {
-              try {
-                // Start SSE progress modal
-                startSSEProgress(uploadId);
-
-                // Call certificate validation API
-                const response = await fetch('/api/certificates/validate', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    uploadId: uploadId,
-                    parsedFileId: uploadId,
-                    certificateCount: 0,
-                    crlCount: 0
-                  })
-                });
-
-                if (!response.ok) {
-                  const error = await response.json();
-                  throw new Error(error.message || '인증서 검증 API 호출 실패');
-                }
-
-                const result = await response.json();
-                console.log('Certificate validation initiated:', result);
-
-              } catch (error) {
-                console.error('Certificate validation error:', error);
-                closeProgressModal(false);
-                showToast('인증서 검증 중 오류: ' + error.message, 'error');
-              }
-            }
-          };
-        }
-
         // Global utility functions
         let currentUploadId = null;
         let sseEventSource = null;
