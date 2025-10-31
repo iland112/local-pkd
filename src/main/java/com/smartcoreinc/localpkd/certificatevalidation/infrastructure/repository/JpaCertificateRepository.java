@@ -108,17 +108,17 @@ public class JpaCertificateRepository implements CertificateRepository {
             certificate.getId().getId(),
             certificate.getX509Data().getFingerprintSha256());
 
-        // 1. JPA 저장
+        // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
+        if (!certificate.getDomainEvents().isEmpty()) {
+            log.debug("Publishing {} domain event(s) BEFORE save", certificate.getDomainEvents().size());
+            eventBus.publishAll(certificate.getDomainEvents());
+            certificate.clearDomainEvents();
+        }
+
+        // 2. JPA 저장
         Certificate saved = jpaRepository.save(certificate);
 
         log.debug("Certificate saved successfully: id={}", saved.getId().getId());
-
-        // 2. Domain Events 발행
-        if (!saved.getDomainEvents().isEmpty()) {
-            log.debug("Publishing {} domain event(s)", saved.getDomainEvents().size());
-            eventBus.publishAll(saved.getDomainEvents());
-            saved.clearDomainEvents();
-        }
 
         return saved;
     }

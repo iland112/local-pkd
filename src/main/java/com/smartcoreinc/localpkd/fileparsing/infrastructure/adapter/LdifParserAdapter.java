@@ -91,7 +91,8 @@ public class LdifParserAdapter implements FileParserPort {
                 throw new ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
             }
 
-            parsedFile.startParsing();
+            // NOTE: startParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.startParsing();
 
             // LDIF 파일을 라인 단위로 읽기
             BufferedReader reader = new BufferedReader(
@@ -197,16 +198,18 @@ public class LdifParserAdapter implements FileParserPort {
 
             reader.close();
 
-            // 파싱 완료
+            // NOTE: completeParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // 파싱 통계만 로깅
             int totalEntries = certificateCount + crlCount + errorCount;
-            parsedFile.completeParsing(totalEntries);
+            // parsedFile.completeParsing(totalEntries);
 
-            log.info("LDIF parsing completed: {} certificates, {} CRLs, {} errors",
-                certificateCount, crlCount, errorCount);
+            log.info("LDIF parsing completed: {} certificates, {} CRLs, {} errors, total entries: {}",
+                certificateCount, crlCount, errorCount, totalEntries);
 
         } catch (Exception e) {
             log.error("LDIF parsing failed", e);
-            parsedFile.failParsing(e.getMessage());
+            // NOTE: failParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.failParsing(e.getMessage());
             throw new ParsingException("LDIF parsing error: " + e.getMessage(), e);
         }
     }

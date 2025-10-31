@@ -59,7 +59,7 @@ public class X509Data implements ValueObject {
      * <p>최대 크기: 약 16MB (대부분의 인증서는 1-10KB)</p>
      */
     @Lob
-    @Column(name = "certificate_binary", nullable = false)
+    @Column(name = "certificate_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateBinary;
 
     /**

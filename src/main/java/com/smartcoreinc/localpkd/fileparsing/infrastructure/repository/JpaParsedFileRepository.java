@@ -70,22 +70,22 @@ public class JpaParsedFileRepository implements ParsedFileRepository {
     public ParsedFile save(ParsedFile parsedFile) {
         log.debug("Saving ParsedFile: {}", parsedFile.getId().getId());
 
-        // 1. JPA 저장
-        ParsedFile saved = jpaRepository.save(parsedFile);
+        // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
+        if (parsedFile.hasDomainEvents()) {
+            log.debug("Publishing {} domain events for ParsedFile BEFORE save: {}",
+                parsedFile.getDomainEvents().size(), parsedFile.getId().getId());
 
-        // 2. Domain Events 발행
-        if (saved.hasDomainEvents()) {
-            log.debug("Publishing {} domain events for ParsedFile: {}",
-                saved.getDomainEvents().size(), saved.getId().getId());
-
-            saved.getDomainEvents().forEach(event -> {
+            parsedFile.getDomainEvents().forEach(event -> {
                 log.debug("Publishing event: {}", event.getClass().getSimpleName());
                 eventPublisher.publishEvent(event);
             });
 
-            // 3. Domain Events 초기화
-            saved.clearDomainEvents();
+            // 2. Domain Events 초기화
+            parsedFile.clearDomainEvents();
         }
+
+        // 3. JPA 저장
+        ParsedFile saved = jpaRepository.save(parsedFile);
 
         return saved;
     }

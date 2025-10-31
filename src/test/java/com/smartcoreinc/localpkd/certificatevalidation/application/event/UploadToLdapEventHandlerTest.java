@@ -379,6 +379,10 @@ public class UploadToLdapEventHandlerTest {
 
     // ========== Async Processing Tests ==========
 
+    // NOTE: handleCertificatesValidatedAsync 메서드는 Phase 17에서 제거되었습니다.
+    // 동기 처리 방식으로 전환되었으므로 이 테스트는 더 이상 필요하지 않습니다.
+
+    /*
     @Test
     @DisplayName("비동기 처리 - Exception 처리")
     void testAsyncProcessing_ExceptionHandling() {
@@ -394,6 +398,7 @@ public class UploadToLdapEventHandlerTest {
 
         log.info("✅ Async processing exception handling test passed");
     }
+    */
 
     // ========== Helper Methods ==========
 

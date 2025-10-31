@@ -85,19 +85,19 @@ public class JpaCertificateRevocationListRepository implements CertificateRevoca
             crl.getId().getId(), crl.getIssuerName().getValue(), crl.getCountryCode().getValue());
 
         try {
-            // 1. JPA를 통해 저장
-            CertificateRevocationList saved = jpaRepository.save(crl);
-
-            // 2. Domain Events 발행
-            if (!saved.getDomainEvents().isEmpty()) {
-                log.debug("Publishing {} domain events from CRL: {}",
-                    saved.getDomainEvents().size(), saved.getId().getId());
-                saved.getDomainEvents().forEach(event -> {
+            // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
+            if (!crl.getDomainEvents().isEmpty()) {
+                log.debug("Publishing {} domain events from CRL BEFORE save: {}",
+                    crl.getDomainEvents().size(), crl.getId().getId());
+                crl.getDomainEvents().forEach(event -> {
                     log.debug("Publishing CRL event: {}", event.getClass().getSimpleName());
                     eventPublisher.publishEvent(event);
                 });
-                saved.clearDomainEvents();
+                crl.clearDomainEvents();
             }
+
+            // 2. JPA를 통해 저장
+            CertificateRevocationList saved = jpaRepository.save(crl);
 
             log.info("CRL saved successfully: id={}", saved.getId().getId());
             return saved;

@@ -7,6 +7,7 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateR
 import com.smartcoreinc.localpkd.certificatevalidation.domain.port.LdapConnectionPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,7 @@ import java.util.Objects;
  * @since 2025-10-24 (Phase 17 Task 1.5)
  */
 @Slf4j
+@Service
 @RequiredArgsConstructor
 public class LdapUploadService {
 

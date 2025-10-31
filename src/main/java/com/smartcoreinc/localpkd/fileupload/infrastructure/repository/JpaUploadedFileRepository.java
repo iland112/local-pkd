@@ -95,17 +95,17 @@ public class JpaUploadedFileRepository implements UploadedFileRepository {
     public UploadedFile save(UploadedFile aggregate) {
         log.debug("Saving UploadedFile: id={}", aggregate.getId().getId());
 
-        // 1. JPA 저장
+        // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
+        if (!aggregate.getDomainEvents().isEmpty()) {
+            log.debug("Publishing {} domain event(s) BEFORE save", aggregate.getDomainEvents().size());
+            eventBus.publishAll(aggregate.getDomainEvents());
+            aggregate.clearDomainEvents();
+        }
+
+        // 2. JPA 저장
         UploadedFile saved = jpaRepository.save(aggregate);
 
         log.debug("UploadedFile saved successfully: id={}", saved.getId().getId());
-
-        // 2. Domain Events 발행
-        if (!saved.getDomainEvents().isEmpty()) {
-            log.debug("Publishing {} domain event(s)", saved.getDomainEvents().size());
-            eventBus.publishAll(saved.getDomainEvents());
-            saved.clearDomainEvents();
-        }
 
         return saved;
     }
