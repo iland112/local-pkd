@@ -121,7 +121,13 @@
                       <i class="fas fa-history"></i>
                       업로드 이력
                     </button>
-                    <button type="button" id="uploadBtn" @click="handleUpload()" class="btn btn-primary gap-2">
+                    <button
+                      type="button"
+                      id="uploadBtn"
+                      @click="handleUpload()"
+                      onclick="if (typeof handleUploadFallback === 'function') handleUploadFallback();"
+                      class="btn btn-primary gap-2"
+                    >
                       <i class="fas fa-cloud-upload-alt"></i>
                       업로드
                     </button>
@@ -411,7 +417,12 @@
 
             // Main upload handler
             async handleUpload() {
+              console.log('handleUpload called');
+              console.log('selectedFile:', this.selectedFile);
+              console.log('processingMode:', this.processingMode);
+
               if (!this.selectedFile) {
+                console.log('No file selected, showing toast');
                 showToast('파일을 선택해주세요.', 'warning');
                 return;
               }
@@ -593,6 +604,42 @@
         // Global utility functions
         let currentUploadId = null;
         let sseEventSource = null;
+
+        // Fallback upload handler (if Alpine.js fails)
+        async function handleUploadFallback() {
+          console.log('Fallback upload handler called');
+          const fileInput = document.getElementById('fileInput');
+          const form = document.getElementById('uploadForm');
+
+          if (!fileInput.files || fileInput.files.length === 0) {
+            alert('파일을 선택해주세요.');
+            return;
+          }
+
+          const file = fileInput.files[0];
+          const fileName = file.name.toLowerCase();
+
+          if (!fileName.endsWith('.ldif') && !fileName.endsWith('.ml')) {
+            alert('LDIF (.ldif) 또는 Master List (.ml) 파일만 업로드 가능합니다.');
+            return;
+          }
+
+          try {
+            // Calculate hash
+            showProgress('파일 해시 계산 중...', 30);
+            const hash = await calculateSHA256(file);
+            document.getElementById('fileHashInput').value = hash;
+
+            // Set form action and submit
+            form.action = '/file/upload';
+            showProgress('파일 업로드 중...', 60);
+            form.submit();
+          } catch (error) {
+            console.error('Fallback upload error:', error);
+            hideProgress();
+            alert('업로드 중 오류가 발생했습니다: ' + error.message);
+          }
+        }
 
         function formatFileSize(bytes) {
           if (bytes === 0) return '0 Bytes';
