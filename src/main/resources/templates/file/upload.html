@@ -29,6 +29,15 @@
             // Processing mode
             processingMode: 'AUTO',
 
+            // Manual mode state
+            parsingStarted: false,
+            validationStarted: false,
+            ldapStarted: false,
+            isProcessing: false,
+            currentStepMessage: '',
+            stepPercentage: 0,
+            stepError: null,
+
             // Initialize state
             init() {
               console.log('Upload page initialized via Alpine.data()');
@@ -273,6 +282,85 @@
                 closeProgressModal(false);
                 showToast('인증서 검증 중 오류: ' + error.message, 'error');
               }
+            },
+
+            // Trigger manual mode step
+            async triggerStep(step) {
+              console.log('triggerStep called:', step);
+
+              this.isProcessing = true;
+              this.stepError = null;
+              this.stepPercentage = 0;
+
+              try {
+                switch (step) {
+                  case 'parse':
+                    await this.triggerParsing();
+                    break;
+                  case 'validate':
+                    await this.triggerValidation();
+                    break;
+                  case 'ldap':
+                    await this.triggerLdapUpload();
+                    break;
+                  default:
+                    console.warn('Unknown step:', step);
+                }
+              } catch (error) {
+                console.error('Step error:', error);
+                this.stepError = error.message || '처리 중 오류가 발생했습니다';
+                showToast(this.stepError, 'error');
+              } finally {
+                this.isProcessing = false;
+              }
+            },
+
+            // Trigger parsing step
+            async triggerParsing() {
+              this.currentStepMessage = '파일 파싱 중...';
+
+              // TODO: Call parsing API (not yet implemented)
+              // For now, simulate progress
+              for (let i = 0; i <= 100; i += 10) {
+                this.stepPercentage = i;
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+
+              this.parsingStarted = true;
+              this.currentStepMessage = '파일 파싱 완료';
+              showToast('파일 파싱이 완료되었습니다', 'success');
+            },
+
+            // Trigger validation step
+            async triggerValidation() {
+              this.currentStepMessage = '인증서 검증 중...';
+
+              // TODO: Call validation API (not yet implemented)
+              // For now, simulate progress
+              for (let i = 0; i <= 100; i += 10) {
+                this.stepPercentage = i;
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+
+              this.validationStarted = true;
+              this.currentStepMessage = '인증서 검증 완료';
+              showToast('인증서 검증이 완료되었습니다', 'success');
+            },
+
+            // Trigger LDAP upload step
+            async triggerLdapUpload() {
+              this.currentStepMessage = 'LDAP 서버에 저장 중...';
+
+              // TODO: Call LDAP upload API (not yet implemented)
+              // For now, simulate progress
+              for (let i = 0; i <= 100; i += 10) {
+                this.stepPercentage = i;
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+
+              this.ldapStarted = true;
+              this.currentStepMessage = 'LDAP 서버 저장 완료';
+              showToast('LDAP 서버 저장이 완료되었습니다', 'success');
             }
           }));
         });
