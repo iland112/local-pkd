@@ -402,14 +402,11 @@
               this.fileInfo = '';
             },
 
-            // Update form action based on file type
+            // Update form action (unified endpoint)
             updateFormAction() {
               const form = document.getElementById('uploadForm');
-              if (this.fileType === 'ldif') {
-                form.action = '/ldif/upload';
-              } else if (this.fileType === 'ml') {
-                form.action = '/masterlist/upload';
-              }
+              // Use unified upload endpoint
+              form.action = '/file/upload';
             },
 
             // Main upload handler
