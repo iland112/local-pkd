@@ -99,11 +99,10 @@ CREATE INDEX IF NOT EXISTS idx_crl_country
 CREATE INDEX IF NOT EXISTS idx_crl_next_update
     ON certificate_revocation_list(next_update DESC);
 
--- Filter: 만료되지 않은 CRL만 (조건부 인덱스)
--- 최적화: WHERE next_update > CURRENT_TIMESTAMP
+-- Filter: 만료되지 않은 CRL만 (일반 인덱스)
+-- NOTE: WHERE next_update > CURRENT_TIMESTAMP removed due to PostgreSQL immutability requirement
 CREATE INDEX IF NOT EXISTS idx_crl_valid
-    ON certificate_revocation_list(next_update DESC)
-    WHERE next_update > CURRENT_TIMESTAMP;
+    ON certificate_revocation_list(next_update DESC);
 
 -- ============================================================
 -- Timestamp Indexes for Auditing
@@ -135,7 +134,7 @@ SELECT
     MAX(this_update) AS newest_crl_update,
     MIN(next_update) AS earliest_crl_expiration,
     MAX(next_update) AS latest_crl_expiration,
-    EXTRACT(EPOCH FROM (AVG(next_update) - CURRENT_TIMESTAMP)) / 86400 AS avg_days_until_expiration
+    (AVG(EXTRACT(EPOCH FROM next_update)) - EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)) / 86400 AS avg_days_until_expiration
 FROM certificate_revocation_list;
 
 -- ============================================================

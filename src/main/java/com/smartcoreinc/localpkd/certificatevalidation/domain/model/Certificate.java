@@ -101,7 +101,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
      * <p>DER-encoded 인증서 바이너리, 공개 키, 일련 번호, 지문 포함</p>
      */
     @Embedded
-    @AttributeOverride(name = "certificateBinary", column = @Column(name = "x509_certificate_binary"))
+    @AttributeOverride(name = "certificateBinary", column = @Column(name = "x509_certificate_binary", columnDefinition = "BYTEA"))
     @AttributeOverride(name = "serialNumber", column = @Column(name = "x509_serial_number"))
     @AttributeOverride(name = "fingerprintSha256", column = @Column(name = "x509_fingerprint_sha256"))
     private X509Data x509Data;

@@ -71,6 +71,7 @@ public class UploadLdifFileUseCase {
         log.info("File size: {} bytes", command.fileSize());
         log.info("File hash: {}", command.fileHash());
         log.info("Force upload: {}", command.forceUpload());
+        log.info("Processing mode: {}", command.processingMode());
 
         try {
             // 1. Command 검증
@@ -112,8 +113,12 @@ public class UploadLdifFileUseCase {
             FileVersion version = FileVersion.extractFromFileName(fileName, fileFormat);
             log.info("Collection: {}, Version: {}", collectionNumber.getValue(), version.getValue());
 
-            // 7. UploadedFile Aggregate Root 생성
+            // 7. UploadedFile Aggregate Root 생성 (processingMode 포함)
             UploadId uploadId = UploadId.newId();
+            ProcessingMode processingMode = command.processingMode() != null
+                ? command.processingMode()
+                : ProcessingMode.AUTO;
+
             UploadedFile uploadedFile = UploadedFile.createWithMetadata(
                 uploadId,
                 fileName,
@@ -122,7 +127,8 @@ public class UploadLdifFileUseCase {
                 fileFormat,
                 collectionNumber,
                 version,
-                savedPath
+                savedPath,
+                processingMode  // processingMode 전달
             );
 
             // 8. Checksum 검증 (expectedChecksum이 있는 경우)
@@ -154,8 +160,8 @@ public class UploadLdifFileUseCase {
 
             // 10. 데이터베이스에 저장 (Domain Events 자동 발행)
             UploadedFile saved = repository.save(uploadedFile);
-            log.info("File upload completed: uploadId={}, status={}",
-                     saved.getId().getId(), saved.getStatus());
+            log.info("File upload completed: uploadId={}, status={}, processingMode={}",
+                     saved.getId().getId(), saved.getStatus(), saved.getProcessingMode());
 
             // 11. Response 생성
             return UploadFileResponse.success(

@@ -95,7 +95,7 @@ import java.util.Objects;
     @Index(name = "idx_crl_issuer_country", columnList = "issuer_name,country_code"),
     @Index(name = "idx_crl_issuer", columnList = "issuer_name"),
     @Index(name = "idx_crl_country", columnList = "country_code"),
-    @Index(name = "idx_crl_not_after", columnList = "not_after DESC")
+    @Index(name = "idx_crl_next_update", columnList = "next_update DESC")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -125,6 +125,8 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      * CRL 유효성 기간 (thisUpdate, nextUpdate)
      */
     @Embedded
+    @AttributeOverride(name = "notBefore", column = @Column(name = "this_update"))
+    @AttributeOverride(name = "notAfter", column = @Column(name = "next_update"))
     private ValidityPeriod validityPeriod;
 
     /**

@@ -81,9 +81,11 @@ public class CrlData implements ValueObject {
 
     /**
      * CRL 바이너리 (DER 인코딩)
+     *
+     * NOTE: @Lob 제거 - Hibernate/PostgreSQL bytea 매핑 버그 회피
+     * columnDefinition="BYTEA"만으로도 충분함
      */
-    @Lob
-    @Column(name = "crl_binary", nullable = false)
+    @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] crlBinary;
 
     /**
