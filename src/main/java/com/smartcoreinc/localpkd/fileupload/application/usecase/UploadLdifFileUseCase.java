@@ -158,7 +158,25 @@ public class UploadLdifFileUseCase {
                 }
             }
 
-            // 10. 데이터베이스에 저장 (Domain Events 자동 발행)
+            // 10. 저장 직전 중복 체크 (Race condition 방지)
+            if (!command.forceUpload()) {
+                // forceUpload가 아닌 경우, 저장 직전에 한 번 더 중복 체크
+                Optional<UploadedFile> existingFile = repository.findByFileHash(fileHash);
+                if (existingFile.isPresent()) {
+                    UploadedFile existing = existingFile.get();
+                    throw new DomainException(
+                        "DUPLICATE_FILE",
+                        String.format(
+                            "이 파일은 이미 업로드되었습니다. (ID: %s, 업로드 일시: %s, 상태: %s)",
+                            existing.getId().getId(),
+                            existing.getUploadedAt(),
+                            existing.getStatus().getDisplayName()
+                        )
+                    );
+                }
+            }
+
+            // 11. 데이터베이스에 저장 (Domain Events 자동 발행)
             UploadedFile saved = repository.save(uploadedFile);
             log.info("File upload completed: uploadId={}, status={}, processingMode={}",
                      saved.getId().getId(), saved.getStatus(), saved.getProcessingMode());
