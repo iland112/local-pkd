@@ -1,8 +1,10 @@
 package com.smartcoreinc.localpkd.fileupload.application.event;
 
 import com.smartcoreinc.localpkd.fileparsing.application.command.ParseLdifFileCommand;
+import com.smartcoreinc.localpkd.fileparsing.application.command.ParseMasterListFileCommand;
 import com.smartcoreinc.localpkd.fileparsing.application.response.ParseFileResponse;
 import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUseCase;
+import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseMasterListFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.domain.event.DuplicateFileDetectedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.event.FileUploadedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
@@ -72,6 +74,7 @@ public class FileUploadEventHandler {
     private final UploadedFileRepository uploadedFileRepository;
     private final FileStoragePort fileStoragePort;
     private final ParseLdifFileUseCase parseLdifFileUseCase;
+    private final ParseMasterListFileUseCase parseMasterListFileUseCase;
     private final ProgressService progressService;
 
     /**
@@ -127,7 +130,13 @@ public class FileUploadEventHandler {
      *   <li>UploadedFile 조회 (file path, format 정보)</li>
      *   <li>파일 bytes 읽기 (FileStoragePort)</li>
      *   <li>SSE 진행 상황 전송 (UPLOAD_COMPLETED)</li>
-     *   <li>파일 파싱 트리거 (ParseLdifFileUseCase)</li>
+     *   <li>파일 포맷 확인 (LDIF vs Master List)</li>
+     *   <li>파일 파싱 트리거:
+     *     <ul>
+     *       <li>LDIF 파일 → ParseLdifFileUseCase</li>
+     *       <li>Master List 파일 → ParseMasterListFileUseCase</li>
+     *     </ul>
+     *   </li>
      * </ul>
      *
      * <h4>처리 내용 (MANUAL 모드)</h4>
@@ -192,17 +201,50 @@ public class FileUploadEventHandler {
             byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
             log.info("File bytes read: size={} bytes", fileBytes.length);
 
-            // 5. ParseLdifFileCommand 생성
-            ParseLdifFileCommand command = ParseLdifFileCommand.builder()
-                .uploadId(event.uploadId().getId())
-                .fileBytes(fileBytes)
-                .fileFormat(uploadedFile.getFileFormatType())  // e.g., "CSCA_COMPLETE_LDIF"
-                .build();
+            // 5. 파일 포맷에 따라 적절한 파서 선택 및 실행
+            ParseFileResponse response;
 
-            // 6. 파일 파싱 실행 (Use Case가 자동으로 SSE progress 전송)
-            log.info("Triggering LDIF parsing: uploadId={}", event.uploadId().getId());
-            ParseFileResponse response = parseLdifFileUseCase.execute(command);
+            if (uploadedFile.getFileFormat().isLdif()) {
+                // LDIF 파일 파싱
+                log.info("Triggering LDIF parsing: uploadId={}, format={}",
+                        event.uploadId().getId(), uploadedFile.getFileFormatType());
 
+                ParseLdifFileCommand ldifCommand = ParseLdifFileCommand.builder()
+                    .uploadId(event.uploadId().getId())
+                    .fileBytes(fileBytes)
+                    .fileFormat(uploadedFile.getFileFormatType())
+                    .build();
+
+                response = parseLdifFileUseCase.execute(ldifCommand);
+
+            } else if (uploadedFile.getFileFormat().isMasterList()) {
+                // Master List 파일 파싱
+                log.info("Triggering Master List parsing: uploadId={}, format={}",
+                        event.uploadId().getId(), uploadedFile.getFileFormatType());
+
+                ParseMasterListFileCommand mlCommand = ParseMasterListFileCommand.builder()
+                    .uploadId(event.uploadId().getId())
+                    .fileBytes(fileBytes)
+                    .fileFormat(uploadedFile.getFileFormatType())
+                    .build();
+
+                response = parseMasterListFileUseCase.execute(mlCommand);
+
+            } else {
+                // 지원하지 않는 파일 포맷
+                log.error("Unsupported file format: uploadId={}, format={}",
+                        event.uploadId().getId(), uploadedFile.getFileFormatType());
+                progressService.sendProgress(
+                    ProcessingProgress.failed(
+                        event.uploadId().getId(),
+                        ProcessingStage.FAILED,
+                        "지원하지 않는 파일 포맷: " + uploadedFile.getFileFormatType()
+                    )
+                );
+                return;
+            }
+
+            // 6. 파싱 결과 처리
             if (response.success()) {
                 log.info("Parsing completed successfully: uploadId={}, certificates={}, CRLs={}",
                         event.uploadId().getId(), response.certificateCount(), response.crlCount());
