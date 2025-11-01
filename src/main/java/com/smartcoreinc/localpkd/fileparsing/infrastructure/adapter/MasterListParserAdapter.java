@@ -81,7 +81,8 @@ public class MasterListParserAdapter implements FileParserPort {
                 throw new ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
             }
 
-            parsedFile.startParsing();
+            // NOTE: startParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.startParsing();
 
             // 1. CMS 형식 검증
             validateCmsFormat(fileBytes);
