@@ -7,7 +7,155 @@
 >
   <body>
     <div layout:fragment="content">
-      <div class="container mx-auto px-4 py-6 max-w-7xl" x-data="dashboardApp()">
+      <!-- Alpine.js Component Registration (must be before x-data usage) -->
+      <script>
+        document.addEventListener('alpine:init', () => {
+          Alpine.data('dashboardApp', () => ({
+            // 상태 데이터
+            currentDate: '',
+            currentTime: '',
+            dbConnected: false,
+            dbMessage: '확인 중...',
+            dbTesting: false,
+            statistics: {
+              totalCount: 0,
+              successCount: 0,
+              failedCount: 0,
+              successRate: 0
+            },
+            recentActivity: [],
+            loadingRecent: false,
+
+            // 초기화
+            init() {
+              this.updateDateTime();
+              this.checkDatabaseStatus();
+              this.loadStatistics();
+              this.loadRecentActivity();
+
+              // 1분마다 시간 업데이트
+              setInterval(() => this.updateDateTime(), 60000);
+
+              // 5분마다 데이터베이스 상태 체크
+              setInterval(() => this.checkDatabaseStatus(), 300000);
+            },
+
+            // 날짜/시간 업데이트
+            updateDateTime() {
+              const now = new Date();
+              this.currentDate = now.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'short'
+              });
+              this.currentTime = now.toLocaleTimeString('ko-KR');
+            },
+
+            // PostgreSQL 데이터베이스 상태 확인
+            async checkDatabaseStatus() {
+              try {
+                const response = await fetch('/api/database-health');
+                const data = await response.json();
+
+                this.dbConnected = data.success;
+                if (data.success) {
+                  this.dbMessage = `${data.database} ${data.version}`;
+                } else {
+                  this.dbMessage = data.message || '연결 실패';
+                }
+              } catch (error) {
+                console.error('Database status check failed:', error);
+                this.dbConnected = false;
+                this.dbMessage = '연결 확인 불가';
+              }
+            },
+
+            // PostgreSQL 데이터베이스 연결 테스트
+            async testDatabaseConnection() {
+              this.dbTesting = true;
+              try {
+                const response = await fetch('/api/database-health');
+                const data = await response.json();
+
+                showNotification(data.message, data.success ? 'success' : 'error');
+                this.checkDatabaseStatus();
+              } catch (error) {
+                showNotification('연결 테스트에 실패했습니다.', 'error');
+              } finally {
+                this.dbTesting = false;
+              }
+            },
+
+            // 통계 로드
+            async loadStatistics() {
+              try {
+                const response = await fetch('/upload-history/statistics');
+                if (response.ok) {
+                  const data = await response.json();
+                  this.statistics = {
+                    totalCount: data.totalCount || 0,
+                    successCount: data.successCount || 0,
+                    failedCount: data.failedCount || 0,
+                    successRate: data.successRate || 0
+                  };
+                }
+              } catch (error) {
+                console.error('Failed to load statistics:', error);
+              }
+            },
+
+            // 최근 활동 로드
+            async loadRecentActivity() {
+              this.loadingRecent = true;
+              try {
+                const response = await fetch('/upload-history/recent?limit=5');
+                if (response.ok) {
+                  const data = await response.json();
+                  this.recentActivity = data.map(item => ({
+                    ...item,
+                    statusDisplay: this.getStatusDisplay(item.status)
+                  }));
+                }
+              } catch (error) {
+                console.error('Failed to load recent activity:', error);
+              } finally {
+                this.loadingRecent = false;
+              }
+            },
+
+            // 상태 표시명 가져오기
+            getStatusDisplay(status) {
+              const statusMap = {
+                'RECEIVED': '수신됨',
+                'VALIDATING': '검증 중',
+                'VALIDATED': '검증 완료',
+                'PARSING': '파싱 중',
+                'PARSED': '파싱 완료',
+                'UPLOADING_TO_LDAP': 'LDAP 업로드 중',
+                'COMPLETED': '완료',
+                'FAILED': '실패'
+              };
+              return statusMap[status] || status;
+            },
+
+            // 날짜 포맷팅
+            formatDateTime(dateString) {
+              if (!dateString) return '';
+              const date = new Date(dateString);
+              return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+            }
+          }));
+        });
+      </script>
+
+      <div class="container mx-auto px-4 py-6 max-w-7xl" x-data="dashboardApp" @alpine:init="init()">
         <!-- 헤더 섹션 -->
         <div class="mb-8">
           <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-6 text-white">
@@ -315,151 +463,6 @@
 
     <th:block layout:fragment="script-content">
       <script>
-        function dashboardApp() {
-          return {
-            // 상태 데이터
-            currentDate: '',
-            currentTime: '',
-            dbConnected: false,
-            dbMessage: '확인 중...',
-            dbTesting: false,
-            statistics: {
-              totalCount: 0,
-              successCount: 0,
-              failedCount: 0,
-              successRate: 0
-            },
-            recentActivity: [],
-            loadingRecent: false,
-
-            // 초기화
-            init() {
-              this.updateDateTime();
-              this.checkDatabaseStatus();
-              this.loadStatistics();
-              this.loadRecentActivity();
-
-              // 1분마다 시간 업데이트
-              setInterval(() => this.updateDateTime(), 60000);
-
-              // 5분마다 데이터베이스 상태 체크
-              setInterval(() => this.checkDatabaseStatus(), 300000);
-            },
-
-            // 날짜/시간 업데이트
-            updateDateTime() {
-              const now = new Date();
-              this.currentDate = now.toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'short'
-              });
-              this.currentTime = now.toLocaleTimeString('ko-KR');
-            },
-
-            // PostgreSQL 데이터베이스 상태 확인
-            async checkDatabaseStatus() {
-              try {
-                const response = await fetch('/api/database-health');
-                const data = await response.json();
-
-                this.dbConnected = data.success;
-                if (data.success) {
-                  this.dbMessage = `${data.database} ${data.version}`;
-                } else {
-                  this.dbMessage = data.message || '연결 실패';
-                }
-              } catch (error) {
-                console.error('Database status check failed:', error);
-                this.dbConnected = false;
-                this.dbMessage = '연결 확인 불가';
-              }
-            },
-
-            // PostgreSQL 데이터베이스 연결 테스트
-            async testDatabaseConnection() {
-              this.dbTesting = true;
-              try {
-                const response = await fetch('/api/database-health');
-                const data = await response.json();
-
-                showNotification(data.message, data.success ? 'success' : 'error');
-                this.checkDatabaseStatus();
-              } catch (error) {
-                showNotification('연결 테스트에 실패했습니다.', 'error');
-              } finally {
-                this.dbTesting = false;
-              }
-            },
-
-            // 통계 로드
-            async loadStatistics() {
-              try {
-                const response = await fetch('/upload-history/statistics');
-                if (response.ok) {
-                  const data = await response.json();
-                  this.statistics = {
-                    totalCount: data.totalCount || 0,
-                    successCount: data.successCount || 0,
-                    failedCount: data.failedCount || 0,
-                    successRate: data.successRate || 0
-                  };
-                }
-              } catch (error) {
-                console.error('Failed to load statistics:', error);
-              }
-            },
-
-            // 최근 활동 로드
-            async loadRecentActivity() {
-              this.loadingRecent = true;
-              try {
-                const response = await fetch('/upload-history/recent?limit=5');
-                if (response.ok) {
-                  const data = await response.json();
-                  this.recentActivity = data.map(item => ({
-                    ...item,
-                    statusDisplay: this.getStatusDisplay(item.status)
-                  }));
-                }
-              } catch (error) {
-                console.error('Failed to load recent activity:', error);
-              } finally {
-                this.loadingRecent = false;
-              }
-            },
-
-            // 상태 표시명 가져오기
-            getStatusDisplay(status) {
-              const statusMap = {
-                'RECEIVED': '수신됨',
-                'VALIDATING': '검증 중',
-                'VALIDATED': '검증 완료',
-                'PARSING': '파싱 중',
-                'PARSED': '파싱 완료',
-                'UPLOADING_TO_LDAP': 'LDAP 업로드 중',
-                'COMPLETED': '완료',
-                'FAILED': '실패'
-              };
-              return statusMap[status] || status;
-            },
-
-            // 날짜 포맷팅
-            formatDateTime(dateString) {
-              if (!dateString) return '';
-              const date = new Date(dateString);
-              return date.toLocaleString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-            }
-          }
-        }
-
         // 알림 표시 함수 (전역)
         function showNotification(message, type = 'info') {
           const colors = {
