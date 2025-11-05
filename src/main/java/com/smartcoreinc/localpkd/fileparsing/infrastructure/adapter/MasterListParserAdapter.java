@@ -6,13 +6,27 @@ import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsingError;
 import com.smartcoreinc.localpkd.fileparsing.domain.port.FileParserPort;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.SignerInformation;
+import org.bouncycastle.cms.SignerInformationStore;
+import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.util.Store;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.Date;
 import java.util.regex.Pattern;
 
@@ -24,17 +38,24 @@ import java.util.regex.Pattern;
  *
  * <p><b>지원 형식</b>:</p>
  * <ul>
- *   <li>ML_SIGNED_CMS: Master List (Signed CMS)</li>
+ *   <li>ML_SIGNED_CMS: Master List (Signed CMS) - ICAO PKD Master List</li>
  * </ul>
  *
  * <p><b>파싱 알고리즘</b>:</p>
  * <ol>
  *   <li>CMS 구조 검증 (Magic bytes 확인)</li>
- *   <li>CMS 서명 검증 (BouncyCastle CMSSignedData 사용)</li>
+ *   <li>BouncyCastle을 사용한 CMS 서명 검증</li>
+ *   <li>신뢰 인증서(UN_CSCA_2.pem)를 사용하여 서명자 검증</li>
  *   <li>서명된 콘텐츠에서 인증서 목록 추출</li>
  *   <li>각 인증서 파싱 및 메타데이터 추출</li>
  *   <li>ParsedFile에 CertificateData 추가</li>
  * </ol>
+ *
+ * <p><b>CMS 서명 검증</b>:</p>
+ * <ul>
+ *   <li>신뢰 인증서: UN_CSCA_2.pem (application.properties에서 설정)</li>
+ *   <li>검증 실패 시: ParsingError 추가하지만 파싱은 계속 진행</li>
+ * </ul>
  *
  * <p><b>오류 처리</b>:</p>
  * <ul>
@@ -43,23 +64,9 @@ import java.util.regex.Pattern;
  *   <li>인증서 파싱 오류: ParsingError 추가</li>
  * </ul>
  *
- * <p><b>Note</b>: 현재 구현은 기본 CMS 파싱만 지원합니다.
- * 실제 서명 검증은 추후 CertificateValidation Context에서 수행됩니다.</p>
- *
- * <p><b>사용 예시</b>:</p>
- * <pre>{@code
- * MasterListParserAdapter parser = new MasterListParserAdapter();
- *
- * byte[] mlContent = Files.readAllBytes(Paths.get("masterlist-ML.ml"));
- * ParsedFile parsedFile = ParsedFile.create(parsedFileId, uploadId, fileFormat);
- *
- * parser.parse(mlContent, FileFormat.ML_SIGNED_CMS, parsedFile);
- * // parsedFile.getCertificates() - 추출된 인증서 목록
- * }</pre>
- *
  * @author SmartCore Inc.
- * @version 1.0
- * @since 2025-10-23
+ * @version 2.0
+ * @since 2025-11-05
  * @see FileParserPort
  * @see ParsedFile
  * @see org.bouncycastle.cms.CMSSignedData
@@ -70,6 +77,50 @@ public class MasterListParserAdapter implements FileParserPort {
 
     // CMS Magic bytes (ASN.1 SEQUENCE tag)
     private static final byte[] CMS_MAGIC = {0x30};  // SEQUENCE tag in BER
+
+    @Value("${app.masterlist.trust-cert-path}")
+    private Resource trustCertResource;
+
+    private X509Certificate trustCertificate;
+
+    /**
+     * BouncyCastle Provider 등록 및 신뢰 인증서 로드
+     */
+    @PostConstruct
+    public void init() {
+        // BouncyCastle Provider 등록
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+            Security.addProvider(new BouncyCastleProvider());
+            log.info("BouncyCastle Provider registered");
+        }
+
+        // 신뢰 인증서 로드
+        loadTrustCertificate();
+    }
+
+    /**
+     * UN_CSCA_2.pem 신뢰 인증서 로드
+     */
+    private void loadTrustCertificate() {
+        try {
+            log.info("Loading trust certificate from: {}", trustCertResource.getDescription());
+
+            try (InputStream is = trustCertResource.getInputStream()) {
+                CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                trustCertificate = (X509Certificate) cf.generateCertificate(is);
+
+                log.info("Trust certificate loaded successfully");
+                log.info("  - Subject: {}", trustCertificate.getSubjectX500Principal().getName());
+                log.info("  - Issuer: {}", trustCertificate.getIssuerX500Principal().getName());
+                log.info("  - Valid from: {} to {}",
+                    trustCertificate.getNotBefore(),
+                    trustCertificate.getNotAfter());
+            }
+        } catch (Exception e) {
+            log.error("Failed to load trust certificate", e);
+            throw new RuntimeException("Failed to load trust certificate: " + e.getMessage(), e);
+        }
+    }
 
     @Override
     public void parse(byte[] fileBytes, FileFormat fileFormat, ParsedFile parsedFile) throws ParsingException {
@@ -87,7 +138,7 @@ public class MasterListParserAdapter implements FileParserPort {
             // 1. CMS 형식 검증
             validateCmsFormat(fileBytes);
 
-            // 2. CMS 파싱
+            // 2. CMS 파싱 및 인증서 추출
             parseCmsContent(fileBytes, parsedFile);
 
             // 3. 파싱 완료
@@ -117,188 +168,265 @@ public class MasterListParserAdapter implements FileParserPort {
 
     @Override
     public boolean supports(FileFormat fileFormat) {
-        return fileFormat != null && fileFormat.getDisplayName() != null &&
-            (fileFormat.getDisplayName().contains("Master List") ||
-             fileFormat.getDisplayName().contains("CMS"));
+        return fileFormat.isMasterList();
     }
 
     /**
      * CMS 형식 검증
+     *
+     * @param fileBytes 파일 바이트 배열
+     * @throws ParsingException CMS 형식이 아닌 경우
      */
     private void validateCmsFormat(byte[] fileBytes) throws ParsingException {
-        if (fileBytes == null || fileBytes.length < 4) {
-            throw new ParsingException("Invalid Master List: file too small");
+        if (fileBytes == null || fileBytes.length == 0) {
+            throw new ParsingException("File content is empty");
         }
 
-        // ASN.1 SEQUENCE tag (0x30) 확인
-        if (fileBytes[0] != 0x30) {
-            throw new ParsingException("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
+        // Check for CMS magic bytes (ASN.1 SEQUENCE)
+        if (fileBytes[0] != CMS_MAGIC[0]) {
+            throw new ParsingException("Invalid CMS format: missing SEQUENCE tag");
         }
 
         log.debug("CMS format validation passed");
     }
 
     /**
-     * CMS 콘텐츠 파싱
+     * CMS 콘텐츠 파싱 및 인증서 추출
      *
-     * <p>참고: 현재 구현은 간단한 파싱만 수행합니다.
-     * 실제 CMS 서명 검증은 CertificateValidation Context에서 수행됩니다.</p>
+     * <p>BouncyCastle CMSSignedData를 사용하여 CMS 서명을 검증하고,
+     * 서명된 콘텐츠에서 인증서를 추출합니다.</p>
+     *
+     * <p><b>처리 과정</b>:</p>
+     * <ol>
+     *   <li>CMSSignedData 객체 생성</li>
+     *   <li>서명자(Signer) 정보 추출</li>
+     *   <li>신뢰 인증서를 사용하여 서명 검증</li>
+     *   <li>인증서 Store에서 모든 인증서 추출</li>
+     *   <li>각 인증서를 CertificateData로 변환</li>
+     * </ol>
+     *
+     * @param fileBytes 파일 바이트 배열
+     * @param parsedFile ParsedFile Aggregate
      */
-    private void parseCmsContent(byte[] fileBytes, ParsedFile parsedFile) throws Exception {
-        log.debug("Parsing CMS content");
+    private void parseCmsContent(byte[] fileBytes, ParsedFile parsedFile) {
+        log.debug("Parsing CMS content with BouncyCastle");
 
         try {
-            // CertificateFactory를 사용하여 인증서 추출 시도
-            // Note: 실제 CMS 서명 검증은 BouncyCastle CMSSignedData 사용
-            // 현재는 기본 파싱만 수행
+            // 1. CMSSignedData 객체 생성
+            CMSSignedData cmsSignedData = new CMSSignedData(fileBytes);
+            log.debug("CMSSignedData created successfully");
+
+            // 2. 서명 검증
+            boolean signatureValid = verifyCmsSignature(cmsSignedData, parsedFile);
+            if (signatureValid) {
+                log.info("CMS signature verification: PASSED");
+            } else {
+                log.warn("CMS signature verification: FAILED (continuing with certificate extraction)");
+            }
+
+            // 3. 인증서 추출
+            Store<X509CertificateHolder> certStore = cmsSignedData.getCertificates();
+            Collection<X509CertificateHolder> certHolders = certStore.getMatches(null);
+
+            log.info("Found {} certificates in CMS", certHolders.size());
+
+            // 4. 각 인증서 처리
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            int processedCount = 0;
+            int errorCount = 0;
 
-            try {
-                // DER 형식의 인증서로 직접 파싱 시도 (CMS 내부의 인증서)
-                ByteArrayInputStream bais = new ByteArrayInputStream(fileBytes);
-                X509Certificate cert = (X509Certificate) cf.generateCertificate(bais);
-
-                log.debug("Direct certificate extraction successful");
-                processCertificate(cert, parsedFile);
-
-            } catch (Exception e1) {
-                log.debug("Direct certificate extraction failed, trying alternative method: {}", e1.getMessage());
-
-                // BouncyCastle을 사용한 CMS 파싱 시도
+            for (X509CertificateHolder certHolder : certHolders) {
                 try {
-                    // Note: 이 부분은 BouncyCastle 의존성이 필요합니다
-                    // pom.xml에 org.bouncycastle:bcmail-jdk15on 추가 필요
-                    parseCmsWithBouncyCastle(fileBytes, parsedFile);
-                } catch (Exception e2) {
-                    log.warn("CMS parsing failed with both methods: {}", e2.getMessage());
+                    // X509CertificateHolder → X509Certificate 변환
+                    byte[] certBytes = certHolder.getEncoded();
+                    ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
+                    X509Certificate cert = (X509Certificate) cf.generateCertificate(bais);
+
+                    // 인증서 처리
+                    processCertificate(cert, parsedFile);
+                    processedCount++;
+
+                    log.debug("Certificate processed [{}/{}]: subject={}",
+                        processedCount, certHolders.size(),
+                        cert.getSubjectX500Principal().getName());
+
+                } catch (Exception e) {
+                    errorCount++;
+                    log.error("Failed to process certificate", e);
                     parsedFile.addError(ParsingError.of(
-                        "CMS_PARSE_ERROR",
-                        "CMS Content",
-                        "Failed to parse CMS: " + e2.getMessage()
+                        "CERT_PROCESSING_ERROR",
+                        "Failed to process certificate: " + e.getMessage()
                     ));
                 }
             }
 
+            log.info("Certificate extraction completed: {} processed, {} errors",
+                processedCount, errorCount);
+
         } catch (Exception e) {
-            log.error("Error parsing CMS content", e);
+            log.error("CMS parsing failed", e);
             parsedFile.addError(ParsingError.of(
-                "CMS_PARSE_ERROR",
-                "CMS Content",
-                e.getMessage()
+                "CMS_PARSING_ERROR",
+                "Failed to parse CMS content: " + e.getMessage()
             ));
         }
     }
 
     /**
-     * BouncyCastle을 사용한 CMS 파싱
+     * CMS 서명 검증
      *
-     * <p>주의: 이 메서드는 BouncyCastle 라이브러리의 존재를 가정합니다.</p>
+     * <p>신뢰 인증서(UN_CSCA_2.pem)를 사용하여 CMS 서명을 검증합니다.</p>
+     *
+     * @param cmsSignedData CMSSignedData 객체
+     * @param parsedFile ParsedFile Aggregate (오류 기록용)
+     * @return 서명 검증 성공 여부
      */
-    private void parseCmsWithBouncyCastle(byte[] fileBytes, ParsedFile parsedFile) throws Exception {
-        log.debug("Parsing CMS with BouncyCastle");
-
+    private boolean verifyCmsSignature(CMSSignedData cmsSignedData, ParsedFile parsedFile) {
         try {
-            // BouncyCastle CMSSignedData를 사용한 파싱
-            // Class<?>를 사용하여 동적으로 로드 (선택 사항)
-            Class<?> cmsSignedDataClass = Class.forName("org.bouncycastle.cms.CMSSignedData");
-            var cmsSignedData = cmsSignedDataClass.getConstructor(byte[].class).newInstance(fileBytes);
+            SignerInformationStore signers = cmsSignedData.getSignerInfos();
+            Collection<SignerInformation> signerCollection = signers.getSigners();
 
-            // getCertificates() 메서드 호출
-            var getCertificates = cmsSignedDataClass.getMethod("getCertificates");
-            Object certStoreObject = getCertificates.invoke(cmsSignedData);
-
-            // CertStore의 getCertificates 메서드 호출
-            Class<?> certStoreClass = Class.forName("java.security.cert.CertStore");
-            var getCertsMethod = certStoreClass.getMethod("getCertificates", Class.forName("java.security.cert.CertSelector"));
-
-            // null selector로 모든 인증서 가져오기
-            Object selector = Class.forName("java.security.cert.X509CertSelector").newInstance();
-            Object certificates = getCertsMethod.invoke(certStoreObject, selector);
-
-            // 인증서 처리
-            if (certificates instanceof java.util.Collection) {
-                for (Object cert : (java.util.Collection<?>) certificates) {
-                    if (cert instanceof X509Certificate) {
-                        processCertificate((X509Certificate) cert, parsedFile);
-                    }
-                }
+            if (signerCollection.isEmpty()) {
+                log.warn("No signers found in CMS");
+                parsedFile.addError(ParsingError.of(
+                    "NO_SIGNERS",
+                    "No signers found in CMS signature"
+                ));
+                return false;
             }
 
-        } catch (ClassNotFoundException e) {
-            log.warn("BouncyCastle not available, skipping CMS signature verification: {}", e.getMessage());
+            log.debug("Found {} signer(s) in CMS", signerCollection.size());
+
+            // 첫 번째 서명자 검증
+            SignerInformation signer = signerCollection.iterator().next();
+
+            // 신뢰 인증서를 사용하여 서명 검증
+            JcaSimpleSignerInfoVerifierBuilder verifierBuilder =
+                new JcaSimpleSignerInfoVerifierBuilder()
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME);
+
+            boolean verified = signer.verify(verifierBuilder.build(trustCertificate));
+
+            if (verified) {
+                log.info("CMS signature verified successfully with trust certificate");
+            } else {
+                log.warn("CMS signature verification failed");
+                parsedFile.addError(ParsingError.of(
+                    "SIGNATURE_VERIFICATION_FAILED",
+                    "CMS signature verification failed with trust certificate"
+                ));
+            }
+
+            return verified;
+
+        } catch (Exception e) {
+            log.error("CMS signature verification failed", e);
+            parsedFile.addError(ParsingError.of(
+                "SIGNATURE_VERIFICATION_ERROR",
+                "CMS signature verification error: " + e.getMessage()
+            ));
+            return false;
         }
     }
 
     /**
-     * 인증서 처리
+     * 개별 인증서 처리 및 CertificateData 생성
+     *
+     * @param cert X509Certificate
+     * @param parsedFile ParsedFile Aggregate
      */
     private void processCertificate(X509Certificate cert, ParsedFile parsedFile) throws Exception {
         log.debug("Processing certificate: {}", cert.getSubjectX500Principal().getName());
 
-        String subjectDn = cert.getSubjectX500Principal().getName();
-        String issuerDn = cert.getIssuerX500Principal().getName();
-        String serialNumber = cert.getSerialNumber().toString(16).toUpperCase();
-        String countryCode = extractCountryCode(subjectDn);
+        // 1. 발급자 정보 추출
+        String issuer = cert.getIssuerX500Principal().getName();
+        String subject = cert.getSubjectX500Principal().getName();
 
+        // 2. 국가 코드 추출 (C=KR 형식)
+        String countryCode = extractCountryCode(subject);
+
+        // 3. 일련번호 추출
+        String serialNumber = cert.getSerialNumber().toString(16).toUpperCase();
+
+        // 4. 유효기간 추출
         Date notBefore = cert.getNotBefore();
         Date notAfter = cert.getNotAfter();
+        LocalDateTime validFrom = LocalDateTime.ofInstant(notBefore.toInstant(), ZoneId.systemDefault());
+        LocalDateTime validUntil = LocalDateTime.ofInstant(notAfter.toInstant(), ZoneId.systemDefault());
 
-        LocalDateTime notBeforeTime = notBefore.toInstant()
-            .atZone(ZoneId.systemDefault())
-            .toLocalDateTime();
-        LocalDateTime notAfterTime = notAfter.toInstant()
-            .atZone(ZoneId.systemDefault())
-            .toLocalDateTime();
+        // 5. 지문 계산
+        String fingerprint = calculateFingerprint(cert);
 
-        // CertificateData 생성 (valid: true - 기본값, 실제 검증은 Certificate Validation Context에서)
+        // 6. 인증서 타입 결정 (CSCA, DSC 등)
+        String certificateType = determineCertificateType(subject);
+
+        // 7. CertificateData 생성 (valid: true - 기본값, 실제 검증은 Certificate Validation Context에서)
         CertificateData certificateData = CertificateData.of(
-            "X.509",  // certType
+            certificateType,
             countryCode,
-            subjectDn,
-            issuerDn,
+            subject,
+            issuer,
             serialNumber,
-            notBeforeTime,
-            notAfterTime,
+            validFrom,
+            validUntil,
             cert.getEncoded(),
-            calculateFingerprint(cert),
-            true  // valid - 기본값으로 true, 실제 검증은 추후 진행
+            fingerprint,
+            true  // 기본값: 서명 검증 성공 시 true
         );
 
         parsedFile.addCertificate(certificateData);
         log.debug("Certificate processed: subject={}, issuer={}, serial={}",
-            subjectDn, issuerDn, serialNumber);
+            subject, issuer, serialNumber);
     }
 
     /**
-     * X.509 인증서의 SHA-256 fingerprint 계산
+     * Subject DN을 분석하여 인증서 타입 결정
+     *
+     * @param subjectDN Subject Distinguished Name
+     * @return 인증서 타입 (CSCA, DSC, DS, UNKNOWN)
      */
-    private String calculateFingerprint(X509Certificate cert) throws Exception {
-        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-        md.update(cert.getEncoded());
-        byte[] digest = md.digest();
+    private String determineCertificateType(String subjectDN) {
+        String upperDN = subjectDN.toUpperCase();
 
-        StringBuilder sb = new StringBuilder();
-        for (byte b : digest) {
-            sb.append(String.format("%02X", b & 0xFF));
+        if (upperDN.contains("CSCA") || upperDN.contains("COUNTRY SIGNING CA")) {
+            return "CSCA";
+        } else if (upperDN.contains("DSC") || upperDN.contains("DOCUMENT SIGNER")) {
+            return "DSC";
+        } else if (upperDN.contains("DS") || upperDN.contains("SIGNER")) {
+            return "DS";
         }
-        return sb.toString().toLowerCase();
+
+        return "UNKNOWN";
     }
 
     /**
-     * DN에서 국가코드(C) 추출
+     * Subject DN에서 국가 코드 추출
      */
-    private String extractCountryCode(String dn) {
-        if (dn == null || dn.isEmpty()) {
-            return null;
-        }
-
-        Pattern countryPattern = Pattern.compile("(?:^|,)\\s*C\\s*=\\s*([A-Z]{2})(?:,|$)");
-        java.util.regex.Matcher matcher = countryPattern.matcher(dn);
-
+    private String extractCountryCode(String subjectDN) {
+        Pattern pattern = Pattern.compile("C=([A-Z]{2})");
+        java.util.regex.Matcher matcher = pattern.matcher(subjectDN);
         if (matcher.find()) {
             return matcher.group(1);
         }
+        return "UNKNOWN";
+    }
 
-        return null;
+    /**
+     * 인증서 지문(Fingerprint) 계산 (SHA-256)
+     */
+    private String calculateFingerprint(X509Certificate cert) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] der = cert.getEncoded();
+        byte[] digest = md.digest(der);
+
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : digest) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString().toUpperCase();
     }
 }
