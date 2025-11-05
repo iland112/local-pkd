@@ -382,21 +382,39 @@ public class MasterListParserAdapter implements FileParserPort {
     /**
      * Subject DN을 분석하여 인증서 타입 결정
      *
+     * <p>Master List CMS 파일의 경우, 대부분의 인증서가 CSCA 타입입니다.
+     * CertificateData는 CSCA, DSC, DSC_NC 타입만 허용하므로, 이에 맞춰 매핑합니다.</p>
+     *
      * @param subjectDN Subject Distinguished Name
-     * @return 인증서 타입 (CSCA, DSC, DS, UNKNOWN)
+     * @return 인증서 타입 (CSCA, DSC, DSC_NC)
      */
     private String determineCertificateType(String subjectDN) {
         String upperDN = subjectDN.toUpperCase();
 
+        // CSCA 타입 감지
         if (upperDN.contains("CSCA") || upperDN.contains("COUNTRY SIGNING CA")) {
             return "CSCA";
-        } else if (upperDN.contains("DSC") || upperDN.contains("DOCUMENT SIGNER")) {
-            return "DSC";
-        } else if (upperDN.contains("DS") || upperDN.contains("SIGNER")) {
-            return "DS";
         }
 
-        return "UNKNOWN";
+        // DSC 타입 감지
+        if (upperDN.contains("DSC") || upperDN.contains("DOCUMENT SIGNER")) {
+            return "DSC";
+        }
+
+        // DSC_NC 타입 감지 (DSC with Name Change)
+        if (upperDN.contains("DSC_NC") || upperDN.contains("DSC-NC")) {
+            return "DSC_NC";
+        }
+
+        // DS 또는 SIGNER로 표시된 경우 DSC로 분류
+        if (upperDN.contains("DS") || upperDN.contains("SIGNER")) {
+            log.debug("Classifying certificate with 'DS' or 'SIGNER' as DSC: {}", subjectDN);
+            return "DSC";
+        }
+
+        // Master List CMS의 경우, 대부분 CSCA이므로 기본값 CSCA 반환
+        log.debug("Unknown certificate type, defaulting to CSCA: {}", subjectDN);
+        return "CSCA";
     }
 
     /**
