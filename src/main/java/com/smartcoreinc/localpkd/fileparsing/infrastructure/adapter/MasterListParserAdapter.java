@@ -94,7 +94,9 @@ public class MasterListParserAdapter implements FileParserPort {
             int totalEntries = parsedFile.getCertificates().size() +
                              parsedFile.getCrls().size() +
                              parsedFile.getErrors().size();
-            parsedFile.completeParsing(totalEntries);
+
+            // NOTE: completeParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.completeParsing(totalEntries);
 
             log.info("Master List parsing completed: {} certificates, {} errors",
                 parsedFile.getCertificates().size(),
@@ -102,11 +104,13 @@ public class MasterListParserAdapter implements FileParserPort {
 
         } catch (ParsingException e) {
             log.error("Master List parsing failed", e);
-            parsedFile.failParsing(e.getMessage());
+            // NOTE: failParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.failParsing(e.getMessage());
             throw e;
         } catch (Exception e) {
             log.error("Master List parsing failed", e);
-            parsedFile.failParsing(e.getMessage());
+            // NOTE: failParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
+            // parsedFile.failParsing(e.getMessage());
             throw new ParsingException("Master List parsing error: " + e.getMessage(), e);
         }
     }
