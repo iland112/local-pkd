@@ -3,15 +3,18 @@ package com.smartcoreinc.localpkd.certificatevalidation.application.event;
 import com.smartcoreinc.localpkd.certificatevalidation.application.command.UploadToLdapCommand;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.UploadToLdapResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.event.UploadToLdapCompletedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,6 +68,7 @@ public class UploadToLdapEventHandler {
 
     private final UploadToLdapUseCase uploadToLdapUseCase;
     private final CertificateRepository certificateRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @org.springframework.beans.factory.annotation.Value("${spring.ldap.base:dc=ldap,dc=smartcoreinc,dc=com}")
     private String defaultBaseDn;
@@ -127,12 +131,12 @@ public class UploadToLdapEventHandler {
             // 5. 결과 로깅
             logUploadResult(response);
 
-            // 6. 성공 이벤트 발행 (향후 구현)
-            // publishUploadCompletedEvent(response);
+            // 6. ✅ Task 2.2: 업로드 완료 이벤트 발행
+            publishUploadCompletedEvent(response, event.getUploadId());
 
         } catch (Exception e) {
             log.error("Error handling CertificatesValidatedEvent for upload ID: {}", event.getUploadId(), e);
-            // 실패 이벤트 발행 (향후 구현)
+            // 7. ✅ Task 2.3: 업로드 실패 이벤트 발행 (선택사항)
             // publishUploadFailedEvent(event, e);
         }
     }
@@ -177,13 +181,42 @@ public class UploadToLdapEventHandler {
     }
 
     /**
-     * 업로드 완료 이벤트 발행 (향후 구현)
+     * 업로드 완료 이벤트 발행 (✅ Phase 17 Task 2.2)
      *
-     * @param response 업로드 응답
+     * <p><b>목적</b>: LDAP 업로드 완료 후 다음 단계를 트리거합니다.
+     * - LdapUploadEventHandler가 이벤트를 수신하여 최종 완료 처리 수행</p>
+     *
+     * <p><b>이벤트 발행</b>:
+     * - UploadToLdapCompletedEvent 생성 및 발행
+     * - ApplicationEventPublisher를 통해 Spring Event Bus에 등록</p>
+     *
+     * @param response 업로드 응답 (성공/실패 정보 포함)
+     * @param uploadId 원본 파일 업로드 ID
+     * @since Phase 17 Task 2.2
      */
-    private void publishUploadCompletedEvent(UploadToLdapResponse response) {
-        // TODO: UploadToLdapCompletedEvent 구현 및 발행
-        log.debug("Publishing UploadToLdapCompletedEvent (TODO)");
+    private void publishUploadCompletedEvent(UploadToLdapResponse response, java.util.UUID uploadId) {
+        try {
+            int successCount = response.getSuccessCount();
+            int failureCount = response.getFailureCount();
+
+            UploadToLdapCompletedEvent event = new UploadToLdapCompletedEvent(
+                uploadId,
+                successCount,
+                failureCount,
+                LocalDateTime.now()
+            );
+
+            log.info("Publishing UploadToLdapCompletedEvent: uploadId={}, success={}, failure={}",
+                uploadId, successCount, failureCount);
+
+            eventPublisher.publishEvent(event);
+
+            log.debug("UploadToLdapCompletedEvent published successfully for uploadId: {}", uploadId);
+
+        } catch (Exception e) {
+            log.error("Error publishing UploadToLdapCompletedEvent for uploadId: {}", uploadId, e);
+            // 이벤트 발행 실패는 주 작업에 영향을 주지 않음
+        }
     }
 
     /**

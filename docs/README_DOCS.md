@@ -1,224 +1,232 @@
-# 📚 Documentation Index
+# 📚 문서 가이드 & 색인
 
-> Local PKD Evaluation Project 문서 가이드
+> Local PKD Evaluation Project 문서 관리 및 검색 가이드
 
-**마지막 업데이트**: 2025-10-23
-**문서 버전**: 6.0
-
----
-
-## 🎯 빠른 시작 (Quick Start)
-
-### 처음 프로젝트를 접하는 경우
-1. 👉 **[FINAL_PROJECT_STATUS.md](./FINAL_PROJECT_STATUS.md)** - 프로젝트 전체 개요
-2. 👉 **[TODO.md](./TODO.md)** - 현재 작업 상태
-3. 👉 **[PHASE_9_SSE_IMPLEMENTATION.md](./PHASE_9_SSE_IMPLEMENTATION.md)** - 최신 구현 (SSE 실시간 진행률)
-
-### 아키텍처를 이해하고 싶은 경우
-1. **[DDD_IMPLEMENTATION_COMPLETE.md](./DDD_IMPLEMENTATION_COMPLETE.md)** - DDD 구현 완료 (Phase 1-5)
-2. **[ddd-msa-migration-roadmap.md](./ddd-msa-migration-roadmap.md)** - 전체 로드맵
+**마지막 업데이트**: 2025-11-07
+**상태**: ✅ 통합 완료 (81개 문서)
+**문서 조직**: Main (60개) + Archive (21개)
 
 ---
 
-## 📁 문서 구조 (간소화)
+## 🎯 여기서 시작하세요!
+
+### 👉 **처음이신가요? → [00_START_HERE.md](./00_START_HERE.md)** ⭐⭐⭐
+5분 안에 프로젝트 전체를 파악할 수 있는 가이드입니다.
+
+### 👉 **프로젝트 현황을 알고 싶으신가요? → [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md)**
+- 프로젝트 규모: 198개 Java 파일
+- 구현 상태: Phase 1-17 완료 (85%+)
+- 5개 Bounded Contexts (DDD)
+
+### 👉 **다음 할 일이 뭔가요? → [TODO.md](./TODO.md)**
+Phase 18+ 계획 및 작업 목록
+
+### 👉 **전체 문서를 찾아야 하나요? → [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md)**
+88개 모든 문서의 상세 색인
+
+---
+
+## 📖 주요 문서 (Quick Links)
+
+### 🌟 필수 마스터 문서
+| 파일 | 설명 | 읽는 시간 |
+|------|------|---------|
+| [00_START_HERE.md](./00_START_HERE.md) | 🆕 문서 시작 가이드 (이 문서의 개선판) | 5분 |
+| [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md) | 프로젝트 종합 현황 | 15분 |
+| [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) | 전체 문서 색인 | 10분 |
+
+### 🏗️ 아키텍처 문서
+| 파일 | 설명 | 읽는 시간 |
+|------|------|---------|
+| [ddd-msa-migration-roadmap.md](./ddd-msa-migration-roadmap.md) | DDD & MSA 로드맵 | 20분 |
+| [DDD_IMPLEMENTATION_COMPLETE.md](./DDD_IMPLEMENTATION_COMPLETE.md) | DDD 구현 완료 (Phase 1-5) | 25분 |
+| [ddd_refactoring_strategy.md](./ddd_refactoring_strategy.md) | 리팩토링 전략 | 15분 |
+
+### 🔧 개발 표준 & 가이드
+| 파일 | 설명 | 대상 |
+|------|------|------|
+| [FRONTEND_CODING_STANDARDS.md](./FRONTEND_CODING_STANDARDS.md) | Frontend 코딩 규칙 | Frontend 개발자 |
+| [API_REFERENCE_LDAP_MODULE.md](./API_REFERENCE_LDAP_MODULE.md) | LDAP API 레퍼런스 | LDAP 작업자 |
+| [LDAP_USAGE_EXAMPLES_CONFIGURATION.md](./LDAP_USAGE_EXAMPLES_CONFIGURATION.md) | LDAP 사용 예시 | LDAP 작업자 |
+
+### 📋 Phase별 구현 문서
+| Phase | 파일 | 상태 |
+|-------|------|------|
+| **6-9** | [PHASE_6_SEARCH_IMPLEMENTATION.md](./PHASE_6_SEARCH_IMPLEMENTATION.md) | ✅ 완료 |
+| **6-9** | [PHASE_7_EVENT_LISTENERS_IMPLEMENTATION.md](./PHASE_7_EVENT_LISTENERS_IMPLEMENTATION.md) | ✅ 완료 |
+| **8** | [PHASE_8_UI_IMPROVEMENTS.md](./PHASE_8_UI_IMPROVEMENTS.md) | ✅ 완료 |
+| **9** | [PHASE_9_SSE_IMPLEMENTATION.md](./PHASE_9_SSE_IMPLEMENTATION.md) | ✅ 완료 |
+| **10** | [PHASE_10_FILE_PARSING.md](./PHASE_10_FILE_PARSING.md) | ✅ 완료 |
+| **11** | [PHASE_11_CERTIFICATE_VALIDATION.md](./PHASE_11_CERTIFICATE_VALIDATION.md) | ✅ 완료 |
+| **12** | [PHASE_12_COMPLETE.md](./PHASE_12_COMPLETE.md) | ✅ 완료 |
+| **13-16** | Phase 13-16 문서들 | ✅ 완료 |
+| **17** | [PHASE_17_PLAN.md](./PHASE_17_PLAN.md) | ✅ 완료 |
+| **18+** | [TODO.md](./TODO.md) | 📅 계획 |
+
+### 🎯 기능별 문서
+| 기능 | 파일 | 상태 |
+|------|------|------|
+| 파일 업로드 | [file_upload_implementation_plan.md](./file_upload_implementation_plan.md) | ✅ 완료 |
+| 중복 검사 | [duplicate_check_feature_summary.md](./duplicate_check_feature_summary.md) | ✅ 완료 |
+| 파일 파싱 | [PHASE_10_FILE_PARSING.md](./PHASE_10_FILE_PARSING.md) | ✅ 완료 |
+| 인증서 검증 | [PHASE_11_CERTIFICATE_VALIDATION.md](./PHASE_11_CERTIFICATE_VALIDATION.md) | ✅ 완료 |
+| LDAP 통합 | [PHASE_14_WEEK1_FINAL_REPORT.md](./PHASE_14_WEEK1_FINAL_REPORT.md) | ✅ 완료 |
+| SSE 진행률 | [PHASE_9_SSE_IMPLEMENTATION.md](./PHASE_9_SSE_IMPLEMENTATION.md) | ✅ 완료 |
+
+---
+
+## 🗂️ 문서 조직 구조
+
+### Main Docs (60개)
+현재 프로젝트에서 참고해야 하는 문서들
 
 ```
-docs/
-├── 🔥 FINAL_PROJECT_STATUS.md          # 프로젝트 전체 상태
-├── 📋 TODO.md                           # 현재/다음 작업
-├── 📖 README_DOCS.md                    # 이 파일
+📁 docs/
+├── 🌟 00_START_HERE.md               ← 여기서 시작!
+├── 🌟 PROJECT_MASTER_SUMMARY_2025-11-07.md
+├── 🌟 DOCUMENTATION_INDEX_2025-11-07.md
 │
-├── 🏗️ DDD_IMPLEMENTATION_COMPLETE.md    # DDD 아키텍처 (Phase 1-5)
-├── 🗺️ ddd-msa-migration-roadmap.md      # 마이그레이션 로드맵
-├── 📐 ddd_refactoring_strategy.md       # 리팩토링 전략
+├── 🏗️ ddd-msa-migration-roadmap.md
+├── 🏗️ DDD_IMPLEMENTATION_COMPLETE.md
+├── 🏗️ ddd_refactoring_strategy.md
 │
-├── 📦 PHASE_6_SEARCH_IMPLEMENTATION.md  # Phase 6: JPA Specification 검색
-├── 🔔 PHASE_7_EVENT_LISTENERS_IMPLEMENTATION.md  # Phase 7: Event Listeners
-├── 🎨 PHASE_8_UI_IMPROVEMENTS.md        # Phase 8: DaisyUI UI
-├── 📡 PHASE_9_SSE_IMPLEMENTATION.md     # Phase 9: SSE 실시간 진행률 (최신)
+├── 📋 PHASE_6_SEARCH_IMPLEMENTATION.md
+├── 📋 PHASE_7_EVENT_LISTENERS_IMPLEMENTATION.md
+├── 📋 PHASE_8_UI_IMPROVEMENTS.md
+├── 📋 PHASE_9_SSE_IMPLEMENTATION.md
+├── 📋 PHASE_10_FILE_PARSING.md
+├── 📋 ... (Phase 11-17)
 │
-├── 🔍 duplicate_check_feature_summary.md    # 중복 검사 기능
-├── 🧪 duplicate_check_api_test_results.md  # API 테스트 결과
-├── 📤 file_upload_implementation_plan.md   # 파일 업로드 계획
-├── 🎯 file_upload_manager_implementation.md # 업로드 매니저 구현
+├── 🎯 file_upload_implementation_plan.md
+├── 🎯 duplicate_check_feature_summary.md
+├── 🎯 API_REFERENCE_LDAP_MODULE.md
+├── 🎯 LDAP_USAGE_EXAMPLES_CONFIGURATION.md
 │
-├── 📂 20251016/                         # 초기 분석 문서 (Phase 1)
-├── 🗄️ archive/                          # 완료된 중간 문서들
-└── 📚 references/                       # 외부 참조 문서
+├── 🔧 FRONTEND_CODING_STANDARDS.md
+├── 🔧 TODO.md
+├── 🔧 README_DOCS.md              ← 이 파일
+│
+└── 📦 archive/                     ← 아카이브 (21개)
+    ├── project_status_history/     (이전 버전)
+    ├── phase_18_detailed/           (상세 분석)
+    └── references/                  (참고 문서)
 ```
-
----
-
-## 📖 핵심 문서 (Must Read)
-
-### 1. 프로젝트 상태
-| 문서 | 설명 | 우선순위 |
-|------|------|----------|
-| **FINAL_PROJECT_STATUS.md** | 프로젝트 최종 상태, 기술 스택, 아키텍처 개요 | ⭐⭐⭐ |
-| **TODO.md** | 현재 진행 중인 작업 및 다음 Sprint 계획 | ⭐⭐⭐ |
-
-### 2. 아키텍처
-| 문서 | 설명 | 우선순위 |
-|------|------|----------|
-| **DDD_IMPLEMENTATION_COMPLETE.md** | DDD 구현 완료 (Shared Kernel, Domain, Application, Infrastructure) | ⭐⭐⭐ |
-| **ddd-msa-migration-roadmap.md** | Modular Monolith → MSA 전환 로드맵 | ⭐⭐ |
-| **ddd_refactoring_strategy.md** | DDD 리팩토링 전략 및 패턴 | ⭐⭐ |
-
-### 3. Phase별 구현 (시간순)
-| Phase | 문서 | 설명 | 완료일 |
-|-------|------|------|--------|
-| **Phase 6** | PHASE_6_SEARCH_IMPLEMENTATION.md | JPA Specification 기반 동적 검색 | 2025-10-19 |
-| **Phase 7** | PHASE_7_EVENT_LISTENERS_IMPLEMENTATION.md | Domain Event Listeners (Checksum, Upload) | 2025-10-20 |
-| **Phase 8** | PHASE_8_UI_IMPROVEMENTS.md | DaisyUI UI, 중복 검사, 체크섬 검증 | 2025-10-22 |
-| **Phase 9** | PHASE_9_SSE_IMPLEMENTATION.md | Server-Sent Events (SSE) 실시간 진행률 추적 | 2025-10-23 |
-
-### 4. 기능별 설계
-| 문서 | 설명 |
-|------|------|
-| **duplicate_check_feature_summary.md** | 중복 파일 검사 기능 요약 |
-| **duplicate_check_api_test_results.md** | 중복 검사 API 테스트 (4/4 passed) |
-| **file_upload_implementation_plan.md** | 파일 업로드 11단계 프로세스 |
-| **file_upload_manager_implementation.md** | 파일 업로드 매니저 구현 상세 |
-
----
-
-## 🗂️ 아카이브 및 히스토리
-
-### 📂 ./20251016/ (초기 분석)
-- `icao_pkd_detailed_analysis.md` - ICAO PKD 상세 분석
-- `icao_pkd_file_format_analysis.md` - 파일 포맷 분석
-- `file_upload_workflow_design.md` - 워크플로우 설계
-- `phase1_final_complete.md` - Phase 1 완료 보고서
-- `refactoring_complete.md` - 초기 리팩토링 완료
-- `2025-10-16-18:05-session-limit-contents-for-continue.md` - 세션 요약
-- `implementation_summary_2025-10-17.md` - 구현 요약 (Phase 1-3)
-- `session-summary-2025-10-18.md` - 세션 요약 (Phase 4-5)
-
-### 🗄️ ./archive/ (완료된 중간 문서)
-- `phase4_integration_strategy.md` - Phase 4 통합 전략
-- `phase4_2_completion_summary.md` - Phase 4.2 완료 요약
-- `phase4_2_legacy_removal_plan.md` - Legacy 코드 제거 계획
-- `phase5_1_completion_summary.md` - Phase 5.1 완료 요약
-
-> **Note**: 아카이브 문서는 히스토리 참고용이며, 현재 구현은 Phase 6-8 문서 참조
-
----
-
-## 🎯 상황별 가이드
-
-### 🆕 신규 개발자 온보딩
-1. **FINAL_PROJECT_STATUS.md** (10분) - 프로젝트 개요
-2. **DDD_IMPLEMENTATION_COMPLETE.md** (20분) - 아키텍처 이해
-3. **PHASE_9_SSE_IMPLEMENTATION.md** (15분) - 최신 기능 파악 (SSE)
-4. **TODO.md** (5분) - 다음 작업 확인
-
-**예상 시간**: ~50분
-
-### 🔧 특정 기능 개발
-1. 해당 Phase 문서 확인 (PHASE_6, 7, 8, 9)
-2. 관련 기능 설계 문서 참조 (duplicate_check, file_upload)
-3. API 테스트 결과 확인 (duplicate_check_api_test_results)
-
-### 🏗️ 아키텍처 개선
-1. **ddd-msa-migration-roadmap.md** - 전체 계획 파악
-2. **ddd_refactoring_strategy.md** - 패턴 이해
-3. **DDD_IMPLEMENTATION_COMPLETE.md** - 현재 구현 확인
-
-### 🐛 버그 수정
-1. **TODO.md** - 알려진 이슈 확인
-2. 해당 Phase 문서에서 관련 기능 찾기
-3. 테스트 결과 문서 참조
-
----
-
-## 📊 프로젝트 현황 요약
-
-### ✅ 완료된 Phase (1-9)
-- ✅ **Phase 1-5**: DDD 아키텍처 구현 (Shared Kernel, Domain, Application, Infrastructure)
-- ✅ **Phase 6**: JPA Specification 기반 동적 검색
-- ✅ **Phase 7**: Domain Event Listeners (3개)
-- ✅ **Phase 8**: DaisyUI 기반 UI 개선 (업로드 이력, 중복 검사, 체크섬 검증)
-- ✅ **Phase 9**: Server-Sent Events (SSE) 실시간 진행률 추적
-
-### 🚀 다음 Phase (10+)
-- ⏳ **Phase 10**: File Parsing (LDIF, Master List)
-- ⏳ **Phase 11**: Certificate Validation
-- ⏳ **Phase 12**: OpenLDAP Integration
-
-자세한 내용은 **TODO.md** 참조.
-
----
-
-## 📝 문서 작성 규칙
-
-1. **파일명 규칙**
-   - Phase 문서: `PHASE_N_DESCRIPTION.md`
-   - 일반 문서: `UPPERCASE_SNAKE_CASE.md` 또는 `lowercase-with-hyphens.md`
-
-2. **문서 구조**
-   ```markdown
-   # Title
-   ## Overview
-   ## Implementation Details
-   ## Code Examples
-   ## Test Results
-   ## Summary
-   ```
-
-3. **버전 관리**
-   - 각 문서에 작성일, 버전 명시
-   - 중요 업데이트 시 문서 버전 증가
-
-4. **아카이브 정책**
-   - 완료된 Phase의 중간 문서 → `./archive/`
-   - 초기 분석 문서 → `./20251016/`
-   - 외부 참조 → `./references/`
 
 ---
 
 ## 🔍 문서 검색 팁
 
-### 키워드로 찾기
-```bash
-# Phase 관련 문서
-find docs -name "PHASE_*.md"
+### 특정 기능을 찾으려면
+1. [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) 의 "기능별" 섹션 참고
+2. 원하는 기능명 검색
 
-# 중복 검사 관련
-grep -r "duplicate" docs/*.md
+### 특정 Phase를 보려면
+1. `PHASE_XX_` 로 시작하는 파일 찾기
+2. Phase 번호로 정렬하면 순서대로 볼 수 있음
 
-# DDD 관련
-grep -r "DDD\|Domain-Driven" docs/*.md
-```
+### API/설정을 찾으려면
+1. `API_REFERENCE_` 또는 `USAGE_EXAMPLES_` 파일 확인
+2. LDAP, FRONTEND 등 모듈별 파일 제공
 
-### 최근 수정 문서
-```bash
-ls -lt docs/*.md | head -5
-```
-
-### 문서 크기 확인
-```bash
-wc -l docs/*.md | sort -n
-```
+### 최신 정보를 원하면
+1. [00_START_HERE.md](./00_START_HERE.md) 또는
+2. [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md) 확인
 
 ---
 
-## 📧 문의 및 기여
+## 📊 문서 현황 (2025-11-07)
 
-- **문서 오류 발견**: TODO.md에 이슈 추가
-- **문서 개선 제안**: 프로젝트 리드에게 문의
-- **새 문서 추가**: 작성 규칙 준수 후 커밋
+| 카테고리 | 수량 | 상태 |
+|---------|------|------|
+| **Main Docs** | 60개 | ✅ 정리 완료 |
+| **Archive** | 21개 | ✅ 아카이브 완료 |
+| **총합** | 81개 | ✅ 100% 관리 |
 
----
-
-## 📚 외부 참조
-
-- **ICAO PKD**: https://www.icao.int/Security/FAL/PKD/
-- **Spring Boot Docs**: https://spring.io/projects/spring-boot
-- **DaisyUI Docs**: https://daisyui.com/
-- **JPearl (Type-safe IDs)**: https://github.com/wimdeblauwe/jpearl
+### Archive 상세 (21개)
+- **프로젝트 상태 이력**: 2개 (PROJECT_STATUS, FINAL_PROJECT_STATUS 이전 버전)
+- **Phase 18 상세**: 15개 (PHASE_18_* 상세 분석 문서)
+- **기타**: 4개
 
 ---
 
-**Document Maintainer**: SmartCore Inc. Development Team
-**Last Updated**: 2025-10-23
-**Version**: 6.0 (Phase 9 완료)
+## 💡 사용 사례별 가이드
+
+### 📌 "프로젝트를 처음 접합니다"
+1. [00_START_HERE.md](./00_START_HERE.md) (5분)
+2. [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md) (15분)
+3. [ddd-msa-migration-roadmap.md](./ddd-msa-migration-roadmap.md) (20분)
+
+### 📌 "코드를 읽고 싶습니다"
+1. [DDD_IMPLEMENTATION_COMPLETE.md](./DDD_IMPLEMENTATION_COMPLETE.md) - 구조 이해
+2. [PHASE_XX_*.md](./PHASE_10_FILE_PARSING.md) - 각 Phase 상세
+3. [FRONTEND_CODING_STANDARDS.md](./FRONTEND_CODING_STANDARDS.md) - Frontend 규칙
+
+### 📌 "특정 기능을 구현해야 합니다"
+1. [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) - 관련 문서 찾기
+2. 해당 기능의 Phase 문서 읽기
+3. 예시 코드 또는 API 레퍼런스 참고
+
+### 📌 "프로젝트 진행 상황을 보고합니다"
+1. [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md) - 현황
+2. [TODO.md](./TODO.md) - 다음 계획
+3. 각 Phase 완료 문서 - 상세 내용
+
+### 📌 "문서를 관리해야 합니다"
+1. [00_START_HERE.md](./00_START_HERE.md) - "문서 정리 규칙" 섹션
+2. [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) - 전체 구조
+3. Git commit 시 명확히 기록
+
+---
+
+## ❓ 자주 묻는 질문
+
+### Q: 어떤 문서를 먼저 읽어야 하나요?
+**A**: [00_START_HERE.md](./00_START_HERE.md) 에서 역할별 읽기 순서를 제시합니다.
+
+### Q: 특정 기능의 구현 상태를 알고 싶어요
+**A**: [PROJECT_MASTER_SUMMARY_2025-11-07.md](./PROJECT_MASTER_SUMMARY_2025-11-07.md) 의 "Phase 진행률" 표 확인
+
+### Q: 오래된 문서는 어디 있나요?
+**A**: `archive/` 폴더에 보관되어 있습니다.
+- 프로젝트 상태 이력: `archive/project_status_history/`
+- Phase 상세: `archive/phase_18_detailed/`
+
+### Q: 새로운 문서를 어디에 만들어야 하나요?
+**A**: [00_START_HERE.md](./00_START_HERE.md) 의 "문서 정리 규칙" 섹션 참고
+
+### Q: 문서가 손상되었거나 오래되었어요
+**A**: [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) 의 "Issues & Cleanup" 섹션 확인
+
+---
+
+## 📅 최근 정리 이력
+
+| 날짜 | 작업 | 결과 |
+|------|------|------|
+| 2025-11-07 | 문서 통합 정리 | 60개 Main + 21개 Archive = 81개 |
+| 2025-11-07 | 00_START_HERE.md 작성 | 통합 시작 가이드 추가 |
+| 2025-11-07 | 프로젝트 상태 문서 아카이브 | 3개 → archive/project_status_history/ |
+| 2025-11-07 | PHASE_18 상세 문서 아카이브 | 15개 → archive/phase_18_detailed/ |
+
+---
+
+## 🔄 다음 정리 (예정)
+
+- **일시**: 2025-11-14
+- **작업**:
+  - Phase 18 구현 문서 추가
+  - archive 문서 검토 및 정리
+  - 색인 업데이트
+
+---
+
+## 📞 문서 관련 연락
+
+- **오류 보고**: [DOCUMENTATION_INDEX_2025-11-07.md](./DOCUMENTATION_INDEX_2025-11-07.md) 의 "Issues" 섹션
+- **새 문서 제안**: 위의 "문서 정리 규칙" 참고
+- **아카이빙 요청**: PR 생성 또는 이슈 등록
+
+---
+
+**Happy Reading! 📚**
+*마지막 업데이트: 2025-11-07*

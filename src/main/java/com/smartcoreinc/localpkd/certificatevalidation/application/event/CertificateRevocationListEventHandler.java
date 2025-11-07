@@ -1,12 +1,19 @@
 package com.smartcoreinc.localpkd.certificatevalidation.application.event;
 
+import com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificatesUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CrlsExtractedEvent;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.Optional;
 
 /**
  * CertificateRevocationListEventHandler - CRL 이벤트 핸들러
@@ -72,6 +79,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Service
 @RequiredArgsConstructor
 public class CertificateRevocationListEventHandler {
+
+    private final ValidateCertificatesUseCase validateCertificatesUseCase;
+    private final ParsedFileRepository parsedFileRepository;
+    private final ProgressService progressService;
 
     // ========== Event Handlers ==========
 
@@ -163,26 +174,53 @@ public class CertificateRevocationListEventHandler {
         try {
             log.debug("=== Async CRL Extraction Event Handler Started ===");
 
-            // TODO: 추가 비동기 처리 구현
-            // 1. 메트릭 수집
-            // log.debug("Publishing CRL extraction metrics...");
-            // metricsService.recordCrlExtraction(event);
+            // ParsedFile 조회
+            Optional<ParsedFile> parsedFileOpt = parsedFileRepository.findById(event.getParsedFileId());
 
-            // 2. 감시 알림
-            // if (!event.isFullySuccessful()) {
-            //     monitoringService.alertCrlExtractionFailure(event);
-            // }
+            if (parsedFileOpt.isEmpty()) {
+                log.warn("ParsedFile not found for triggering validation: parsedFileId={}",
+                    event.getParsedFileId());
+                return;
+            }
 
-            // 3. Audit 로그
-            // auditService.logCrlExtraction(event);
+            ParsedFile parsedFile = parsedFileOpt.get();
+            java.util.UUID uploadId = parsedFile.getUploadId().getId();
+            int totalCerts = parsedFile.getStatistics().getCertificateCount();
+            int totalCrls = parsedFile.getStatistics().getCrlCount();
 
-            // 4. 다음 단계 트리거
-            // certificateValidationWorkflow.startValidationForParsedFile(event.getParsedFileId());
+            log.info("CRL extraction completed: uploadId={}, crlCount={}, issuers={}",
+                uploadId, event.getTotalCrlCount(), event.getCrlIssuerNames());
 
-            log.debug("=== Async CRL Extraction Event Handler Completed ===");
+            // SSE Progress 전송: 검증 시작 (65%)
+            progressService.sendProgress(
+                com.smartcoreinc.localpkd.shared.progress.ProcessingProgress.builder()
+                    .uploadId(uploadId)
+                    .stage(com.smartcoreinc.localpkd.shared.progress.ProcessingStage.VALIDATION_STARTED)
+                    .percentage(65)
+                    .message(String.format("인증서 검증 시작 (%d 개, CRL %d 개)", totalCerts, totalCrls))
+                    .processedCount(0)
+                    .totalCount(totalCerts + totalCrls)
+                    .build()
+            );
+
+            // ValidateCertificatesCommand 생성
+            ValidateCertificatesCommand command = ValidateCertificatesCommand.builder()
+                .uploadId(uploadId)
+                .parsedFileId(event.getParsedFileId().getId())
+                .certificateCount(totalCerts)
+                .crlCount(totalCrls)
+                .build();
+
+            log.info("Triggering certificate validation: uploadId={}, certCount={}, crlCount={}",
+                uploadId, totalCerts, totalCrls);
+
+            // ✅ Task 1: ValidateCertificatesUseCase 호출 (다음 단계 시작)
+            validateCertificatesUseCase.execute(command);
+
+            log.info("Certificate validation triggered successfully from CRL extraction");
 
         } catch (Exception e) {
-            log.warn("Error in async CRL extraction event handling", e);
+            log.error("Error in async CRL extraction event handling: {}", e.getMessage(), e);
             // 예외를 던지지 않음 - 비동기 작업 실패가 주 작업에 영향 없음
         }
     }
