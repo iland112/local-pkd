@@ -26,6 +26,16 @@
               failedCount: 0,
               successRate: 0
             },
+            certificateStats: {
+              totalCertificates: 0,
+              cscaCount: 0,
+              dscCount: 0,
+              totalCrls: 0,
+              validatedCertificates: 0,
+              validationRate: 0,
+              cscaRate: 0,
+              dscRate: 0
+            },
             recentActivity: [],
             loadingRecent: false,
 
@@ -35,6 +45,8 @@
               this.checkDatabaseStatus();
               this.checkLdapStatus();
               this.loadStatistics();
+              this.loadCertificateStatistics();
+              this.loadDetailedStatistics();
               this.loadRecentActivity();
 
               // 1분마다 시간 업데이트
@@ -45,6 +57,12 @@
 
               // 5분마다 LDAP 상태 체크
               setInterval(() => this.checkLdapStatus(), 300000);
+
+              // 5분마다 인증서 통계 갱신
+              setInterval(() => this.loadCertificateStatistics(), 300000);
+
+              // 5분마다 상세 통계 갱신
+              setInterval(() => this.loadDetailedStatistics(), 300000);
             },
 
             // 날짜/시간 업데이트
@@ -144,6 +162,154 @@
                 }
               } catch (error) {
                 console.error('Failed to load statistics:', error);
+              }
+            },
+
+            // 인증서 통계 로드
+            async loadCertificateStatistics() {
+              try {
+                const response = await fetch('/api/dashboard/certificate-statistics');
+                if (response.ok) {
+                  const data = await response.json();
+                  this.certificateStats = {
+                    totalCertificates: data.totalCertificates || 0,
+                    cscaCount: data.cscaCount || 0,
+                    dscCount: data.dscCount || 0,
+                    totalCrls: data.totalCrls || 0,
+                    validatedCertificates: data.validatedCertificates || 0,
+                    validationRate: this.calculateRate(data.validatedCertificates, data.totalCertificates),
+                    cscaRate: this.calculateRate(data.cscaCount, data.totalCertificates),
+                    dscRate: this.calculateRate(data.dscCount, data.totalCertificates)
+                  };
+                }
+              } catch (error) {
+                console.error('Failed to load certificate statistics:', error);
+              }
+            },
+
+            // 비율 계산 헬퍼 메서드
+            calculateRate(count, total) {
+              if (total === 0) return 0;
+              return ((count / total) * 100).toFixed(1);
+            },
+
+            // 상세 통계 로드 (Chart.js용)
+            async loadDetailedStatistics() {
+              try {
+                const response = await fetch('/api/dashboard/detailed-statistics');
+                if (response.ok) {
+                  const data = await response.json();
+                  this.renderCharts(data);
+                }
+              } catch (error) {
+                console.error('Failed to load detailed statistics:', error);
+              }
+            },
+
+            // Chart.js 차트 렌더링
+            renderCharts(data) {
+              // 1. 인증서 타입별 분포 (Pie Chart)
+              const typeCtx = document.getElementById('certificateTypeChart');
+              if (typeCtx && window.Chart) {
+                if (window.typeChart) {
+                  window.typeChart.destroy();
+                }
+                window.typeChart = new Chart(typeCtx, {
+                  type: 'pie',
+                  data: {
+                    labels: Object.keys(data.certificateTypeDistribution),
+                    datasets: [{
+                      data: Object.values(data.certificateTypeDistribution),
+                      backgroundColor: ['#6366F1', '#06B6D4', '#F59E0B'],
+                      borderColor: ['#ffffff', '#ffffff', '#ffffff'],
+                      borderWidth: 2
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 12 } }
+                      },
+                      title: {
+                        display: true,
+                        text: '인증서 타입별 분포'
+                      }
+                    }
+                  }
+                });
+              }
+
+              // 2. 인증서 상태 분포 (Doughnut Chart)
+              const statusCtx = document.getElementById('certificateStatusChart');
+              if (statusCtx && window.Chart) {
+                if (window.statusChart) {
+                  window.statusChart.destroy();
+                }
+                window.statusChart = new Chart(statusCtx, {
+                  type: 'doughnut',
+                  data: {
+                    labels: Object.keys(data.certificateStatusDistribution),
+                    datasets: [{
+                      data: Object.values(data.certificateStatusDistribution),
+                      backgroundColor: ['#10B981', '#EF4444'],
+                      borderColor: ['#ffffff', '#ffffff'],
+                      borderWidth: 2
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 12 } }
+                      },
+                      title: {
+                        display: true,
+                        text: '인증서 상태별 분포'
+                      }
+                    }
+                  }
+                });
+              }
+
+              // 3. CRL 상태 분포 (Bar Chart)
+              const crlCtx = document.getElementById('crlStatusChart');
+              if (crlCtx && window.Chart) {
+                if (window.crlChart) {
+                  window.crlChart.destroy();
+                }
+                window.crlChart = new Chart(crlCtx, {
+                  type: 'bar',
+                  data: {
+                    labels: Object.keys(data.crlStatusDistribution),
+                    datasets: [{
+                      label: 'CRL 수',
+                      data: Object.values(data.crlStatusDistribution),
+                      backgroundColor: ['#8B5CF6', '#EC4899'],
+                      borderColor: ['#7C3AED', '#DB2777'],
+                      borderWidth: 1
+                    }]
+                  },
+                  options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {
+                      legend: { display: false },
+                      title: {
+                        display: true,
+                        text: 'CRL 상태별 분포'
+                      }
+                    },
+                    scales: {
+                      x: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 }
+                      }
+                    }
+                  }
+                });
               }
             },
 
@@ -333,6 +499,120 @@
               <div class="flex-shrink-0 ml-3">
                 <i class="fas fa-times-circle text-4xl text-red-500"></i>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 인증서 통계 카드 -->
+        <div class="mb-8">
+          <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-certificate text-indigo-600 mr-2"></i>
+            인증서 및 CRL 통계
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <!-- 총 인증서 -->
+            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-blue-500">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    총 인증서
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-blue-600" x-text="certificateStats.totalCertificates.toLocaleString()"></span>
+                    <span class="text-sm text-gray-500">certs</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">CSCA + DSC 전체</p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-certificate text-4xl text-blue-500"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- CSCA 인증서 -->
+            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-purple-500">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    CSCA 인증서
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-purple-600" x-text="certificateStats.cscaCount.toLocaleString()"></span>
+                    <span class="text-sm text-gray-500">certs</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">
+                    <span x-text="certificateStats.cscaRate + '%'"></span> of total
+                  </p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-shield-alt text-4xl text-purple-500"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- DSC 인증서 -->
+            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-teal-500">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    DSC 인증서
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-teal-600" x-text="certificateStats.dscCount.toLocaleString()"></span>
+                    <span class="text-sm text-gray-500">certs</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">
+                    <span x-text="certificateStats.dscRate + '%'"></span> of total
+                  </p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-key text-4xl text-teal-500"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- CRL -->
+            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-amber-500">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    CRL
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-amber-600" x-text="certificateStats.totalCrls.toLocaleString()"></span>
+                    <span class="text-sm text-gray-500">crls</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Certificate Revocation Lists</p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-list-alt text-4xl text-amber-500"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 통계 차트 섹션 -->
+        <div class="max-w-5xl mx-auto mb-8">
+          <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-chart-line text-indigo-600 mr-2"></i>
+            통계 차트
+          </h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            <!-- Certificate Type Distribution - Pie Chart -->
+            <div class="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
+              <canvas id="certificateTypeChart" height="250"></canvas>
+            </div>
+
+            <!-- Certificate Status Distribution - Doughnut Chart -->
+            <div class="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
+              <canvas id="certificateStatusChart" height="250"></canvas>
+            </div>
+
+            <!-- CRL Status Distribution - Bar Chart -->
+            <div class="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
+              <canvas id="crlStatusChart" height="250"></canvas>
             </div>
           </div>
         </div>

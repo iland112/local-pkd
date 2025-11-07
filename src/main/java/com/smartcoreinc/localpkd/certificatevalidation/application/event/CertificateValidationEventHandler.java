@@ -5,8 +5,27 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateV
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.TrustChainVerifiedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.ValidationFailedEvent;
-import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
-import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data;
+import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.repository.JpaCertificateRepository;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+
+import java.io.ByteArrayInputStream;
+import java.security.PublicKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import com.smartcoreinc.localpkd.fileparsing.domain.event.CertificatesExtractedEvent;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFileId;
+import com.smartcoreinc.localpkd.fileparsing.infrastructure.repository.JpaParsedFileRepository;
+import com.smartcoreinc.localpkd.certificatevalidation.application.command.UploadToLdapCommand;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -15,8 +34,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * CertificateValidationEventHandler - 인증서 검증 이벤트 핸들러
@@ -58,6 +82,8 @@ public class CertificateValidationEventHandler {
 
     private final ProgressService progressService;
     private final UploadToLdapUseCase uploadToLdapUseCase;
+    private final JpaParsedFileRepository parsedFileRepository;
+    private final JpaCertificateRepository certificateRepository;
 
     /**
      * CertificateValidatedEvent 동기 핸들러
@@ -360,6 +386,186 @@ public class CertificateValidationEventHandler {
     }
 
     /**
+     * CertificatesExtractedEvent 핸들러
+     *
+     * <p><b>책임</b>: 파일에서 추출된 인증서를 Certificate Aggregate Root로 변환하여 저장합니다.</p>
+     *
+     * <p><b>처리 내용</b>:</p>
+     * <ul>
+     *   <li>ParsedFile에서 CertificateData 리스트 조회</li>
+     *   <li>각 CertificateData를 Certificate Aggregate Root로 변환</li>
+     *   <li>Certificate를 데이터베이스에 저장</li>
+     *   <li>변환 및 저장 통계 로깅</li>
+     * </ul>
+     *
+     * <p><b>실행 시점</b>: 트랜잭션 커밋 후 (별도 트랜잭션)</p>
+     *
+     * @param event 인증서 추출 완료 이벤트
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void handleCertificatesExtracted(CertificatesExtractedEvent event) {
+        log.info("=== [Event-Async] CertificatesExtracted (Converting to Certificate Aggregates) ===");
+        log.info("ParsedFile ID: {}", event.getParsedFileId());
+        log.info("Upload ID: {}", event.getUploadId());
+        log.info("Certificate Count: {}", event.getCertificateCount());
+
+        try {
+            // 1. ParsedFile 조회
+            ParsedFileId parsedFileId = ParsedFileId.of(event.getParsedFileId());
+            Optional<ParsedFile> parsedFileOpt = parsedFileRepository.findById(parsedFileId);
+            if (parsedFileOpt.isEmpty()) {
+                log.warn("ParsedFile not found: {}", event.getParsedFileId());
+                return;
+            }
+
+            ParsedFile parsedFile = parsedFileOpt.get();
+            List<CertificateData> certificateDataList = parsedFile.getCertificates();
+
+            log.info("ParsedFile loaded: {} (status={}, certificateCount={})",
+                parsedFile.getId().getId(), parsedFile.getStatus(),
+                parsedFile.getStatistics() != null ? parsedFile.getStatistics().getCertificateCount() : 0);
+
+            if (certificateDataList == null) {
+                log.warn("Certificate list is null in ParsedFile: {}", event.getParsedFileId());
+                return;
+            }
+
+            if (certificateDataList.isEmpty()) {
+                log.warn("No certificates found in ParsedFile: {} (list size=0)", event.getParsedFileId());
+                return;
+            }
+
+            log.info("Found {} certificates to convert from ParsedFile", certificateDataList.size());
+
+            // 2. 각 CertificateData를 Certificate Aggregate Root로 변환 및 저장
+            int successCount = 0;
+            int errorCount = 0;
+
+            for (int i = 0; i < certificateDataList.size(); i++) {
+                CertificateData certData = certificateDataList.get(i);
+
+                try {
+                    log.debug("Converting certificate {}/{}: subject={}, type={}",
+                        i + 1, certificateDataList.size(), certData.getSubjectDN(), certData.getCertificateType());
+
+                    // Certificate Aggregate Root 생성
+                    Certificate certificate = convertToCertificate(certData, event.getUploadId());
+
+                    log.debug("Certificate object created: id={}, type={}, subject={}",
+                        certificate.getId().getId(),
+                        certificate.getCertificateType(),
+                        certificate.getSubjectInfo() != null ? certificate.getSubjectInfo().getDistinguishedName() : "null");
+
+                    // 저장
+                    Certificate savedCertificate = certificateRepository.save(certificate);
+                    successCount++;
+
+                    log.info("Certificate {} saved successfully: id={}, type={}, subject={}",
+                        i + 1, savedCertificate.getId().getId(),
+                        savedCertificate.getCertificateType(),
+                        savedCertificate.getSubjectInfo() != null ? savedCertificate.getSubjectInfo().getDistinguishedName() : "null");
+
+                } catch (Exception e) {
+                    errorCount++;
+                    log.error("Failed to convert or save certificate {}/{}: subject={}, error={}",
+                        i + 1, certificateDataList.size(), certData.getSubjectDN(), e.getMessage());
+                    log.error("Exception details:", e);
+                }
+            }
+
+            log.info("Certificate conversion completed: {} succeeded, {} failed (total: {})",
+                successCount, errorCount, certificateDataList.size());
+
+            if (successCount > 0) {
+                log.info("Successfully saved {} certificates for uploadId: {}",
+                    successCount, event.getUploadId());
+            } else {
+                log.warn("No certificates were successfully saved for uploadId: {} (event count: {})",
+                    event.getUploadId(), event.getCertificateCount());
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to handle CertificatesExtractedEvent: uploadId={}, error={}",
+                event.getUploadId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * CertificateData를 Certificate Aggregate Root로 변환
+     *
+     * @param certData CertificateData from parsing layer
+     * @param uploadId Upload ID
+     * @return Certificate Aggregate Root
+     */
+    private Certificate convertToCertificate(CertificateData certData, UUID uploadId) {
+        try {
+            // 1. X.509 인증서 파싱 (PublicKey와 SignatureAlgorithm 추출용)
+            CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+            X509Certificate x509Cert = (X509Certificate) certFactory.generateCertificate(
+                new ByteArrayInputStream(certData.getCertificateBinary())
+            );
+
+            PublicKey publicKey = x509Cert.getPublicKey();
+            String signatureAlgorithm = x509Cert.getSigAlgName();
+            boolean isCA = x509Cert.getBasicConstraints() != -1;  // -1 means not a CA
+
+            // 2. Value Objects 생성
+            // 2.1 SubjectInfo (simplified - using only DN and countryCode)
+            SubjectInfo subjectInfo = SubjectInfo.of(
+                certData.getSubjectDN(),
+                certData.getCountryCode(),
+                null,  // organization - not parsed yet
+                null,  // organizationalUnit - not parsed yet
+                null   // commonName - not parsed yet
+            );
+
+            // 2.2 IssuerInfo (simplified - using only DN and isCA flag)
+            IssuerInfo issuerInfo = IssuerInfo.of(
+                certData.getIssuerDN(),
+                certData.getCountryCode(),
+                null,  // organization - not parsed yet
+                null,  // organizationalUnit - not parsed yet
+                null,  // commonName - not parsed yet
+                isCA
+            );
+
+            // 2.3 ValidityPeriod
+            ValidityPeriod validityPeriod = ValidityPeriod.of(
+                certData.getNotBefore(),
+                certData.getNotAfter()
+            );
+
+            // 2.4 X509Data
+            X509Data x509Data = X509Data.of(
+                certData.getCertificateBinary(),
+                publicKey,
+                certData.getSerialNumber(),
+                certData.getFingerprintSha256()
+            );
+
+            // 2.5 CertificateType (convert String to enum)
+            CertificateType certificateType = CertificateType.valueOf(certData.getCertificateType());
+
+            // 3. Certificate Aggregate Root 생성
+            return Certificate.create(
+                uploadId,
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validityPeriod,
+                certificateType,
+                signatureAlgorithm
+            );
+
+        } catch (Exception e) {
+            log.error("Failed to convert CertificateData to Certificate: subject={}, error={}",
+                certData.getSubjectDN(), e.getMessage(), e);
+            throw new RuntimeException("Certificate conversion failed", e);
+        }
+    }
+
+    /**
      * CertificatesValidatedEvent 동기 핸들러 (Phase 16: 배치 검증 완료)
      *
      * <p><b>처리 내용</b>:</p>
@@ -387,11 +593,12 @@ public class CertificateValidationEventHandler {
     }
 
     /**
-     * CertificatesValidatedEvent 비동기 핸들러 (Phase 16: 배치 검증 완료 후 LDAP 업로드 트리거)
+     * CertificatesValidatedEvent 비동기 핸들러 (Phase 14: 배치 검증 완료 후 LDAP 업로드 트리거)
      *
      * <p><b>처리 내용</b>:</p>
      * <ul>
-     *   <li>LDAP Integration: 검증된 인증서들을 LDAP 서버에 업로드</li>
+     *   <li>검증된 인증서 조회: CertificateRepository에서 uploadId로 검증된 인증서 조회</li>
+     *   <li>LDAP 업로드: 검증된 인증서들을 실제 LDAP 서버에 업로드</li>
      *   <li>배치 처리: 대량의 인증서/CRL을 효율적으로 업로드</li>
      *   <li>진행 상황 추적: SSE를 통해 실시간 업로드 진행률 전송</li>
      * </ul>
@@ -405,7 +612,8 @@ public class CertificateValidationEventHandler {
      *     → ValidateCertificatesUseCase
      *       → CertificatesValidatedEvent
      *         → handleCertificatesValidatedAndTriggerLdapUpload()  [THIS METHOD]
-     *           → UploadToLdapUseCase
+     *           → [Query CertificateRepository for validated certificates]
+     *           → UploadToLdapUseCase (Phase 17 - Production)
      *             → LdapUploadCompletedEvent
      *               → LdapUploadEventHandler
      * </pre>
@@ -417,34 +625,98 @@ public class CertificateValidationEventHandler {
     public void handleCertificatesValidatedAndTriggerLdapUpload(CertificatesValidatedEvent event) {
         log.info("=== [Event-Async] CertificatesValidated (Triggering LDAP upload) ===");
         log.info("Upload ID: {}", event.getUploadId());
-        log.info("Triggering LDAP upload for {} valid certificates + {} valid CRLs",
+        log.info("Valid certificates: {}, Valid CRLs: {}",
             event.getValidCertificateCount(), event.getValidCrlCount());
 
         try {
-            // 1. UploadToLdapCommand 생성
-            UploadToLdapCommand command = UploadToLdapCommand.create(
-                event.getUploadId(),
-                event.getValidCertificateCount(),
-                event.getValidCrlCount()
+            // SSE Progress: LDAP_SAVING_STARTED (90%)
+            progressService.sendProgress(
+                ProcessingProgress.builder()
+                    .uploadId(event.getUploadId())
+                    .stage(ProcessingStage.LDAP_SAVING_STARTED)
+                    .percentage(90)
+                    .message("LDAP 서버 업로드 준비 중...")
+                    .build()
             );
 
-            // 2. LDAP 업로드 실행 (UploadToLdapUseCase)
-            log.info("Executing LDAP upload: uploadId={}, total items={}",
-                event.getUploadId(), command.getTotalCount());
+            // 1. CertificateRepository에서 uploadId로 검증된 인증서 조회
+            // 참고: CertificatesValidatedEvent는 카운트만 포함하고 있으므로,
+            // 실제 인증서 ID는 CertificateRepository에서 조회해야 함
+            List<Certificate> validatedCertificates = certificateRepository.findByUploadId(event.getUploadId());
+
+            if (validatedCertificates.isEmpty()) {
+                log.warn("No validated certificates found for uploadId: {}", event.getUploadId());
+                progressService.sendProgress(
+                    ProcessingProgress.builder()
+                        .uploadId(event.getUploadId())
+                        .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
+                        .percentage(100)
+                        .message("검증된 인증서가 없습니다")
+                        .build()
+                );
+                return;
+            }
+
+            // 2. 검증된 인증서 ID 추출
+            List<UUID> certificateIds = new java.util.ArrayList<>();
+            for (Certificate cert : validatedCertificates) {
+                certificateIds.add(cert.getId().getId());
+            }
+
+            log.info("Found {} validated certificates for LDAP upload", certificateIds.size());
+
+            // 3. LDAP Base DN 설정 (Spring LDAP 설정에서 가져옴)
+            String baseDn = "dc=ldap,dc=smartcoreinc,dc=com";  // Spring LDAP base from config
+            boolean isBatch = certificateIds.size() > 1;
+
+            // 4. Phase 17 UploadToLdapCommand 생성 (실제 인증서 ID 사용)
+            UploadToLdapCommand command = UploadToLdapCommand.builder()
+                .uploadId(event.getUploadId())
+                .certificateIds(certificateIds)
+                .baseDn(baseDn)
+                .isBatch(isBatch)
+                .build();
+
+            log.info("Executing Phase 17 LDAP upload: uploadId={}, certificateCount={}, isBatch={}",
+                event.getUploadId(), certificateIds.size(), isBatch);
+
+            // 5. LDAP 업로드 실행 (UploadToLdapUseCase - Phase 17 Production)
             var response = uploadToLdapUseCase.execute(command);
 
-            if (response.success()) {
+            if (response.isSuccess()) {
                 log.info("LDAP upload completed successfully: uploadId={}, uploaded={}, failed={}",
-                    event.getUploadId(), response.getTotalUploaded(), response.getTotalFailed());
+                    event.getUploadId(), response.getSuccessCount(), response.getFailureCount());
+
+                // SSE Progress: LDAP_SAVING_COMPLETED (100%)
+                progressService.sendProgress(
+                    ProcessingProgress.builder()
+                        .uploadId(event.getUploadId())
+                        .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
+                        .percentage(100)
+                        .message(String.format("LDAP 저장 완료: %d 인증서 업로드됨", response.getSuccessCount()))
+                        .processedCount(response.getSuccessCount())
+                        .totalCount(certificateIds.size())
+                        .build()
+                );
             } else {
                 log.error("LDAP upload failed: uploadId={}, error={}",
-                    event.getUploadId(), response.errorMessage());
+                    event.getUploadId(), response.getErrorMessage());
+
+                // SSE Progress: FAILED
+                progressService.sendProgress(
+                    ProcessingProgress.failed(
+                        event.getUploadId(),
+                        ProcessingStage.FAILED,
+                        "LDAP 업로드 실패: " + response.getErrorMessage()
+                    )
+                );
             }
 
         } catch (Exception e) {
-            log.error("Failed to trigger LDAP upload for uploadId: {}",
+            log.error("Exception during LDAP upload trigger for uploadId: {}",
                 event.getUploadId(), e);
 
+            // SSE Progress: FAILED
             progressService.sendProgress(
                 ProcessingProgress.failed(
                     event.getUploadId(),

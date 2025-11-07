@@ -4,12 +4,15 @@ import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFileId;
 import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.shared.domain.DomainEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -70,22 +73,34 @@ public class JpaParsedFileRepository implements ParsedFileRepository {
     public ParsedFile save(ParsedFile parsedFile) {
         log.debug("Saving ParsedFile: {}", parsedFile.getId().getId());
 
-        // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
-        if (parsedFile.hasDomainEvents()) {
-            log.debug("Publishing {} domain events for ParsedFile BEFORE save: {}",
-                parsedFile.getDomainEvents().size(), parsedFile.getId().getId());
+        // 1. JPA save 전에 도메인 이벤트를 별도로 저장 (merge()가 transient 필드를 초기화하므로)
+        List<DomainEvent> eventsBeforeSave = new ArrayList<>(parsedFile.getDomainEvents());
+        if (!eventsBeforeSave.isEmpty()) {
+            log.debug("Captured {} domain events BEFORE save: {}",
+                eventsBeforeSave.size(), parsedFile.getId().getId());
+        }
 
-            parsedFile.getDomainEvents().forEach(event -> {
-                log.debug("Publishing event: {}", event.getClass().getSimpleName());
+        // 2. JPA 저장 (데이터베이스에 저장)
+        ParsedFile saved = jpaRepository.save(parsedFile);
+        log.debug("ParsedFile saved to database: {} (status={})", saved.getId().getId(), saved.getStatus());
+
+        // 3. Domain Events 발행 (JPA 저장 AFTER에 발행 - 미리 저장해둔 이벤트 사용)
+        if (!eventsBeforeSave.isEmpty()) {
+            log.debug("Publishing {} domain events for ParsedFile AFTER save: {}",
+                eventsBeforeSave.size(), saved.getId().getId());
+
+            eventsBeforeSave.forEach(event -> {
+                log.debug("Publishing event: {} for ParsedFile: {}",
+                    event.getClass().getSimpleName(), saved.getId().getId());
                 eventPublisher.publishEvent(event);
             });
 
-            // 2. Domain Events 초기화
-            parsedFile.clearDomainEvents();
+            // 4. Domain Events 초기화
+            saved.clearDomainEvents();
+            log.debug("Domain events cleared after publishing");
+        } else {
+            log.debug("No domain events to publish for ParsedFile: {}", saved.getId().getId());
         }
-
-        // 3. JPA 저장
-        ParsedFile saved = jpaRepository.save(parsedFile);
 
         return saved;
     }

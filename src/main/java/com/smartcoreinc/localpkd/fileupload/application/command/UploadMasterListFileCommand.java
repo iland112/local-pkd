@@ -88,9 +88,7 @@ public record UploadMasterListFileCommand(
         if (fileSize == null || fileSize <= 0) {
             throw new IllegalArgumentException("fileSize must be positive");
         }
-        if (fileHash == null || fileHash.isBlank()) {
-            throw new IllegalArgumentException("fileHash must not be blank");
-        }
+        // fileHash는 선택사항 (클라이언트가 계산하지 않은 경우 null 가능)
         if (!fileName.toLowerCase().endsWith(".ml")) {
             throw new IllegalArgumentException("fileName must end with .ml");
         }

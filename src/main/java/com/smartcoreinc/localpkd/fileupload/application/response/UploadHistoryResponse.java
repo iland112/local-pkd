@@ -26,6 +26,15 @@ import java.util.UUID;
  *   <li>예상 체크섬 (SHA-1, optional)</li>
  *   <li>계산된 체크섬 (SHA-1, optional)</li>
  *   <li>에러 메시지 (optional)</li>
+ *   <li><b>파싱 통계 정보</b> (optional):</li>
+ *   <li>  - 파싱 상태</li>
+ *   <li>  - 파싱된 인증서 개수</li>
+ *   <li>  - 파싱된 CRL 개수</li>
+ *   <li>  - 유효한 인증서 개수</li>
+ *   <li>  - 유효하지 않은 인증서 개수</li>
+ *   <li>  - 파싱 에러 개수</li>
+ *   <li>  - 파싱 소요 시간 (밀리초)</li>
+ *   <li>  - 파싱 시작/완료 시간</li>
  * </ul>
  *
  * <h3>사용 예시</h3>
@@ -67,10 +76,21 @@ public record UploadHistoryResponse(
         Boolean isNewerVersion,
         String expectedChecksum,    // optional - SHA-1 expected checksum
         String calculatedChecksum,  // optional - SHA-1 calculated checksum
-        String errorMessage         // optional
+        String errorMessage,        // optional
+
+        // 파싱 통계 정보 (optional)
+        String parsingStatus,       // optional - ParsedFile.status
+        Integer certificateCount,   // optional - 파싱된 인증서 개수
+        Integer crlCount,           // optional - 파싱된 CRL 개수
+        Integer validCount,         // optional - 유효한 인증서 개수
+        Integer invalidCount,       // optional - 유효하지 않은 인증서 개수
+        Integer errorCount,         // optional - 파싱 에러 개수
+        Long parsingDurationMillis, // optional - 파싱 소요 시간 (밀리초)
+        LocalDateTime parsingStartedAt,   // optional - 파싱 시작 시간
+        LocalDateTime parsingCompletedAt  // optional - 파싱 완료 시간
 ) {
     /**
-     * UploadedFile Aggregate로부터 생성
+     * UploadedFile Aggregate로부터 생성 (파싱 정보 포함)
      */
     public static UploadHistoryResponse from(
             UUID uploadId,
@@ -87,7 +107,17 @@ public record UploadHistoryResponse(
             Boolean isNewerVersion,
             String expectedChecksum,
             String calculatedChecksum,
-            String errorMessage
+            String errorMessage,
+            // 파싱 통계 정보
+            String parsingStatus,
+            Integer certificateCount,
+            Integer crlCount,
+            Integer validCount,
+            Integer invalidCount,
+            Integer errorCount,
+            Long parsingDurationMillis,
+            LocalDateTime parsingStartedAt,
+            LocalDateTime parsingCompletedAt
     ) {
         return UploadHistoryResponse.builder()
                 .uploadId(uploadId)
@@ -105,6 +135,16 @@ public record UploadHistoryResponse(
                 .expectedChecksum(expectedChecksum)
                 .calculatedChecksum(calculatedChecksum)
                 .errorMessage(errorMessage)
+                // 파싱 통계 정보
+                .parsingStatus(parsingStatus)
+                .certificateCount(certificateCount)
+                .crlCount(crlCount)
+                .validCount(validCount)
+                .invalidCount(invalidCount)
+                .errorCount(errorCount)
+                .parsingDurationMillis(parsingDurationMillis)
+                .parsingStartedAt(parsingStartedAt)
+                .parsingCompletedAt(parsingCompletedAt)
                 .build();
     }
 }

@@ -5,7 +5,12 @@ import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsingError;
 import com.smartcoreinc.localpkd.fileparsing.domain.port.FileParserPort;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.asn1.*;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
@@ -73,15 +78,32 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class MasterListParserAdapter implements FileParserPort {
 
     // CMS Magic bytes (ASN.1 SEQUENCE tag)
     private static final byte[] CMS_MAGIC = {0x30};  // SEQUENCE tag in BER
 
+    // Phase 18.1: CertificateFactory Singleton Caching (성능 최적화)
+    // - 한 번만 생성하고 모든 인증서 파싱에서 재사용
+    // - Expected: 수백 개 instantiations → 1 instantiation (200ms+ 단축)
+    private static final CertificateFactory CERTIFICATE_FACTORY;
+
+    static {
+        try {
+            CERTIFICATE_FACTORY = CertificateFactory.getInstance("X.509");
+            log.info("CertificateFactory singleton initialized (X.509) - MasterListParserAdapter");
+        } catch (java.security.cert.CertificateException e) {
+            throw new ExceptionInInitializerError("Failed to initialize CertificateFactory: " + e.getMessage());
+        }
+    }
+
     @Value("${app.masterlist.trust-cert-path}")
     private Resource trustCertResource;
 
     private X509Certificate trustCertificate;
+
+    private final ProgressService progressService;
 
     /**
      * BouncyCastle Provider 등록 및 신뢰 인증서 로드
@@ -106,8 +128,8 @@ public class MasterListParserAdapter implements FileParserPort {
             log.info("Loading trust certificate from: {}", trustCertResource.getDescription());
 
             try (InputStream is = trustCertResource.getInputStream()) {
-                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-                trustCertificate = (X509Certificate) cf.generateCertificate(is);
+                // Phase 18.1: Use cached CERTIFICATE_FACTORY singleton
+                trustCertificate = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(is);
 
                 log.info("Trust certificate loaded successfully");
                 log.info("  - Subject: {}", trustCertificate.getSubjectX500Principal().getName());
@@ -127,6 +149,8 @@ public class MasterListParserAdapter implements FileParserPort {
         log.info("=== Master List Parsing started ===");
         log.info("File format: {}, File size: {} bytes", fileFormat.getDisplayName(), fileBytes.length);
 
+        java.util.UUID uploadId = parsedFile.getUploadId().getId();
+
         try {
             if (!supports(fileFormat)) {
                 throw new ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
@@ -134,6 +158,11 @@ public class MasterListParserAdapter implements FileParserPort {
 
             // NOTE: startParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
             // parsedFile.startParsing();
+
+            // 파싱 시작 진행률 전송 (SSE)
+            String fileName = fileFormat.getDisplayName();
+            progressService.sendProgress(ProcessingProgress.parsingStarted(uploadId, fileName));
+            log.debug("Sent parsing started progress for uploadId: {}", uploadId);
 
             // 1. CMS 형식 검증
             validateCmsFormat(fileBytes);
@@ -153,15 +182,25 @@ public class MasterListParserAdapter implements FileParserPort {
                 parsedFile.getCertificates().size(),
                 parsedFile.getErrors().size());
 
+            // 파싱 완료 진행률 전송 (SSE)
+            progressService.sendProgress(ProcessingProgress.parsingCompleted(uploadId, parsedFile.getCertificates().size()));
+            log.debug("Sent parsing completed progress: {} certificates", parsedFile.getCertificates().size());
+
         } catch (ParsingException e) {
             log.error("Master List parsing failed", e);
             // NOTE: failParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
             // parsedFile.failParsing(e.getMessage());
+            // 파싱 실패 진행률 전송 (SSE)
+            progressService.sendProgress(ProcessingProgress.failed(uploadId, ProcessingStage.PARSING_IN_PROGRESS, e.getMessage()));
+            log.debug("Sent parsing failed progress for uploadId: {}", uploadId);
             throw e;
         } catch (Exception e) {
             log.error("Master List parsing failed", e);
             // NOTE: failParsing()은 UseCase에서 호출하므로 여기서는 호출하지 않음
             // parsedFile.failParsing(e.getMessage());
+            // 파싱 실패 진행률 전송 (SSE)
+            progressService.sendProgress(ProcessingProgress.failed(uploadId, ProcessingStage.PARSING_IN_PROGRESS, e.getMessage()));
+            log.debug("Sent parsing failed progress for uploadId: {}", uploadId);
             throw new ParsingException("Master List parsing error: " + e.getMessage(), e);
         }
     }
@@ -230,8 +269,7 @@ public class MasterListParserAdapter implements FileParserPort {
 
             log.info("Found {} certificates in CMS", certHolders.size());
 
-            // 4. 각 인증서 처리
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            // 4. 각 인증서 처리 (Phase 18.1: Use cached CERTIFICATE_FACTORY singleton)
             int processedCount = 0;
             int errorCount = 0;
 
@@ -240,7 +278,7 @@ public class MasterListParserAdapter implements FileParserPort {
                     // X509CertificateHolder → X509Certificate 변환
                     byte[] certBytes = certHolder.getEncoded();
                     ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
-                    X509Certificate cert = (X509Certificate) cf.generateCertificate(bais);
+                    X509Certificate cert = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bais);
 
                     // 인증서 처리
                     processCertificate(cert, parsedFile);
@@ -260,8 +298,12 @@ public class MasterListParserAdapter implements FileParserPort {
                 }
             }
 
-            log.info("Certificate extraction completed: {} processed, {} errors",
+            log.info("SignerInfo certificate extraction completed: {} processed, {} errors",
                 processedCount, errorCount);
+
+            // 5. EncapsulatedContentInfo에서 국가별 CSCA 인증서 추출
+            log.info("=== Extracting country CSCAs from EncapsulatedContentInfo ===");
+            extractCountryCscasFromEncapsulatedContent(cmsSignedData, parsedFile);
 
         } catch (Exception e) {
             log.error("CMS parsing failed", e);
@@ -446,5 +488,175 @@ public class MasterListParserAdapter implements FileParserPort {
             hexString.append(hex);
         }
         return hexString.toString().toUpperCase();
+    }
+
+    /**
+     * EncapsulatedContentInfo에서 국가별 CSCA 인증서 추출
+     *
+     * <p>Master List 파일의 EncapsulatedContentInfo에는 OCTET STRING 형태로
+     * 수백 개의 국가별 CSCA 인증서가 포함되어 있습니다.</p>
+     *
+     * <p><b>처리 과정</b>:</p>
+     * <ol>
+     *   <li>CMSSignedData에서 SignedContent 추출</li>
+     *   <li>SignedContent의 OCTET STRING 파싱</li>
+     *   <li>ASN.1 SEQUENCE로 변환</li>
+     *   <li>각 인증서를 X509Certificate로 변환</li>
+     *   <li>processCertificate() 메서드로 처리</li>
+     * </ol>
+     *
+     * @param cmsSignedData CMSSignedData 객체
+     * @param parsedFile ParsedFile Aggregate
+     */
+    private void extractCountryCscasFromEncapsulatedContent(CMSSignedData cmsSignedData, ParsedFile parsedFile) {
+        try {
+            // 1. SignedContent 추출
+            if (cmsSignedData.getSignedContent() == null) {
+                log.warn("No signed content found in CMS");
+                return;
+            }
+
+            // 2. SignedContent에서 바이트 배열 추출
+            Object content = cmsSignedData.getSignedContent().getContent();
+            if (content == null) {
+                log.warn("Signed content is null");
+                return;
+            }
+
+            byte[] contentBytes = (byte[]) content;
+            log.info("EncapsulatedContentInfo size: {} bytes", contentBytes.length);
+
+            // 3. ASN.1 파싱 - OCTET STRING 내부의 SEQUENCE 추출
+            ASN1InputStream asn1Stream = new ASN1InputStream(new ByteArrayInputStream(contentBytes));
+            ASN1Primitive primitive = asn1Stream.readObject();
+            asn1Stream.close();
+
+            if (!(primitive instanceof ASN1Sequence)) {
+                log.warn("EncapsulatedContentInfo is not an ASN.1 SEQUENCE");
+                return;
+            }
+
+            ASN1Sequence sequence = (ASN1Sequence) primitive;
+            log.info("Found ASN.1 SEQUENCE with {} elements", sequence.size());
+
+            // 4. SEQUENCE 내의 각 요소 분석 및 인증서 추출 (Phase 18.1: Use cached CERTIFICATE_FACTORY singleton)
+            int processedCount = 0;
+            int errorCount = 0;
+
+            for (int i = 0; i < sequence.size(); i++) {
+                try {
+                    ASN1Encodable element = sequence.getObjectAt(i);
+                    ASN1Primitive elemPrimitive = element.toASN1Primitive();
+
+                    log.debug("Element {}: type={}, class={}",
+                        i, elemPrimitive.getClass().getSimpleName(), elemPrimitive);
+
+                    // SET (DLSet) 타입 확인 - 국가별 CSCA 인증서들이 여기 있음
+                    if (elemPrimitive instanceof ASN1Set) {
+                        ASN1Set certSet = (ASN1Set) elemPrimitive;
+                        log.info("Element {} is a SET with {} certificates", i, certSet.size());
+
+                        // SET의 각 요소를 인증서로 추출
+                        for (int j = 0; j < certSet.size(); j++) {
+                            try {
+                                ASN1Encodable certElement = certSet.getObjectAt(j);
+                                byte[] certBytes = certElement.toASN1Primitive().getEncoded();
+
+                                // X509Certificate로 변환
+                                ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
+                                X509Certificate cert = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bais);
+
+                                // 인증서 처리
+                                processCertificate(cert, parsedFile);
+                                processedCount++;
+
+                                // Phase 18.1 Quick Win #3: 진행률 전송 (10개마다 - 50→10 변경으로 5배 더 자주 업데이트)
+                                if (processedCount % 10 == 0) {
+                                    log.info("Processed {} country CSCAs...", processedCount);
+                                    java.util.UUID uploadId = parsedFile.getUploadId().getId();
+                                    progressService.sendProgress(ProcessingProgress.parsingInProgress(
+                                        uploadId, processedCount, 0, cert.getSubjectX500Principal().getName()
+                                    ));
+                                    log.debug("Sent parsing progress: {} certificates", processedCount);
+                                }
+
+                            } catch (Exception e) {
+                                errorCount++;
+                                log.debug("Failed to process SET element {}.{} as certificate: {}",
+                                    i, j, e.getMessage());
+                            }
+                        }
+                    }
+                    // SEQUENCE 내부에 또 다른 SEQUENCE가 있는지 확인
+                    else if (elemPrimitive instanceof ASN1Sequence) {
+                        ASN1Sequence innerSequence = (ASN1Sequence) elemPrimitive;
+                        log.debug("Element {} is a SEQUENCE with {} elements", i, innerSequence.size());
+
+                        // Inner SEQUENCE의 각 요소를 인증서로 시도
+                        for (int j = 0; j < innerSequence.size(); j++) {
+                            try {
+                                ASN1Encodable innerElement = innerSequence.getObjectAt(j);
+                                byte[] certBytes = innerElement.toASN1Primitive().getEncoded();
+
+                                // X509Certificate로 변환
+                                ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
+                                X509Certificate cert = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bais);
+
+                                // 인증서 처리
+                                processCertificate(cert, parsedFile);
+                                processedCount++;
+
+                                // Phase 18.1 Quick Win #3: 진행률 전송 (10개마다 - 50→10 변경으로 5배 더 자주 업데이트)
+                                if (processedCount % 10 == 0) {
+                                    log.info("Processed {} country CSCAs...", processedCount);
+                                    java.util.UUID uploadId = parsedFile.getUploadId().getId();
+                                    progressService.sendProgress(ProcessingProgress.parsingInProgress(
+                                        uploadId, processedCount, 0, cert.getSubjectX500Principal().getName()
+                                    ));
+                                    log.debug("Sent parsing progress: {} certificates", processedCount);
+                                }
+
+                            } catch (Exception e) {
+                                log.trace("Element {}.{} is not a certificate: {}", i, j, e.getMessage());
+                            }
+                        }
+                    } else {
+                        // 직접 인증서로 시도
+                        byte[] certBytes = elemPrimitive.getEncoded();
+                        ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
+                        X509Certificate cert = (X509Certificate) CERTIFICATE_FACTORY.generateCertificate(bais);
+
+                        // 인증서 처리
+                        processCertificate(cert, parsedFile);
+                        processedCount++;
+
+                        // Phase 18.1 Quick Win #3: 진행률 전송 (10개마다 - 50→10 변경으로 5배 더 자주 업데이트)
+                        if (processedCount % 10 == 0) {
+                            log.info("Processed {} country CSCAs...", processedCount);
+                            java.util.UUID uploadId = parsedFile.getUploadId().getId();
+                            progressService.sendProgress(ProcessingProgress.parsingInProgress(
+                                uploadId, processedCount, 0, cert.getSubjectX500Principal().getName()
+                            ));
+                            log.debug("Sent parsing progress: {} certificates", processedCount);
+                        }
+                    }
+
+                } catch (Exception e) {
+                    errorCount++;
+                    log.debug("Failed to process element {} as certificate: {}", i, e.getMessage());
+                    // 일부 요소는 인증서가 아닐 수 있으므로 계속 진행
+                }
+            }
+
+            log.info("Country CSCA extraction completed: {} processed, {} errors",
+                processedCount, errorCount);
+
+        } catch (Exception e) {
+            log.error("Failed to extract country CSCAs from EncapsulatedContentInfo", e);
+            parsedFile.addError(ParsingError.of(
+                "ENCAPSULATED_CONTENT_ERROR",
+                "Failed to extract country CSCAs: " + e.getMessage()
+            ));
+        }
     }
 }

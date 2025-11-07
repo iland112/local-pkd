@@ -5,6 +5,8 @@ import com.smartcoreinc.localpkd.fileupload.application.response.UploadHistoryRe
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.infrastructure.repository.SpringDataUploadedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.infrastructure.repository.UploadedFileSpecification;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -14,6 +16,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 /**
  * 업로드 이력 조회 Use Case (CQRS Query)
@@ -39,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class GetUploadHistoryUseCase {
 
     private final SpringDataUploadedFileRepository repository;
+    private final ParsedFileRepository parsedFileRepository;
 
     @Transactional(readOnly = true)
     public Page<UploadHistoryResponse> execute(GetUploadHistoryQuery query) {
@@ -79,9 +84,35 @@ public class GetUploadHistoryUseCase {
     }
 
     /**
-     * UploadedFile을 UploadHistoryResponse로 변환
+     * UploadedFile을 UploadHistoryResponse로 변환 (파싱 통계 포함)
+     *
+     * <p>파싱이 완료된 경우 ParsedFile에서 통계 정보를 조회하여 포함합니다.
+     * 파싱이 아직 시작되지 않았거나 진행 중인 경우 통계는 null입니다.</p>
      */
     private UploadHistoryResponse toResponse(UploadedFile uploadedFile) {
+        // ParsedFile 조회 (파싱 통계 가져오기)
+        Optional<ParsedFile> parsedFileOpt = parsedFileRepository.findByUploadId(uploadedFile.getId());
+
+        // 파싱 통계 추출
+        String parsingStatus = null;
+        Integer certificateCount = null;
+        Integer crlCount = null;
+        Integer validCount = null;
+        Integer invalidCount = null;
+        Integer errorCount = null;
+        Long parsingDurationMillis = null;
+
+        if (parsedFileOpt.isPresent()) {
+            ParsedFile parsedFile = parsedFileOpt.get();
+            parsingStatus = parsedFile.getStatus().name();
+            certificateCount = parsedFile.getStatistics().getCertificateCount();
+            crlCount = parsedFile.getStatistics().getCrlCount();
+            validCount = parsedFile.getStatistics().getValidCount();
+            invalidCount = parsedFile.getStatistics().getInvalidCount();
+            errorCount = parsedFile.getStatistics().getErrorCount();
+            parsingDurationMillis = parsedFile.getStatistics().getDurationMillis();
+        }
+
         return UploadHistoryResponse.from(
             uploadedFile.getId().getId(),
             uploadedFile.getFileName().getValue(),
@@ -97,7 +128,17 @@ public class GetUploadHistoryUseCase {
             uploadedFile.getIsNewerVersion(),
             uploadedFile.getExpectedChecksum() != null ? uploadedFile.getExpectedChecksum().getValue() : null,
             uploadedFile.getCalculatedChecksum() != null ? uploadedFile.getCalculatedChecksum().getValue() : null,
-            uploadedFile.getErrorMessage()
+            uploadedFile.getErrorMessage(),
+            // 파싱 통계 정보
+            parsingStatus,
+            certificateCount,
+            crlCount,
+            validCount,
+            invalidCount,
+            errorCount,
+            parsingDurationMillis,
+            parsedFileOpt.isPresent() ? parsedFileOpt.get().getParsingStartedAt() : null,
+            parsedFileOpt.isPresent() ? parsedFileOpt.get().getParsingCompletedAt() : null
         );
     }
 }

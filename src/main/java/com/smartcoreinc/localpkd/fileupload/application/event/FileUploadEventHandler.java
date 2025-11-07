@@ -286,7 +286,8 @@ public class FileUploadEventHandler {
     public void handleDuplicateFileDetected(DuplicateFileDetectedEvent event) {
         log.warn("=== [Event] DuplicateFileDetected ===");
         log.warn("Duplicate upload ID: {}", event.duplicateUploadId().getId());
-        log.warn("Original upload ID: {}", event.originalUploadId().getId());
+        log.warn("Original upload ID: {}",
+                event.originalUploadId() != null ? event.originalUploadId().getId() : "none (force upload)");
         log.warn("File name: {}", event.fileName());
         log.warn("File hash: {}", event.fileHash().substring(0, 8) + "...");
         log.warn("Detected at: {}", event.detectedAt());

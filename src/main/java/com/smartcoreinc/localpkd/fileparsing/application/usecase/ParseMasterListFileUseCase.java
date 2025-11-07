@@ -108,9 +108,7 @@ public class ParseMasterListFileUseCase {
             // 4. 파싱 시작 (PARSING 상태로 전환, FileParsingStartedEvent 발행)
             parsedFile.startParsing();
 
-            // 5. Repository 저장 (FileParsingStartedEvent 발행)
-            repository.save(parsedFile);
-
+            // 5. 파싱 시작 (FileParsingStartedEvent는 나중에 발행)
             log.info("Parsing started: parsedFileId={}", parsedFileId.getId());
 
             // 6. SSE 진행 상황 전송: PARSING_STARTED (10%)

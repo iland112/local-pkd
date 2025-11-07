@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 
 /**
@@ -79,14 +81,32 @@ public class UploadLdifFileUseCase {
 
             // 2. Value Objects 생성
             FileName fileName = FileName.of(command.fileName());
-            FileHash fileHash = FileHash.of(command.fileHash());
+
+            // FileHash: 클라이언트가 제공하지 않으면 서버에서 SHA-256 계산
+            FileHash fileHash;
+            if (command.fileHash() != null && !command.fileHash().isBlank()) {
+                fileHash = FileHash.of(command.fileHash());
+                log.debug("Using client-provided file hash");
+            } else {
+                String calculatedHash = calculateSha256(command.fileContent());
+                fileHash = FileHash.of(calculatedHash);
+                log.info("Calculated SHA-256 hash server-side: {}", calculatedHash.substring(0, 8) + "...");
+            }
+
             FileSize fileSize = FileSize.ofBytes(command.fileSize());
 
             // 3. 중복 파일 검사 (forceUpload가 아닌 경우)
             if (!command.forceUpload()) {
                 checkDuplicate(fileHash, fileName);
             } else {
-                log.warn("Force upload enabled - skipping duplicate check");
+                log.warn("Force upload enabled - deleting existing file if present");
+                // forceUpload인 경우 기존 레코드를 먼저 삭제하여 UNIQUE constraint violation 방지
+                repository.findByFileHash(fileHash).ifPresent(existing -> {
+                    log.info("Found existing file with same hash: uploadId={}, fileName={}",
+                            existing.getId().getId(), existing.getFileName().getValue());
+                    repository.deleteById(existing.getId());
+                    log.info("Deleted existing file for force upload: {}", existing.getId().getId());
+                });
             }
 
             // 4. 파일 포맷 감지
@@ -232,5 +252,33 @@ public class UploadLdifFileUseCase {
         }
 
         log.debug("No duplicate file found for hash: {}", fileHash.getValue());
+    }
+
+    /**
+     * 바이트 배열에서 SHA-256 해시 계산
+     *
+     * @param fileContent 파일 내용 (바이트 배열)
+     * @return SHA-256 해시 (64자 16진수 소문자)
+     * @throws RuntimeException SHA-256 알고리즘을 사용할 수 없는 경우
+     */
+    private String calculateSha256(byte[] fileContent) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(fileContent);
+
+            // 바이트 배열을 16진수 문자열로 변환
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+
+            return hexString.toString().toLowerCase();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 알고리즘을 사용할 수 없습니다", e);
+        }
     }
 }

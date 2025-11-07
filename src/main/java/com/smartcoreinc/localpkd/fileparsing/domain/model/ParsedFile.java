@@ -127,8 +127,9 @@ public class ParsedFile extends AggregateRoot<ParsedFileId> {
      * 추출된 인증서 목록
      *
      * <p>ElementCollection으로 Value Object를 컬렉션으로 저장</p>
+     * <p>EAGER fetch: Event Handler에서 certificates를 사용하므로 항상 로드</p>
      */
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "parsed_certificate",
         joinColumns = @JoinColumn(name = "parsed_file_id")
@@ -137,8 +138,10 @@ public class ParsedFile extends AggregateRoot<ParsedFileId> {
 
     /**
      * 추출된 CRL 목록
+     *
+     * <p>EAGER fetch: Event Handler에서 CRLs를 사용하므로 항상 로드</p>
      */
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "parsed_crl",
         joinColumns = @JoinColumn(name = "parsed_file_id")
@@ -232,7 +235,15 @@ public class ParsedFile extends AggregateRoot<ParsedFileId> {
             throw new IllegalArgumentException("certificate must not be null");
         }
 
-        certificates.add(certificate);
+        // 중복 체크: fingerprint_sha256 기준으로 이미 존재하는 인증서는 추가하지 않음
+        // Master List의 SignerInfo 인증서가 DLSet에도 포함되어 있는 경우를 방지
+        String newFingerprint = certificate.getFingerprintSha256();
+        boolean isDuplicate = certificates.stream()
+            .anyMatch(existing -> existing.getFingerprintSha256().equals(newFingerprint));
+
+        if (!isDuplicate) {
+            certificates.add(certificate);
+        }
     }
 
     /**

@@ -598,6 +598,11 @@ public class UploadedFile extends AggregateRoot<UploadId> {
     /**
      * 중복 파일로 표시
      *
+     * <p><b>중요</b>: ForceUpload로 중복 파일이 업로드된 경우,
+     * createWithMetadata()에서 이미 FileUploadedEvent가 발행되므로
+     * 여기서는 DuplicateFileDetectedEvent만 발행합니다.
+     * (FileUploadedEvent를 중복 발행하면 파싱이 2번 실행되어 데이터베이스 충돌 발생)</p>
+     *
      * @param originalUploadId 원본 업로드 ID
      */
     public void markAsDuplicate(UploadId originalUploadId) {
@@ -605,6 +610,8 @@ public class UploadedFile extends AggregateRoot<UploadId> {
         this.originalUploadId = originalUploadId;
         this.status = UploadStatus.DUPLICATE_DETECTED;
 
+        // 중복 파일 감지 이벤트만 발행
+        // FileUploadedEvent는 createWithMetadata()에서 이미 발행됨
         addDomainEvent(new DuplicateFileDetectedEvent(
                 this.id,
                 originalUploadId,

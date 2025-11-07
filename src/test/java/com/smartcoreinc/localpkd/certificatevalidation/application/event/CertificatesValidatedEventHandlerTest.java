@@ -1,8 +1,8 @@
 package com.smartcoreinc.localpkd.certificatevalidation.application.event;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
-import com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse;
-import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
+import com.smartcoreinc.localpkd.certificatevalidation.application.response.UploadToLdapResponse;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -14,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -42,11 +44,22 @@ class CertificatesValidatedEventHandlerTest {
     @Mock
     private UploadToLdapUseCase uploadToLdapUseCase;
 
+    @Mock
+    private com.smartcoreinc.localpkd.fileparsing.infrastructure.repository.JpaParsedFileRepository parsedFileRepository;
+
+    @Mock
+    private com.smartcoreinc.localpkd.certificatevalidation.infrastructure.repository.JpaCertificateRepository certificateRepository;
+
     private CertificateValidationEventHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new CertificateValidationEventHandler(progressService, uploadToLdapUseCase);
+        handler = new CertificateValidationEventHandler(
+            progressService,
+            uploadToLdapUseCase,
+            parsedFileRepository,
+            certificateRepository
+        );
     }
 
     @Test
@@ -84,14 +97,15 @@ class CertificatesValidatedEventHandlerTest {
             LocalDateTime.now()
         );
 
+        List<String> uploadedDns = new ArrayList<>();
+        for (int i = 0; i < 792; i++) {
+            uploadedDns.add("cn=cert-" + i + ",ou=certificates,dc=ldap,dc=smartcoreinc,dc=com");
+        }
+
         UploadToLdapResponse mockResponse = UploadToLdapResponse.success(
             uploadId,
-            792,  // uploadedCertificateCount (99% of 800)
-            49,   // uploadedCrlCount (98% of 50)
-            8,    // failedCertificateCount
-            1,    // failedCrlCount
-            LocalDateTime.now(),
-            5000  // durationMillis
+            800,  // totalCount
+            uploadedDns
         );
 
         when(uploadToLdapUseCase.execute(any())).thenReturn(mockResponse);
@@ -117,8 +131,13 @@ class CertificatesValidatedEventHandlerTest {
             LocalDateTime.now()
         );
 
+        List<String> uploadedDns = new ArrayList<>();
+        for (int i = 0; i < 594; i++) {
+            uploadedDns.add("cn=cert-" + i + ",ou=certificates,dc=ldap,dc=smartcoreinc,dc=com");
+        }
+
         when(uploadToLdapUseCase.execute(any())).thenReturn(
-            UploadToLdapResponse.success(uploadId, 594, 39, 6, 1, LocalDateTime.now(), 3000)
+            UploadToLdapResponse.success(uploadId, 640, uploadedDns)
         );
 
         // When

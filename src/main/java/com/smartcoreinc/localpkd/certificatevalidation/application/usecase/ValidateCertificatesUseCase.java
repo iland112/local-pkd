@@ -2,11 +2,15 @@ package com.smartcoreinc.localpkd.certificatevalidation.application.usecase;
 
 import com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.CertificatesValidatedResponse;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.*;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.CrlData;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
@@ -19,6 +23,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * ValidateCertificatesUseCase - 인증서 검증 Use Case
@@ -68,6 +73,7 @@ public class ValidateCertificatesUseCase {
 
     private final CertificateRepository certificateRepository;
     private final CertificateRevocationListRepository crlRepository;
+    private final ParsedFileRepository parsedFileRepository;
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -89,42 +95,49 @@ public class ValidateCertificatesUseCase {
             // 1. Command 검증
             command.validate();
 
-            // 2. SSE 진행 상황 전송: VALIDATION_IN_PROGRESS (70%)
+            // 2. ParsedFile 조회 (UploadId로)
+            UploadId uploadId = new UploadId(command.uploadId());
+            Optional<ParsedFile> parsedFileOpt = parsedFileRepository.findByUploadId(uploadId);
+
+            if (parsedFileOpt.isEmpty()) {
+                String errorMsg = "파싱된 파일을 찾을 수 없습니다. UploadId: " + command.uploadId();
+                log.error(errorMsg);
+                throw new DomainException("PARSED_FILE_NOT_FOUND", errorMsg);
+            }
+
+            ParsedFile parsedFile = parsedFileOpt.get();
+            log.info("Found parsed file: id={}, certificates={}, crls={}",
+                parsedFile.getId().getId(), command.certificateCount(), command.crlCount());
+
+            // 3. SSE 진행 상황 전송: VALIDATION_IN_PROGRESS (70%)
             progressService.sendProgress(
                 ProcessingProgress.builder()
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
                     .percentage(70)
-                    .message("인증서 검증 중")
+                    .message("인증서 변환 및 검증 중")
                     .processedCount(0)
                     .totalCount(command.getTotalCount())
                     .build()
             );
 
-            // 3. 파싱된 인증서 조회 및 검증
-            log.info("Validating {} certificates...", command.certificateCount());
-            List<Certificate> certificates = certificateRepository.findByType(
-                com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC
-            );
+            // 4. ParsedFile의 CertificateData 목록에서 검증 결과 추출
+            log.info("Extracting validation results from {} parsed certificates...", command.certificateCount());
+            List<CertificateData> certificateDataList = parsedFile.getCertificates();
 
             int validCertificateCount = 0;
             int invalidCertificateCount = 0;
 
-            for (Certificate cert : certificates) {
-                try {
-                    // TODO: Phase 4에서 실제 검증 로직 구현
-                    // 현재는 상태 확인만 수행
-                    if (cert.isValid()) {
-                        validCertificateCount++;
-                        log.debug("Certificate validated: {}", cert.getId().getId());
-                    } else {
-                        invalidCertificateCount++;
-                        log.debug("Certificate invalid: {}", cert.getId().getId());
-                    }
+            for (int i = 0; i < certificateDataList.size(); i++) {
+                CertificateData certData = certificateDataList.get(i);
 
-                } catch (Exception e) {
+                // ParsedFile에 이미 저장된 isValid() 플래그 사용
+                if (certData.isValid()) {
+                    validCertificateCount++;
+                    log.debug("Valid certificate extracted: {}", certData.getSubjectDN());
+                } else {
                     invalidCertificateCount++;
-                    log.error("Certificate validation failed: {}", cert.getId().getId(), e);
+                    log.debug("Invalid certificate extracted: {}", certData.getSubjectDN());
                 }
 
                 // SSE 진행 상황 업데이트 (70-85% 범위)
@@ -135,35 +148,28 @@ public class ValidateCertificatesUseCase {
                         .uploadId(command.uploadId())
                         .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
                         .percentage(Math.min(85, percentage))
-                        .message(String.format("인증서 검증 중 (%d/%d)", processed, command.getTotalCount()))
+                        .message(String.format("인증서 검증 완료 (%d/%d)", processed, command.getTotalCount()))
                         .processedCount(processed)
                         .totalCount(command.getTotalCount())
                         .build()
                 );
             }
 
-            // 4. 파싱된 CRL 조회 및 검증
-            log.info("Validating {} CRLs...", command.crlCount());
-            List<CertificateRevocationList> crls = crlRepository.findAll();
+            // 5. ParsedFile의 CrlData 목록에서 검증 결과 추출
+            log.info("Extracting validation results from {} parsed CRLs...", command.crlCount());
+            List<CrlData> crlDataList = parsedFile.getCrls();
 
             int validCrlCount = 0;
             int invalidCrlCount = 0;
 
-            for (CertificateRevocationList crl : crls) {
-                try {
-                    // TODO: Phase 4에서 실제 CRL 검증 로직 구현
-                    // 현재는 상태 확인만 수행
-                    if (crl.isValid()) {
-                        validCrlCount++;
-                        log.debug("CRL validated: {}", crl.getId().getId());
-                    } else {
-                        invalidCrlCount++;
-                        log.debug("CRL invalid: {}", crl.getId().getId());
-                    }
-
-                } catch (Exception e) {
+            for (CrlData crlData : crlDataList) {
+                // ParsedFile에 이미 저장된 isValid() 플래그 사용
+                if (crlData.isValid()) {
+                    validCrlCount++;
+                    log.debug("Valid CRL extracted: {}", crlData.getIssuerDN());
+                } else {
                     invalidCrlCount++;
-                    log.error("CRL validation failed: {}", crl.getId().getId(), e);
+                    log.debug("Invalid CRL extracted: {}", crlData.getIssuerDN());
                 }
 
                 // SSE 진행 상황 업데이트 (80-85% 범위)
@@ -174,14 +180,17 @@ public class ValidateCertificatesUseCase {
                         .uploadId(command.uploadId())
                         .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
                         .percentage(Math.min(85, percentage))
-                        .message(String.format("CRL 검증 중 (%d/%d)", processed, command.getTotalCount()))
+                        .message(String.format("CRL 검증 완료 (%d/%d)", processed, command.getTotalCount()))
                         .processedCount(processed)
                         .totalCount(command.getTotalCount())
                         .build()
                 );
             }
 
-            // 5. CertificatesValidatedEvent 생성 및 발행
+            // 6. CertificatesValidatedEvent 생성 및 발행
+            int totalValid = validCertificateCount + validCrlCount;
+            int totalInvalid = invalidCertificateCount + invalidCrlCount;
+
             CertificatesValidatedEvent event = new CertificatesValidatedEvent(
                 command.uploadId(),
                 validCertificateCount,
@@ -192,24 +201,25 @@ public class ValidateCertificatesUseCase {
             );
 
             eventPublisher.publishEvent(event);
-            log.info("CertificatesValidatedEvent published: uploadId={}", command.uploadId());
+            log.info("CertificatesValidatedEvent published: uploadId={}, valid={}, invalid={}",
+                command.uploadId(), totalValid, totalInvalid);
 
-            // 6. SSE 진행 상황 전송: VALIDATION_COMPLETED (85%)
+            // 7. SSE 진행 상황 전송: VALIDATION_COMPLETED (85%)
             progressService.sendProgress(
                 ProcessingProgress.builder()
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.VALIDATION_COMPLETED)
                     .percentage(85)
-                    .message(String.format("인증서 검증 완료: %d 유효, %d 실패",
-                        validCertificateCount + validCrlCount,
-                        invalidCertificateCount + invalidCrlCount))
+                    .message(String.format("인증서 및 CRL 검증 완료: %d 유효, %d 실패",
+                        totalValid, totalInvalid))
                     .processedCount(validCertificateCount + invalidCertificateCount + validCrlCount + invalidCrlCount)
                     .totalCount(command.getTotalCount())
                     .build()
             );
 
-            // 7. Response 반환
+            // 8. Response 반환
             long durationMillis = System.currentTimeMillis() - startTime;
+            log.info("Certificate validation completed in {}ms: valid={}, invalid={}", durationMillis, totalValid, totalInvalid);
             return CertificatesValidatedResponse.success(
                 command.uploadId(),
                 validCertificateCount,
@@ -244,6 +254,65 @@ public class ValidateCertificatesUseCase {
                 command.uploadId(),
                 "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
             );
+        }
+    }
+
+    /**
+     * CertificateData를 Certificate Aggregate로 변환
+     *
+     * <p>파싱된 인증서 데이터를 도메인 Aggregate로 변환합니다.</p>
+     *
+     * @param certData 파싱된 인증서 데이터
+     * @return Certificate Aggregate
+     */
+    private Certificate convertToCertificate(CertificateData certData) {
+        // TODO: Phase 4에서 실제 Value Objects 생성 로직 구현
+        // 현재는 기본 생성만 수행
+
+        CertificateType certificateType = convertCertificateType(certData.getCertificateType());
+
+        log.debug("Certificate data converted: type={}, subject={}, fingerprint={}",
+            certificateType, certData.getSubjectDN(), certData.getFingerprintSha256());
+
+        // TODO: 실제 Certificate Aggregate 생성 로직 구현
+        return null;  // 임시 처리
+    }
+
+    /**
+     * CrlData를 CertificateRevocationList Aggregate로 변환
+     *
+     * <p>파싱된 CRL 데이터를 도메인 Aggregate로 변환합니다.</p>
+     *
+     * @param crlData 파싱된 CRL 데이터
+     * @return CertificateRevocationList Aggregate
+     */
+    private CertificateRevocationList convertToCrl(CrlData crlData) {
+        // TODO: Phase 4에서 실제 Value Objects 생성 로직 구현
+        // 현재는 기본 처리만 수행
+
+        log.debug("CRL data converted: issuer={}, thisUpdate={}",
+            crlData.getIssuerDN(), crlData.getThisUpdate());
+
+        // TODO: 실제 CertificateRevocationList Aggregate 생성 로직 구현
+        return null;  // 임시 처리
+    }
+
+    /**
+     * 문자열 인증서 타입을 도메인 CertificateType Enum으로 변환
+     *
+     * @param certTypeStr 파싱된 인증서 타입 문자열 (CSCA, DSC, DSC_NC 등)
+     * @return CertificateType Enum
+     */
+    private CertificateType convertCertificateType(String certTypeStr) {
+        if (certTypeStr == null || certTypeStr.isEmpty()) {
+            return CertificateType.UNKNOWN;
+        }
+
+        try {
+            return CertificateType.valueOf(certTypeStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown certificate type: {}", certTypeStr);
+            return CertificateType.UNKNOWN;
         }
     }
 }

@@ -57,7 +57,7 @@ public class LdifUploadWebController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "forceUpload", defaultValue = "false") boolean forceUpload,
             @RequestParam(value = "expectedChecksum", required = false) String expectedChecksum,
-            @RequestParam("fileHash") String fileHash,
+            @RequestParam(value = "fileHash", required = false) String fileHash,
             @RequestParam(value = "processingMode", defaultValue = "AUTO") String processingModeStr,
             RedirectAttributes redirectAttributes
     ) {

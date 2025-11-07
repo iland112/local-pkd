@@ -55,6 +55,18 @@ public record GetUploadHistoryQuery(
         int size
 ) {
     /**
+     * Compact Constructor - 유효성 검증
+     */
+    public GetUploadHistoryQuery {
+        if (page < 0) {
+            throw new IllegalArgumentException("page must be non-negative");
+        }
+        if (size <= 0 || size > 100) {
+            throw new IllegalArgumentException("size must be between 1 and 100");
+        }
+    }
+
+    /**
      * 기본 생성자 (page=0, size=20)
      */
     public GetUploadHistoryQuery() {
@@ -62,14 +74,10 @@ public record GetUploadHistoryQuery(
     }
 
     /**
-     * 검증
+     * 검증 메서드 (별도 호출용, compact constructor가 자동 호출)
      */
     public void validate() {
-        if (page < 0) {
-            throw new IllegalArgumentException("page must be non-negative");
-        }
-        if (size <= 0 || size > 100) {
-            throw new IllegalArgumentException("size must be between 1 and 100");
-        }
+        // Compact constructor에서 이미 검증됨
+        // 이 메서드는 backward compatibility를 위해 유지
     }
 }

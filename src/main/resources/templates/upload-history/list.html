@@ -222,7 +222,16 @@
                                  data-hash=${history.fileHash},
                                  data-expected=${history.expectedChecksum},
                                  data-calculated=${history.calculatedChecksum},
-                                 data-error=${history.errorMessage}"
+                                 data-error=${history.errorMessage},
+                                 data-parsing-status=${history.parsingStatus},
+                                 data-certificate-count=${history.certificateCount},
+                                 data-crl-count=${history.crlCount},
+                                 data-valid-count=${history.validCount},
+                                 data-invalid-count=${history.invalidCount},
+                                 data-error-count=${history.errorCount},
+                                 data-parsing-duration=${history.parsingDurationMillis},
+                                 data-parsing-started=${history.parsingStartedAt},
+                                 data-parsing-completed=${history.parsingCompletedAt}"
                         onclick="showDetailFromBtn(this)"
                       >
                         <i class="fas fa-eye"></i>
@@ -381,6 +390,64 @@
               </div>
             </div>
 
+            <!-- Parsing Statistics Section -->
+            <div id="parsing-section" class="mt-6" style="display: none;">
+              <div class="divider">
+                <span class="text-sm font-semibold text-base-content opacity-70">
+                  <i class="fas fa-chart-bar mr-1"></i>
+                  파싱 통계
+                </span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-sm font-semibold text-base-content opacity-70">파싱 상태</p>
+                  <p id="detail-parsing-status" class="text-sm font-medium text-primary">-</p>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-base-content opacity-70">파싱 소요 시간</p>
+                  <p id="detail-parsing-duration" class="text-sm font-mono">-</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-4 mt-4">
+                <div class="stat">
+                  <div class="stat-title text-xs">추출된 인증서</div>
+                  <div class="stat-value text-lg text-primary" id="detail-certificate-count">-</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-title text-xs">추출된 CRL</div>
+                  <div class="stat-value text-lg text-secondary" id="detail-crl-count">-</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-title text-xs">유효한 인증서</div>
+                  <div class="stat-value text-lg text-success" id="detail-valid-count">-</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 mt-4">
+                <div class="stat">
+                  <div class="stat-title text-xs">무효한 인증서</div>
+                  <div class="stat-value text-lg text-error" id="detail-invalid-count">-</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-title text-xs">파싱 오류</div>
+                  <div class="stat-value text-lg text-warning" id="detail-error-count">-</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 mt-4 text-xs text-base-content opacity-70">
+                <div>
+                  <p class="font-semibold">파싱 시작</p>
+                  <p id="detail-parsing-started" class="font-mono">-</p>
+                </div>
+                <div>
+                  <p class="font-semibold">파싱 완료</p>
+                  <p id="detail-parsing-completed" class="font-mono">-</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Error Section -->
             <div class="space-y-4 mt-6">
               <div id="error-section" class="col-span-2" style="display: none;">
@@ -407,7 +474,8 @@
     <th:block layout:fragment="script-content">
       <script>
         // Show detail modal
-        function showDetail(id, filename, format, size, status, time, hash, expectedChecksum, calculatedChecksum, errorMsg) {
+        function showDetail(id, filename, format, size, status, time, hash, expectedChecksum, calculatedChecksum, errorMsg,
+                            parsingStatus, certificateCount, crlCount, validCount, invalidCount, errorCount, parsingDuration, parsingStarted, parsingCompleted) {
           document.getElementById('detail-id').textContent = id;
           document.getElementById('detail-filename').textContent = filename;
           document.getElementById('detail-format').textContent = format;
@@ -444,6 +512,24 @@
             checksumSection.style.display = 'none';
           }
 
+          // Parsing Statistics Section
+          const parsingSection = document.getElementById('parsing-section');
+          if (parsingStatus && parsingStatus !== 'null' && parsingStatus.trim() !== '') {
+            document.getElementById('detail-parsing-status').textContent = formatParsingStatus(parsingStatus);
+            document.getElementById('detail-certificate-count').textContent = certificateCount && certificateCount !== 'null' ? certificateCount : '-';
+            document.getElementById('detail-crl-count').textContent = crlCount && crlCount !== 'null' ? crlCount : '-';
+            document.getElementById('detail-valid-count').textContent = validCount && validCount !== 'null' ? validCount : '-';
+            document.getElementById('detail-invalid-count').textContent = invalidCount && invalidCount !== 'null' ? invalidCount : '-';
+            document.getElementById('detail-error-count').textContent = errorCount && errorCount !== 'null' ? errorCount : '-';
+            document.getElementById('detail-parsing-duration').textContent = formatDuration(parsingDuration);
+            document.getElementById('detail-parsing-started').textContent = parsingStarted && parsingStarted !== 'null' ? parsingStarted : '-';
+            document.getElementById('detail-parsing-completed').textContent = parsingCompleted && parsingCompleted !== 'null' ? parsingCompleted : '-';
+
+            parsingSection.style.display = 'block';
+          } else {
+            parsingSection.style.display = 'none';
+          }
+
           // Error section
           const errorSection = document.getElementById('error-section');
           if (errorMsg && errorMsg !== 'null' && errorMsg.trim() !== '') {
@@ -458,7 +544,33 @@
 
         function showDetailFromBtn(btn) {
           const d = btn.dataset;
-          showDetail(d.id, d.filename, d.format, d.size, d.status, d.time, d.hash, d.expected, d.calculated, d.error);
+          showDetail(d.id, d.filename, d.format, d.size, d.status, d.time, d.hash, d.expected, d.calculated, d.error,
+                     d.parsingStatus, d.certificateCount, d.crlCount, d.validCount, d.invalidCount, d.errorCount, d.parsingDuration, d.parsingStarted, d.parsingCompleted);
+        }
+
+        // Format parsing status for display
+        function formatParsingStatus(status) {
+          const statusMap = {
+            'RECEIVED': '수신됨',
+            'PARSING': '파싱 중',
+            'PARSED': '파싱 완료',
+            'VALIDATED': '검증 완료',
+            'FAILED': '파싱 실패'
+          };
+          return statusMap[status] || status;
+        }
+
+        // Format duration in milliseconds to human-readable format
+        function formatDuration(millis) {
+          if (!millis || millis === 'null' || millis <= 0) return '-';
+          const seconds = millis / 1000;
+          if (seconds < 60) {
+            return seconds.toFixed(2) + '초';
+          } else {
+            const minutes = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(2);
+            return minutes + '분 ' + secs + '초';
+          }
         }
         
         // Copy to clipboard

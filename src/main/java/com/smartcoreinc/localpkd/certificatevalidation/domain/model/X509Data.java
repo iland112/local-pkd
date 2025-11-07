@@ -57,8 +57,10 @@ public class X509Data implements ValueObject {
      *
      * <p>X.509 인증서의 완전한 DER-encoded 바이너리 데이터입니다.</p>
      * <p>최대 크기: 약 16MB (대부분의 인증서는 1-10KB)</p>
+     *
+     * <p><b>JPA 매핑 주의사항</b>: PostgreSQL에서 @Lob은 OID 타입으로 매핑되므로 제거하고,
+     * columnDefinition="BYTEA"만 사용해야 합니다.</p>
      */
-    @Lob
     @Column(name = "certificate_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateBinary;
 
