@@ -83,16 +83,19 @@ public interface SpringDataCertificateRevocationListRepository extends JpaReposi
      * <p>특정 업로드 파일에서 추출된 모든 CRL을 조회합니다.</p>
      * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
      *
-     * <p><b>Query Method Naming Convention</b>:</p>
+     * <p><b>Attempt 9 (2025-10-30): Native SQL with UUID Casting</b>:</p>
      * <ul>
-     *   <li>Field name: uploadId (UUID 타입)</li>
-     *   <li>Generated SQL: SELECT ... WHERE upload_id = :uploadId</li>
+     *   <li>Spring Data JPA의 기본 UUID 파라미터 바인딩 문제 회피</li>
+     *   <li>Native SQL 쿼리로 UUID를 명시적으로 ::uuid로 캐스팅</li>
+     *   <li>8개 시도 실패 후의 최종 해결책</li>
      * </ul>
      *
      * @param uploadId 원본 업로드 파일 ID (File Upload Context)
      * @return CRL 목록 (빈 리스트 가능)
-     * @since Phase 17 Task 1.2
+     * @since Phase 17 Task 1.2 (Attempt 9 - Native SQL with UUID Casting)
      */
+    @Query(value = "SELECT * FROM certificate_revocation_list WHERE upload_id = CAST(:uploadId AS uuid)",
+           nativeQuery = true)
     List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId);
 
     /**

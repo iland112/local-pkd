@@ -1,0 +1,750 @@
+package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.adapter;
+
+import com.smartcoreinc.localpkd.certificatevalidation.domain.exception.LdapConnectionException;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.exception.LdapOperationException;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.port.LdapConnectionPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.ldap.core.AttributesMapper;
+import org.springframework.ldap.core.LdapTemplate;
+import org.springframework.ldap.core.support.LdapContextSource;
+import org.springframework.ldap.filter.AndFilter;
+import org.springframework.ldap.filter.EqualsFilter;
+import org.springframework.ldap.support.LdapNameBuilder;
+import org.springframework.stereotype.Component;
+
+import javax.naming.NamingException;
+import javax.naming.directory.Attribute;
+import javax.naming.Name;
+import javax.naming.directory.Attributes;
+import javax.naming.directory.BasicAttribute;
+import javax.naming.directory.BasicAttributes;
+
+import org.springframework.ldap.core.DirContextAdapter;
+import org.springframework.ldap.support.LdapNameBuilder;
+import javax.naming.directory.DirContext;
+import javax.naming.directory.SearchControls;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.TimeZone;
+
+/**
+ * SpringLdapConnectionAdapter - Spring LDAP 기반 LDAP 연결 어댑터
+ *
+ * <p><b>목적</b>: LdapConnectionPort 인터페이스를 Spring LDAP을 이용해 구현합니다.</p>
+ *
+ * <p><b>설계 패턴</b>: Adapter Pattern (Hexagonal Architecture)
+ * <ul>
+ *   <li>Port: Domain Layer의 LdapConnectionPort 인터페이스</li>
+ *   <li>Adapter: Infrastructure Layer의 이 클래스 (Spring LDAP 구현체)</li>
+ *   <li>장점: Domain이 Spring LDAP에 의존하지 않음</li>
+ * </ul>
+ * </p>
+ *
+ * <p><b>Spring LDAP 설정</b>:
+ * <pre>
+ * # application.properties
+ * spring.ldap.urls=ldap://192.168.100.10:389
+ * spring.ldap.base=dc=ldap,dc=smartcoreinc,dc=com
+ * spring.ldap.username=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+ * spring.ldap.password=admin_password
+ *
+ * # Optional: SSL/TLS
+ * app.ldap.ssl.enabled=false
+ * app.ldap.connection.timeout=5000
+ * app.ldap.read.timeout=10000
+ * </pre>
+ * </p>
+ *
+ * <p><b>LDAP Entry 스키마</b>:
+ * <pre>
+ * # 인증서 엔트리
+ * dn: cn=Test Certificate,ou=certificates,dc=ldap,dc=smartcoreinc,dc=com
+ * objectClass: pkiCertificate
+ * cn: Test Certificate
+ * serialNumber: 1234567890ABCDEF
+ * certificateContent: {binary_cert_data}
+ * issuer: CN=CSCA-Test
+ * validFrom: 20240101000000Z
+ * validTo: 20250101000000Z
+ * fingerprint: A1B2C3D4...
+ * uploadedAt: {timestamp}
+ *
+ * # CRL 엔트리
+ * dn: cn=CSCA-Test-001,ou=crl,dc=ldap,dc=smartcoreinc,dc=com
+ * objectClass: pkiCRL
+ * cn: CSCA-Test-001
+ * issuer: CN=CSCA-Test
+ * crlContent: {binary_crl_data}
+ * thisUpdate: 20240101000000Z
+ * nextUpdate: 20240131000000Z
+ * revokedCount: 5
+ * uploadedAt: {timestamp}
+ * </pre>
+ * </p>
+ *
+ * <p><b>Phase 17</b>: Spring LDAP adapter for LDAP Integration foundation</p>
+ *
+ * @see LdapConnectionPort
+ * @see LdapTemplate
+ * @author SmartCore Inc.
+ * @version 1.0
+ * @since 2025-10-24 (Phase 17 Task 1.5)
+ */
+@Slf4j
+@Component
+@ConditionalOnProperty(name = "spring.ldap.urls", matchIfMissing = false)
+@RequiredArgsConstructor
+public class SpringLdapConnectionAdapter implements LdapConnectionPort {
+
+    private final LdapTemplate ldapTemplate;
+    private final LdapContextSource contextSource;
+
+    @Value("${spring.ldap.base:}")
+    private String baseDn;  // Empty for absolute DN mode, non-empty for relative DN mode
+
+    @Value("${app.ldap.connection.timeout:5000}")
+    private int connectionTimeout;
+
+    @Value("${app.ldap.read.timeout:10000}")
+    private int readTimeout;
+
+    private volatile boolean connected = false;
+
+    @Override
+    public void connect() throws LdapConnectionException {
+        log.debug("=== LDAP Connection started ===");
+        log.info("LDAP Configuration - baseDn: '{}', urls: {}", baseDn, contextSource.getUrls());
+
+        try {
+            // Test LDAP connection by creating a read-only context
+            // This is the proper way to validate LDAP connectivity without searching
+            DirContext context = contextSource.getReadOnlyContext();
+
+            if (context != null) {
+                try {
+                    context.close();
+                } catch (NamingException e) {
+                    log.warn("Failed to close LDAP context", e);
+                }
+
+                connected = true;
+                log.info("LDAP connected successfully: {}", getConnectionStatus());
+            } else {
+                throw LdapConnectionException.connectionFailed(
+                    contextSource.getUrls()[0],
+                    new IllegalStateException("LDAP context is null")
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("LDAP connection failed", e);
+            connected = false;
+            throw LdapConnectionException.connectionFailed(
+                contextSource.getUrls()[0],
+                e
+            );
+        }
+    }
+
+    @Override
+    public void disconnect() throws LdapConnectionException {
+        log.debug("=== LDAP disconnection started ===");
+
+        try {
+            // Spring LDAP's LdapTemplate handles connection lifecycle automatically
+            // But we can invalidate the cached context source
+            connected = false;
+            log.info("LDAP disconnected");
+
+        } catch (Exception e) {
+            log.error("LDAP disconnection error", e);
+            throw new LdapConnectionException("Failed to disconnect from LDAP", e);
+        }
+    }
+
+    @Override
+    public boolean isConnected() {
+        if (!connected) {
+            return false;
+        }
+
+        try {
+            // Quick validation: test LDAP connection by creating a read-only context
+            DirContext context = contextSource.getReadOnlyContext();
+
+            if (context != null) {
+                try {
+                    context.close();
+                } catch (NamingException e) {
+                    log.warn("Failed to close LDAP context during validation", e);
+                }
+                return true;
+            }
+            return false;
+
+        } catch (Exception e) {
+            log.warn("LDAP connection validation failed", e);
+            connected = false;
+            return false;
+        }
+    }
+
+    @Override
+    public String getConnectionStatus() {
+        try {
+            String url = String.join(", ", contextSource.getUrls());
+            return String.format(
+                "Connected to LDAP: %s, Base DN: %s, Status: %s",
+                url,
+                baseDn,
+                connected ? "CONNECTED" : "DISCONNECTED"
+            );
+        } catch (Exception e) {
+            return "Unknown connection status";
+        }
+    }
+
+    @Override
+    public String uploadCertificate(byte[] certificateDer, String subjectCn, String baseDn)
+            throws LdapOperationException {
+        log.debug("=== Certificate LDAP upload started ===");
+        log.debug("Subject CN: {}, Base DN: {}", subjectCn, baseDn);
+
+        try {
+            validateConnected();
+            validateInputs(certificateDer, subjectCn, baseDn);
+
+            // Extract country code from Subject CN (임시 구현 - 실제로는 Certificate 엔티티에서 가져와야 함)
+            // 이 메서드는 deprecated되고 새로운 uploadCertificateWithCountry 메서드 사용 권장
+            String countryCode = extractCountryCodeFromCn(subjectCn);
+
+            return uploadCertificateWithCountry(certificateDer, subjectCn, countryCode, baseDn);
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "uploadCertificate");
+        } catch (Exception e) {
+            log.error("Failed to upload certificate to LDAP", e);
+            throw LdapOperationException.uploadCertificateFailed(subjectCn, e);
+        }
+    }
+
+    /**
+     * ICAO PKD 표준 DN 구조로 인증서를 업로드합니다.
+     *
+     * DN 구조: cn=CERT_NAME,o=csca,c=COUNTRY,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+     *
+     * @param certificateDer 인증서 DER 바이너리
+     * @param subjectCn Subject Common Name
+     * @param countryCode 국가 코드 (2자리, 예: KR, US, FR)
+     * @param baseDn Base DN (dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com)
+     * @return 생성된 인증서 DN
+     * @throws LdapOperationException LDAP 작업 실패 시
+     */
+    public String uploadCertificateWithCountry(byte[] certificateDer, String subjectCn, String countryCode, String baseDn)
+            throws LdapOperationException {
+        log.debug("=== Certificate LDAP upload with country started ===");
+        log.debug("Subject CN: {}, Country: {}, Base DN: {}", subjectCn, countryCode, baseDn);
+
+        try {
+            validateConnected();
+            validateInputs(certificateDer, subjectCn, baseDn);
+
+            if (countryCode == null || countryCode.trim().isEmpty()) {
+                countryCode = "UN";  // Unknown country
+            }
+
+            // 0. Build ICAO PKD DN path (baseDn is assumed to exist)
+            // baseDn = "dc=ldap,dc=smartcoreinc,dc=com" (must exist on LDAP server)
+            // Ensure intermediate DCs exist in correct order:
+            //   - dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+            //   - dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+            //   - dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+            // Ensure ICAO PKD intermediate DCs (in order from root to leaf)
+            String pkdDn = String.format("dc=pkd,%s", baseDn);
+            String downloadDn = String.format("dc=download,%s", pkdDn);
+            String dataDn = String.format("dc=data,%s", downloadDn);
+
+            ensureIntermediateDcExists("pkd", baseDn);
+            ensureIntermediateDcExists("download", pkdDn);
+            ensureIntermediateDcExists("data", downloadDn);
+
+            // 1. Ensure DN tree exists: c=COUNTRY,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+            ensureCountryExists(countryCode, dataDn);
+
+            // 2. Ensure organization exists: o=csca,c=COUNTRY,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+            ensureOrganizationExists(countryCode, dataDn);
+
+            // 3. Create certificate DN using LdapNameBuilder (proper Spring LDAP way)
+            String certificateDnString = String.format(
+                "cn=%s,o=csca,c=%s,%s",
+                escapeDnValue(subjectCn),
+                countryCode.toUpperCase(),
+                dataDn
+            );
+            Name certificateDn = LdapNameBuilder.newInstance(certificateDnString).build();
+
+            // 4. Create LDAP attributes (ICAO PKD standard schema)
+            Attributes attributes = new BasicAttributes();
+            // objectClass: MUST have STRUCTURAL class (inetOrgPerson) + AUXILIARY classes (pkiUser)
+            BasicAttribute objectClass = new BasicAttribute("objectClass");
+            objectClass.add("top");                    // Abstract base class
+            objectClass.add("person");                 // Structural class (requires cn, sn)
+            objectClass.add("organizationalPerson");   // Extends person
+            objectClass.add("inetOrgPerson");          // Structural class (extends organizationalPerson)
+            objectClass.add("pkiUser");                // Auxiliary class (adds userCertificate)
+            attributes.put(objectClass);
+
+            attributes.put(new BasicAttribute("cn", subjectCn));
+            attributes.put(new BasicAttribute("sn", subjectCn));  // Required by person objectClass
+            // Use standard LDAP attribute: userCertificate;binary
+            attributes.put(new BasicAttribute("userCertificate;binary", certificateDer));
+            // Note: uploadedAt is not a standard LDAP attribute, removed to avoid schema error
+
+            // 5. Create DirContextAdapter and bind to LDAP (Spring LDAP proper way)
+            DirContextAdapter context = new DirContextAdapter(attributes, certificateDn);
+            ldapTemplate.bind(context);
+
+            log.info("Certificate uploaded to LDAP: {}", certificateDnString);
+            return certificateDnString;
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "uploadCertificateWithCountry");
+        } catch (Exception e) {
+            log.error("Failed to upload certificate to LDAP", e);
+            throw LdapOperationException.uploadCertificateFailed(subjectCn, e);
+        }
+    }
+
+    /**
+     * 중간 DC (Domain Component) 엔트리를 생성합니다.
+     * 예: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+     *
+     * <p><b>전략</b>: 원본 LdapService.java의 ensureParentEntriesExist() 패턴을 따릅니다.
+     * 1. lookup()으로 먼저 엔트리 존재 여부 확인
+     * 2. 존재하지 않으면 createIntermediateDc()로 생성
+     * 3. 부모 엔트리가 없으면 명시적 오류 처리</p>
+     *
+     * @param dcValue DC 값 (예: "pkd", "download", "data")
+     * @param parentDn 부모 DN (예: "dc=ldap,dc=smartcoreinc,dc=com")
+     */
+    private void ensureIntermediateDcExists(String dcValue, String parentDn) {
+        String dcDnString = String.format("dc=%s,%s", dcValue, parentDn);
+        Name dcDn = LdapNameBuilder.newInstance(dcDnString).build();
+
+        log.debug("Ensuring intermediate DC exists: {}", dcDnString);
+
+        // 1단계: lookup()으로 먼저 엔트리가 존재하는지 확인
+        try {
+            ldapTemplate.lookup(dcDn);
+            log.debug("Intermediate DC already exists: {}", dcDnString);
+            return; // 이미 존재하므로 종료
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            // 엔트리가 없으므로 생성해야 함 - 정상 경로
+            log.debug("Intermediate DC not found, will create: {}", dcDnString);
+        } catch (Exception e) {
+            // 다른 오류 발생시 로깅
+            log.warn("Error checking intermediate DC existence: {}", dcDnString, e);
+        }
+
+        // 2단계: 부모 DN 먼저 확인 (부모가 없으면 자식도 못 만듦)
+        Name parentName = LdapNameBuilder.newInstance(parentDn).build();
+        try {
+            ldapTemplate.lookup(parentName);
+            log.debug("Parent DN exists: {}", parentDn);
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            String errorMsg = String.format(
+                "Cannot create intermediate DC '%s': parent DN '%s' does not exist. " +
+                "Please ensure the LDAP server baseDN and intermediate paths are created first.",
+                dcDnString, parentDn
+            );
+            log.error(errorMsg);
+            throw new LdapOperationException(errorMsg, "ensureIntermediateDcExists");
+        } catch (Exception e) {
+            log.warn("Error checking parent DN existence: {}", parentDn, e);
+        }
+
+        // 3단계: 엔트리 생성
+        createIntermediateDc(dcValue, dcDnString, dcDn);
+    }
+
+    /**
+     * 중간 DC 엔트리를 실제로 생성합니다.
+     *
+     * @param dcValue DC 값 (예: "pkd")
+     * @param dcDnString DN 문자열 (예: "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com")
+     * @param dcDn DN 객체
+     */
+    private void createIntermediateDc(String dcValue, String dcDnString, Name dcDn) {
+        try {
+            Attributes attributes = new BasicAttributes();
+            BasicAttribute objectClass = new BasicAttribute("objectClass");
+            objectClass.add("top");
+            objectClass.add("dcObject");
+            objectClass.add("organization");
+            attributes.put(objectClass);
+            attributes.put(new BasicAttribute("dc", dcValue));
+            attributes.put(new BasicAttribute("o", dcValue));
+
+            DirContextAdapter context = new DirContextAdapter(attributes, dcDn);
+            ldapTemplate.bind(context);
+            log.info("Intermediate DC created successfully: {}", dcDnString);
+        } catch (Exception e) {
+            log.error("Failed to create intermediate DC '{}': {}", dcDnString, e.getMessage());
+            throw new LdapOperationException("Failed to create intermediate DC: " + dcDnString, "ensureIntermediateDcExists");
+        }
+    }
+
+    /**
+     * 국가 엔트리가 LDAP에 존재하는지 확인하고 없으면 생성합니다.
+     *
+     * <p><b>전략</b>: lookup() 패턴을 사용하여 먼저 존재 여부 확인</p>
+     *
+     * @param countryCode 국가 코드
+     * @param baseDn Base DN
+     */
+    private void ensureCountryExists(String countryCode, String baseDn) {
+        String countryDnString = String.format("c=%s,%s", countryCode.toUpperCase(), baseDn);
+        Name countryDn = LdapNameBuilder.newInstance(countryDnString).build();
+
+        log.debug("Ensuring country entry exists: {}", countryDnString);
+
+        // 1단계: 먼저 lookup()으로 존재 여부 확인
+        try {
+            ldapTemplate.lookup(countryDn);
+            log.debug("Country entry already exists: {}", countryDnString);
+            return; // 이미 존재하므로 종료
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            // 엔트리가 없으므로 생성해야 함 - 정상 경로
+            log.debug("Country entry not found, will create: {}", countryDnString);
+        } catch (Exception e) {
+            log.warn("Error checking country entry existence: {}", countryDnString, e);
+        }
+
+        // 2단계: 엔트리 생성
+        try {
+            Attributes attributes = new BasicAttributes();
+            BasicAttribute objectClass = new BasicAttribute("objectClass");
+            objectClass.add("top");
+            objectClass.add("country");
+            attributes.put(objectClass);
+            attributes.put(new BasicAttribute("c", countryCode.toUpperCase()));
+
+            DirContextAdapter context = new DirContextAdapter(attributes, countryDn);
+            ldapTemplate.bind(context);
+            log.info("Country entry created successfully: {}", countryDnString);
+        } catch (Exception ex) {
+            log.error("Failed to create country entry: {}", countryDnString, ex);
+            throw new LdapOperationException("Failed to create country entry: " + countryDnString, "ensureCountryExists");
+        }
+    }
+
+    /**
+     * Organization 엔트리가 LDAP에 존재하는지 확인하고 없으면 생성합니다.
+     *
+     * <p><b>전략</b>: lookup() 패턴을 사용하여 먼저 존재 여부 확인</p>
+     *
+     * @param countryCode 국가 코드
+     * @param baseDn Base DN
+     */
+    private void ensureOrganizationExists(String countryCode, String baseDn) {
+        String orgDnString = String.format("o=csca,c=%s,%s", countryCode.toUpperCase(), baseDn);
+        Name orgDn = LdapNameBuilder.newInstance(orgDnString).build();
+
+        log.debug("Ensuring organization entry exists: {}", orgDnString);
+
+        // 1단계: 먼저 lookup()으로 존재 여부 확인
+        try {
+            ldapTemplate.lookup(orgDn);
+            log.debug("Organization entry already exists: {}", orgDnString);
+            return; // 이미 존재하므로 종료
+        } catch (org.springframework.ldap.NameNotFoundException e) {
+            // 엔트리가 없으므로 생성해야 함 - 정상 경로
+            log.debug("Organization entry not found, will create: {}", orgDnString);
+        } catch (Exception e) {
+            log.warn("Error checking organization entry existence: {}", orgDnString, e);
+        }
+
+        // 2단계: 엔트리 생성
+        try {
+            Attributes attributes = new BasicAttributes();
+            BasicAttribute objectClass = new BasicAttribute("objectClass");
+            objectClass.add("top");
+            objectClass.add("organization");
+            attributes.put(objectClass);
+            attributes.put(new BasicAttribute("o", "csca"));
+
+            DirContextAdapter context = new DirContextAdapter(attributes, orgDn);
+            ldapTemplate.bind(context);
+            log.info("Organization entry created successfully: {}", orgDnString);
+        } catch (Exception ex) {
+            log.error("Failed to create organization entry: {}", orgDnString, ex);
+            throw new LdapOperationException("Failed to create organization entry: " + orgDnString, "ensureOrganizationExists");
+        }
+    }
+
+    /**
+     * Subject CN에서 국가 코드를 추출합니다 (임시 구현).
+     * 실제로는 Certificate 엔티티의 SubjectInfo.countryCode를 사용해야 합니다.
+     *
+     * @param subjectCn Subject Common Name
+     * @return 국가 코드 (없으면 "UN")
+     */
+    private String extractCountryCodeFromCn(String subjectCn) {
+        // 임시 구현: CN에서 국가 코드를 추출할 수 없으므로 "UN" 반환
+        // 실제로는 Certificate 엔티티에서 가져와야 함
+        return "UN";
+    }
+
+    @Override
+    public String uploadCrl(byte[] crlDer, String issuerName, String baseDn)
+            throws LdapOperationException {
+        log.debug("=== CRL LDAP upload started ===");
+        log.debug("Issuer: {}, Base DN: {}", issuerName, baseDn);
+
+        try {
+            validateConnected();
+            validateInputs(crlDer, issuerName, baseDn);
+
+            // Create DN for CRL entry using LdapNameBuilder (proper Spring LDAP way)
+            String crlDnString = String.format(
+                "cn=%s,ou=crl,%s",
+                escapeDnValue(issuerName),
+                baseDn
+            );
+            Name crlDn = LdapNameBuilder.newInstance(crlDnString).build();
+
+            // Create LDAP attributes (ICAO PKD standard schema)
+            Attributes attributes = new BasicAttributes();
+            // objectClass: MUST use multi-value with top + cRLDistributionPoint
+            BasicAttribute objectClass = new BasicAttribute("objectClass");
+            objectClass.add("top");
+            objectClass.add("cRLDistributionPoint");
+            attributes.put(objectClass);
+
+            attributes.put(new BasicAttribute("cn", issuerName));
+            // Use standard LDAP attribute: certificateRevocationList;binary
+            attributes.put(new BasicAttribute("certificateRevocationList;binary", crlDer));
+            // Note: uploadedAt is not a standard LDAP attribute, removed to avoid schema error
+
+            // Create DirContextAdapter and bind to LDAP (Spring LDAP proper way)
+            DirContextAdapter context = new DirContextAdapter(attributes, crlDn);
+            ldapTemplate.bind(context);
+
+            log.info("CRL uploaded to LDAP: {}", crlDnString);
+            return crlDnString;
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "uploadCrl");
+        } catch (Exception e) {
+            log.error("Failed to upload CRL to LDAP", e);
+            throw LdapOperationException.uploadCrlFailed(issuerName, e);
+        }
+    }
+
+    @Override
+    public Optional<LdapEntry> searchCertificate(String subjectCn, String baseDn)
+            throws LdapOperationException {
+        log.debug("=== Certificate LDAP search started ===");
+        log.debug("Subject CN: {}", subjectCn);
+
+        try {
+            validateConnected();
+            validateInputs(subjectCn, baseDn);
+
+            String searchDn = String.format("ou=certificates,%s", baseDn);
+            EqualsFilter filter = new EqualsFilter("cn", subjectCn);
+
+            List<LdapEntry> results = ldapTemplate.search(
+                searchDn,
+                filter.encode(),
+                (AttributesMapper<LdapEntry>) this::mapAttributesToEntry
+            );
+
+            if (results.isEmpty()) {
+                log.debug("Certificate not found: {}", subjectCn);
+                return Optional.empty();
+            }
+
+            log.debug("Certificate found: {}", subjectCn);
+            return Optional.of(results.get(0));
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "searchCertificate");
+        } catch (Exception e) {
+            log.error("Failed to search certificate in LDAP", e);
+            throw LdapOperationException.searchCertificateFailed(subjectCn);
+        }
+    }
+
+    @Override
+    public List<LdapEntry> searchCrls(String issuerName, String baseDn)
+            throws LdapOperationException {
+        log.debug("=== CRL LDAP search started ===");
+        log.debug("Issuer: {}", issuerName);
+
+        try {
+            validateConnected();
+            validateInputs(issuerName, baseDn);
+
+            String searchDn = String.format("ou=crl,%s", baseDn);
+            EqualsFilter filter = new EqualsFilter("issuer", issuerName);
+
+            List<LdapEntry> results = ldapTemplate.search(
+                searchDn,
+                filter.encode(),
+                (AttributesMapper<LdapEntry>) this::mapAttributesToEntry
+            );
+
+            log.debug("Found {} CRL(s) for issuer: {}", results.size(), issuerName);
+            return results;
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "searchCrls");
+        } catch (Exception e) {
+            log.error("Failed to search CRLs in LDAP", e);
+            throw LdapOperationException.searchCrlFailed(issuerName);
+        }
+    }
+
+    @Override
+    public boolean deleteEntry(String dn) throws LdapOperationException {
+        log.debug("=== LDAP entry deletion started ===");
+        log.debug("DN: {}", dn);
+
+        try {
+            validateConnected();
+            if (dn == null || dn.isBlank()) {
+                throw new IllegalArgumentException("DN must not be null or blank");
+            }
+
+            ldapTemplate.unbind(dn);
+            log.info("LDAP entry deleted: {}", dn);
+            return true;
+
+        } catch (IllegalStateException e) {
+            throw new LdapOperationException(e.getMessage(), "deleteEntry", dn);
+        } catch (Exception e) {
+            log.error("Failed to delete LDAP entry", e);
+            throw LdapOperationException.deleteEntryFailed(dn, e);
+        }
+    }
+
+    @Override
+    public void keepAlive(int timeoutSeconds) throws LdapConnectionException {
+        log.debug("=== LDAP keep-alive started ===");
+
+        try {
+            if (!isConnected()) {
+                throw new IllegalStateException("LDAP not connected");
+            }
+
+            // Send a keep-alive search to maintain connection
+            ldapTemplate.search(
+                LdapNameBuilder.newInstance(baseDn).build(),
+                "(objectClass=*)",
+                new SearchControls() {{
+                    setSearchScope(SearchControls.OBJECT_SCOPE);
+                    setTimeLimit(1000);
+                    setReturningObjFlag(false);
+                }},
+                (AttributesMapper<Void>) attrs -> null
+            );
+
+            log.debug("LDAP keep-alive sent, timeout: {} seconds", timeoutSeconds);
+
+        } catch (IllegalStateException e) {
+            throw new LdapConnectionException(e.getMessage());
+        } catch (Exception e) {
+            log.warn("LDAP keep-alive failed", e);
+            throw LdapConnectionException.connectionTimeout((long) timeoutSeconds * 1000);
+        }
+    }
+
+    // ========== Helper Methods ==========
+
+    private void validateConnected() throws IllegalStateException {
+        if (!connected) {
+            throw new IllegalStateException("LDAP connection not established. Call connect() first.");
+        }
+    }
+
+    private void validateInputs(byte[] data, String name, String baseDn) {
+        if (data == null || data.length == 0) {
+            throw new IllegalArgumentException("Data must not be null or empty");
+        }
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Name must not be null or blank");
+        }
+        if (baseDn == null || baseDn.isBlank()) {
+            throw new IllegalArgumentException("Base DN must not be null or blank");
+        }
+    }
+
+    private void validateInputs(String name, String baseDn) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Name must not be null or blank");
+        }
+        if (baseDn == null || baseDn.isBlank()) {
+            throw new IllegalArgumentException("Base DN must not be null or blank");
+        }
+    }
+
+    private String escapeDnValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        // Escape special characters in DN values per RFC 4514
+        return value
+            .replace("\\", "\\5c")
+            .replace(",", "\\2c")
+            .replace("=", "\\3d")
+            .replace("+", "\\2b")
+            .replace("\"", "\\22")
+            .replace("<", "\\3c")
+            .replace(">", "\\3e")
+            .replace(";", "\\3b");
+    }
+
+    private String getCurrentTimestamp() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss'Z'");
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return sdf.format(new Date());
+    }
+
+    private LdapEntry mapAttributesToEntry(Attributes attributes) throws NamingException {
+        String dn = attributes.get("dn") != null ?
+            attributes.get("dn").get().toString() : "";
+
+        String cn = attributes.get("cn") != null ?
+            attributes.get("cn").get().toString() : "";
+
+        byte[] certificateContent = null;
+        if (attributes.get("certificateContent") != null) {
+            Object content = attributes.get("certificateContent").get();
+            if (content instanceof byte[]) {
+                certificateContent = (byte[]) content;
+            }
+        }
+
+        byte[] crlContent = null;
+        if (attributes.get("crlContent") != null) {
+            Object content = attributes.get("crlContent").get();
+            if (content instanceof byte[]) {
+                crlContent = (byte[]) content;
+            }
+        }
+
+        String uploadedAt = attributes.get("uploadedAt") != null ?
+            attributes.get("uploadedAt").get().toString() : "";
+
+        return new LdapEntry(dn, cn, certificateContent, crlContent, uploadedAt);
+    }
+
+}

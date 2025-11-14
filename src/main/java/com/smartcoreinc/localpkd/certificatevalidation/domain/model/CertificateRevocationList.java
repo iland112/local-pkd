@@ -148,6 +148,13 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      * <p>Cross-Context Reference: UploadedFile Aggregate와 연결</p>
      * <p>Phase 17: ValidateCertificatesUseCase에서 사용됩니다.</p>
      *
+     * <p><b>Attempt 9 (2025-10-30)</b>: Native SQL with UUID Casting</p>
+     * <ul>
+     *   <li>Spring Data JPA의 기본 UUID 파라미터 바인딩 문제 회피</li>
+     *   <li>Native SQL 쿼리로 UUID를 명시적으로 CAST(:uploadId AS uuid) 처리</li>
+     *   <li>8개 시도 실패 후 최종 해결책</li>
+     * </ul>
+     *
      * @since Phase 17 Task 1.2
      */
     @Column(name = "upload_id", nullable = false)
