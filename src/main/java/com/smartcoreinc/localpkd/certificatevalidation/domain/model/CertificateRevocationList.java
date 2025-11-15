@@ -133,6 +133,8 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      * X.509 CRL 바이너리 데이터
      */
     @Embedded
+    @AttributeOverride(name = "crlBinary", column = @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA"))
+    @AttributeOverride(name = "revokedCount", column = @Column(name = "revoked_count", nullable = false, columnDefinition = "INT DEFAULT 0"))
     private X509CrlData x509CrlData;
 
     /**
@@ -200,19 +202,15 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
         Objects.requireNonNull(uploadId, "Upload ID cannot be null");
         Objects.requireNonNull(id, "CRL ID cannot be null");
         Objects.requireNonNull(issuerName, "Issuer name cannot be null");
-        Objects.requireNonNull(countryCode, "Country code cannot be null");
+        // ✅ Phase 17 Fix: CountryCode는 nullable (LDIF 데이터가 손상되었을 때)
+        // countryCode가 null이면 database의 country_code 컬럼에 null이 저장됨
         Objects.requireNonNull(validityPeriod, "Validity period cannot be null");
         Objects.requireNonNull(x509CrlData, "X509 CRL data cannot be null");
         Objects.requireNonNull(revokedCertificates, "Revoked certificates cannot be null");
 
-        // Issuer name과 Country code 일치 검증
-        if (!issuerName.isCountry(countryCode.getValue())) {
-            throw new DomainException(
-                "ISSUER_COUNTRY_MISMATCH",
-                String.format("Issuer country (%s) does not match Country code (%s)",
-                    issuerName.getCountryCode(), countryCode.getValue())
-            );
-        }
+        // ✅ Phase 17 Fix: IssuerName은 이제 CN만 저장하므로 국가 정보가 없음
+        // CountryCode는 DN의 C (Country) RDN에서 별도로 추출되므로 검증 불필요
+        // Trust Chain 검증은 Phase 18+ 별도 모듈에서 수행
 
         // CRL Aggregate 생성
         CertificateRevocationList crl = new CertificateRevocationList();

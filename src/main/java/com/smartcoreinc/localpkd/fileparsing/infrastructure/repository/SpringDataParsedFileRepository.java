@@ -3,6 +3,7 @@ package com.smartcoreinc.localpkd.fileparsing.infrastructure.repository;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFileId;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -38,14 +39,20 @@ import java.util.Optional;
 public interface SpringDataParsedFileRepository extends JpaRepository<ParsedFile, ParsedFileId> {
 
     /**
-     * UploadId로 ParsedFile 조회
+     * UploadId로 ParsedFile 조회 (컬렉션 미포함)
      *
      * <p>File Upload Context의 UploadedFile과 1:1 관계입니다.</p>
+     * <p>
+     * LIMITATION: Hibernate는 같은 쿼리에서 여러 @ElementCollection을 동시에 로드할 수 없음.
+     * (MultipleBagFetchException) 따라서 @EntityGraph, LEFT JOIN FETCH 모두 작동 불가.
+     *
+     * 해결책: ParsedFile 기본 정보만 로드하고, 컬렉션은 LAZY로 로드됨.
+     * ValidateCertificatesUseCase에서 수동으로 컬렉션 접근 시 로드됨.
+     * </p>
      *
      * @param uploadId UploadId
-     * @return Optional<ParsedFile>
+     * @return Optional<ParsedFile> (certificates와 crls는 LAZY 로드)
      */
-    @Query("SELECT pf FROM ParsedFile pf WHERE pf.uploadId = :uploadId")
     Optional<ParsedFile> findByUploadId(@Param("uploadId") UploadId uploadId);
 
     /**

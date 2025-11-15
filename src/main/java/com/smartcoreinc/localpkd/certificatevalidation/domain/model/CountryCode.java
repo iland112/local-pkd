@@ -66,7 +66,9 @@ public class CountryCode implements ValueObject {
     }
 
     /**
-     * CountryCode 생성 (Static Factory Method)
+     * CountryCode 생성 (Static Factory Method - Strict)
+     *
+     * <p>국가 코드 형식이 유효하지 않으면 DomainException을 발생시킵니다.</p>
      *
      * @param value ISO 3166-1 alpha-2 국가 코드 (예: QA)
      * @return CountryCode
@@ -88,6 +90,42 @@ public class CountryCode implements ValueObject {
                 "INVALID_COUNTRY_CODE_FORMAT",
                 "Country code must be exactly 2 uppercase letters (ISO 3166-1 alpha-2). Got: " + value
             );
+        }
+
+        CountryCode countryCode = new CountryCode();
+        countryCode.value = normalized;
+        return countryCode;
+    }
+
+    /**
+     * CountryCode 생성 (Static Factory Method - Lenient)
+     *
+     * <p>국가 코드 형식이 유효하지 않으면 null을 반환합니다.
+     * LDIF 파일에서 추출한 DN 데이터가 손상되었을 때 사용합니다.</p>
+     *
+     * <p>예:</p>
+     * <ul>
+     *   <li>"QA" → CountryCode("QA") ✅</li>
+     *   <li>"qA" → CountryCode("QA") ✅ (대문자로 정규화)</li>
+     *   <li>"KOR" → null ❌ (3자, 유효하지 않음)</li>
+     *   <li>"K9" → null ❌ (숫자 포함, 유효하지 않음)</li>
+     *   <li>null → null ❌</li>
+     *   <li>"" → null ❌</li>
+     * </ul>
+     *
+     * @param value ISO 3166-1 alpha-2 국가 코드 또는 null/invalid
+     * @return CountryCode 또는 null (형식이 유효하지 않은 경우)
+     */
+    public static CountryCode ofOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String normalized = value.trim().toUpperCase();
+
+        // 형식 검증: 정확히 2자 대문자 알파벳
+        if (!COUNTRY_CODE_PATTERN.matcher(normalized).matches()) {
+            return null;  // 형식이 유효하지 않으면 null 반환 (예외 발생 안함)
         }
 
         CountryCode countryCode = new CountryCode();

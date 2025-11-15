@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -72,12 +73,25 @@ public class LdifParsingEventHandler {
      * <ul>
      *   <li>SSE 진행 상황 전송 (VALIDATION_STARTED, 65%)</li>
      *   <li>추출된 인증서 개수 로깅</li>
-     *   <li>TODO: Certificate Validation Context로 검증 트리거</li>
+     *   <li>Certificate Validation Context로 검증 트리거</li>
      * </ul>
+     *
+     * <h4>트랜잭션 관리</h4>
+     * <ul>
+     *   <li><b>@Async</b>: 비동기 실행 (별도 스레드)</li>
+     *   <li><b>@Transactional</b>: NEW 트랜잭션 생성</li>
+     *   <li><b>@TransactionalEventListener(AFTER_COMMIT)</b>: 파싱 트랜잭션 커밋 후 실행</li>
+     * </ul>
+     *
+     * <h4>문제 해결</h4>
+     * <p>이전에는 @Transactional이 없어서 validateCertificatesUseCase.execute()의
+     * 트랜잭션 전파가 제대로 되지 않았습니다. @Transactional(propagation=REQUIRES_NEW)
+     * 추가로 명시적인 새 트랜잭션 생성을 보장합니다.</p>
      *
      * @param event 파일 파싱 완료 이벤트
      */
     @Async
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleFileParsingCompletedAndTriggerValidation(FileParsingCompletedEvent event) {
         log.info("=== [Event-Async] FileParsingCompleted (Triggering certificate validation) ===");

@@ -84,20 +84,30 @@ public class JpaParsedFileRepository implements ParsedFileRepository {
         ParsedFile saved = jpaRepository.save(parsedFile);
         log.debug("ParsedFile saved to database: {} (status={})", saved.getId().getId(), saved.getStatus());
 
-        // 3. Domain Events 발행 (JPA 저장 AFTER에 발행 - 미리 저장해둔 이벤트 사용)
+        // 3. Domain Events 발행 (트랜잭션 커밋 후 발행하기 위해 TransactionSynchronization 사용)
         if (!eventsBeforeSave.isEmpty()) {
-            log.debug("Publishing {} domain events for ParsedFile AFTER save: {}",
+            log.debug("Registering {} domain events to be published AFTER transaction commit: {}",
                 eventsBeforeSave.size(), saved.getId().getId());
 
-            eventsBeforeSave.forEach(event -> {
-                log.debug("Publishing event: {} for ParsedFile: {}",
-                    event.getClass().getSimpleName(), saved.getId().getId());
-                eventPublisher.publishEvent(event);
-            });
+            // ✅ FIX: Use TransactionSynchronization to publish events AFTER commit
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        log.debug("Transaction committed. Publishing {} domain events for ParsedFile: {}",
+                            eventsBeforeSave.size(), saved.getId().getId());
 
-            // 4. Domain Events 초기화
-            saved.clearDomainEvents();
-            log.debug("Domain events cleared after publishing");
+                        eventsBeforeSave.forEach(event -> {
+                            log.debug("Publishing event: {} for ParsedFile: {}",
+                                event.getClass().getSimpleName(), saved.getId().getId());
+                            eventPublisher.publishEvent(event);
+                        });
+
+                        saved.clearDomainEvents();
+                        log.debug("Domain events cleared after publishing");
+                    }
+                }
+            );
         } else {
             log.debug("No domain events to publish for ParsedFile: {}", saved.getId().getId());
         }

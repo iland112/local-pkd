@@ -5181,7 +5181,121 @@ LdapUploadEventHandler (@Async AFTER_COMMIT)
 
 ---
 
-**Document Version**: 7.0 (Phase 17 완료)
-**Last Updated**: 2025-10-30
-**Status**: Phase 17 ✅ PRODUCTION READY, Phase 18-20 계획 수립
+## Phase 17 Task 7: CRL LDAP 업로드 코드 구현 (COMPLETED) ✅
+
+**완료 날짜**: 2025-11-14
+**상태**: Task 7 CRL 업로드 메서드 구현 완료
+
+### 🔴 핵심 규칙: LDIF 파일의 DN 구조 유지 및 baseDN 변환만 수행
+
+**⚠️ 이 규칙을 반드시 기억하고 모든 CSCA, DSC, CRL 업로드에 적용할 것**
+
+#### DN 변환 규칙 상세
+
+LDIF 파일에서 추출되는 모든 Entry(CSCA, DSC, CRL 등)는 LDIF 파일의 원본 DN 구조를 **완전히 유지**하되, 오직 **baseDN만 변환**합니다.
+
+**변환 규칙 (정규식)**:
+```
+originalDn.replaceAll("dc=icao,dc=int$", "dc=ldap,dc=smartcoreinc,dc=com")
+```
+
+#### 구체적인 예시
+
+**CRL Entry (Certificate Revocation Lists)**:
+```
+원본 (LDIF 파일):
+  dn: cn=CN\=CSCA-QATAR\,O\=Gov\,C\=QA,o=crl,c=QA,dc=data,dc=download,dc=pkd,dc=icao,dc=int
+
+변환 후 (OpenLDAP):
+  dn: cn=CN\=CSCA-QATAR\,O\=Gov\,C\=QA,o=crl,c=QA,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+```
+
+**CSCA Entry (Certificates)**:
+```
+원본 (LDIF 파일):
+  dn: cn=CN\=CSCA-QATAR\,O\=Gov\,C\=QA,o=csca,c=QA,dc=data,dc=download,dc=pkd,dc=icao,dc=int
+
+변환 후 (OpenLDAP):
+  dn: cn=CN\=CSCA-QATAR\,O\=Gov\,C\=QA,o=csca,c=QA,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+```
+
+**DSC Entry (Document Signer Certificates)**:
+```
+원본 (LDIF 파일):
+  dn: cn=...,o=dsc,c=XX,dc=data,dc=download,dc=pkd,dc=icao,dc=int
+
+변환 후 (OpenLDAP):
+  dn: cn=...,o=dsc,c=XX,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+```
+
+#### 변환되지 않는 부분 (DN 구조 100% 유지)
+
+```
+✅ cn= (Common Name)
+✅ o= (Organization Unit: csca, crl, dsc 등)
+✅ c= (Country Code: QA, MY, UZ, BW, ID 등)
+✅ dc=data (Data DC)
+✅ dc=download (Download DC)
+✅ dc=pkd (PKD DC)
+
+❌ 오직 마지막 baseDN만 변환:
+   dc=icao,dc=int → dc=ldap,dc=smartcoreinc,dc=com
+```
+
+#### 구현 위치 및 메서드
+
+**파일**: `UnboundIdLdapConnectionAdapter.java`
+
+**메서드**:
+1. `uploadCrlToLdap(Entry crlEntry)` (lines 860-1049)
+   - CRL Entry를 받아서 DN을 변환하고 LDAP에 업로드
+   - transformDn() 메서드로 DN 변환
+
+2. `transformDn(String originalDn)` (lines 1051-1067)
+   - DN 변환 로직을 수행하는 유틸리티 메서드
+   - 정규식을 사용해 baseDN만 변환하고 나머지는 그대로 유지
+
+**사용 패턴**:
+```java
+// CRL Entry가 LDIF에서 파싱되었을 때
+String originalDn = crlEntry.getDN();  // 원본 DN 그대로
+String transformedDn = transformDn(originalDn);  // baseDN만 변환
+
+// 변환된 DN으로 새 Entry 생성
+Entry transformedEntry = new Entry(transformedDn);
+
+// 원본 Entry의 모든 속성을 복사 (DN만 변경)
+for (Attribute attribute : crlEntry.getAttributes()) {
+    transformedEntry.addAttribute(attribute);
+}
+
+// LDAP에 추가
+connectionPool.add(new AddRequest(transformedEntry));
+```
+
+#### 이 규칙이 중요한 이유
+
+1. **ICAO PKD 표준 준수**: LDIF 파일의 DN 구조는 ICAO 국제 표준에 따른 것이므로 절대 변경하면 안됨
+2. **향후 ICAO 시스템 연동**: ICAO 중앙 PKD 서버와 동기화할 때 DN 구조가 일치해야 함
+3. **인증서 체인 검증**: 인증서의 issuer/subject DN이 LDAP의 DN과 일치해야 검증 성공
+4. **데이터 무결성**: DN은 LDAP에서의 고유한 식별자로서 정확성이 중요
+
+#### 앞으로 구현할 메서드들에 대한 지침
+
+다음 메서드들도 **동일한 DN 변환 규칙**을 적용해야 합니다:
+
+- `uploadCscaToLdap()` - CSCA 인증서 업로드
+- `uploadDscToLdap()` - DSC 인증서 업로드
+- 향후 추가될 모든 Entry 업로드 메서드들
+
+**항상 이 패턴을 따를 것**:
+```java
+String transformedDn = transformDn(originalDn);  // transformDn() 메서드 사용!
+```
+
+---
+
+**Document Version**: 7.1 (Phase 17 Task 7 완료 + DN 변환 규칙 명시)
+**Last Updated**: 2025-11-14
+**Status**: Phase 17 Task 7 ✅ COMPLETED (uploadCrlToLdap 구현, DN 변환 규칙 확립)
 

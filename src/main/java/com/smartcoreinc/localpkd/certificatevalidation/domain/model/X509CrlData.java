@@ -5,8 +5,10 @@ import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Lob;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.Arrays;
 
@@ -57,6 +59,7 @@ import java.util.Arrays;
 @Embeddable
 @Getter
 @EqualsAndHashCode
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class X509CrlData implements ValueObject {
 
     /**
@@ -66,7 +69,7 @@ public class X509CrlData implements ValueObject {
      * LDIF 파일에서 certificateRevocationList;binary 필드로부터 추출된 Base64 데이터를 디코딩합니다.</p>
      * <p>최대 크기: 약 10MB</p>
      */
-    @Lob
+    // @Lob
     @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] crlBinary;
 
@@ -78,12 +81,6 @@ public class X509CrlData implements ValueObject {
      */
     @Column(name = "revoked_count", nullable = false, columnDefinition = "INT DEFAULT 0")
     private int revokedCount;
-
-    /**
-     * JPA용 기본 생성자 (protected)
-     */
-    protected X509CrlData() {
-    }
 
     /**
      * X509CrlData 생성 (Static Factory Method)

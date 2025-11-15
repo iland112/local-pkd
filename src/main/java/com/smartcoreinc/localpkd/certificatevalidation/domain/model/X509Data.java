@@ -102,8 +102,15 @@ public class X509Data implements ValueObject {
     /**
      * X509Data 생성 (Static Factory Method)
      *
+     * <p><b>PublicKey는 Optional</b>:</p>
+     * <ul>
+     *   <li>Phase 17 (Validity Validation): PublicKey 불필요</li>
+     *   <li>Phase 18+ (Trust Chain): PublicKey 필요 (certificate binary에서 추출)</li>
+     *   <li>공개 키는 인증서 바이너리에 포함되어 있으므로, null 허용</li>
+     * </ul>
+     *
      * @param certificateBinary X.509 인증서 바이너리 (DER-encoded)
-     * @param publicKey 공개 키 객체
+     * @param publicKey 공개 키 객체 (null 허용, Phase 18+에서 추출 가능)
      * @param serialNumber 일련 번호 (16진수 문자열)
      * @param fingerprintSha256 SHA-256 지문 (64자 16진수)
      * @return X509Data
@@ -118,9 +125,7 @@ public class X509Data implements ValueObject {
         if (certificateBinary == null || certificateBinary.length == 0) {
             throw new IllegalArgumentException("Certificate binary cannot be null or empty");
         }
-        if (publicKey == null) {
-            throw new IllegalArgumentException("Public key cannot be null");
-        }
+        // ✅ PublicKey는 Optional (null 허용) - Phase 17은 불필요, Phase 18+에서 추출
         if (serialNumber == null || serialNumber.trim().isEmpty()) {
             throw new IllegalArgumentException("Serial number cannot be null or blank");
         }
@@ -137,7 +142,7 @@ public class X509Data implements ValueObject {
 
         X509Data data = new X509Data();
         data.certificateBinary = certificateBinary.clone();
-        data.publicKey = publicKey;
+        data.publicKey = publicKey;  // ✅ null 허용
         data.serialNumber = serialNumber;
         data.fingerprintSha256 = fingerprintSha256.toLowerCase();
 
