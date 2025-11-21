@@ -151,12 +151,23 @@ public class LdapUploadService {
 
             // 3. 인증서 정보 추출
             String subjectCn = certificate.getSubjectInfo().getCommonName();
+            String countryCode = certificate.getSubjectInfo().getCountryCode();
             byte[] certificateDer = certificate.getX509Data().getCertificateBinary();
+
+            // 3-1. Country Code 검증 (null 처리)
+            if (countryCode == null || countryCode.trim().isEmpty()) {
+                log.warn("Country code is null or empty for certificate: {}", subjectCn);
+                return UploadResult.failure(
+                    certificate.getId().getId().toString(),
+                    "Country code is missing from certificate: " + subjectCn
+                );
+            }
 
             // 4. LDAP 업로드
             String ldapDn = ldapConnectionPort.uploadCertificate(
                 certificateDer,
                 subjectCn,
+                countryCode,
                 baseDn
             );
 
@@ -231,11 +242,20 @@ public class LdapUploadService {
             for (Certificate cert : certificates) {
                 try {
                     String subjectCn = cert.getSubjectInfo().getCommonName();
+                    String countryCode = cert.getSubjectInfo().getCountryCode();
                     byte[] certificateDer = cert.getX509Data().getCertificateBinary();
+
+                    // Country Code 검증 (null 처리)
+                    if (countryCode == null || countryCode.trim().isEmpty()) {
+                        log.warn("Skipping certificate with missing country code: {}", subjectCn);
+                        batchResult.addFailure(cert, "Country code is missing");
+                        continue;
+                    }
 
                     String ldapDn = ldapConnectionPort.uploadCertificate(
                         certificateDer,
                         subjectCn,
+                        countryCode,
                         baseDn
                     );
 

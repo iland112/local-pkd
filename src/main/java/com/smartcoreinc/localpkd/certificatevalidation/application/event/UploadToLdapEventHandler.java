@@ -6,12 +6,16 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.event.Certificates
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
+import com.smartcoreinc.localpkd.ldapintegration.domain.event.LdapUploadCompletedEvent;
+import com.smartcoreinc.localpkd.ldapintegration.domain.event.LdapUploadFailedEvent;
+import com.smartcoreinc.localpkd.shared.event.EventBus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,6 +69,7 @@ public class UploadToLdapEventHandler {
 
     private final UploadToLdapUseCase uploadToLdapUseCase;
     private final CertificateRepository certificateRepository;
+    private final EventBus eventBus;
 
     @org.springframework.beans.factory.annotation.Value("${spring.ldap.base:dc=ldap,dc=smartcoreinc,dc=com}")
     private String defaultBaseDn;
@@ -127,13 +132,25 @@ public class UploadToLdapEventHandler {
             // 5. 결과 로깅
             logUploadResult(response);
 
-            // 6. 성공 이벤트 발행 (향후 구현)
-            // publishUploadCompletedEvent(response);
+            // 6. 성공/실패 이벤트 발행
+            if (response.isSuccess() || response.isPartialSuccess()) {
+                publishUploadCompletedEvent(response, certificateIds.size());
+            } else {
+                publishUploadFailedEvent(event, certificateIds.size(),
+                    response.getErrorMessage() != null ? response.getErrorMessage() : "Unknown error");
+            }
 
         } catch (Exception e) {
             log.error("Error handling CertificatesValidatedEvent for upload ID: {}", event.getUploadId(), e);
-            // 실패 이벤트 발행 (향후 구현)
-            // publishUploadFailedEvent(event, e);
+            // 실패 이벤트 발행 (예외 발생 시 인증서 개수 조회 불가, 0으로 설정)
+            try {
+                List<Certificate> certificates = certificateRepository.findByUploadId(event.getUploadId());
+                publishUploadFailedEvent(event, certificates.size(), e.getMessage());
+            } catch (Exception ex) {
+                log.error("Failed to publish UploadFailedEvent due to repository error", ex);
+                // Repository에서도 예외 발생 시 인증서 개수 0으로 이벤트 발행
+                publishUploadFailedEvent(event, 0, e.getMessage());
+            }
         }
     }
 
@@ -177,23 +194,57 @@ public class UploadToLdapEventHandler {
     }
 
     /**
-     * 업로드 완료 이벤트 발행 (향후 구현)
+     * 업로드 완료 이벤트 발행
      *
      * @param response 업로드 응답
+     * @param totalCount 총 인증서 개수
      */
-    private void publishUploadCompletedEvent(UploadToLdapResponse response) {
-        // TODO: UploadToLdapCompletedEvent 구현 및 발행
-        log.debug("Publishing UploadToLdapCompletedEvent (TODO)");
+    private void publishUploadCompletedEvent(UploadToLdapResponse response, int totalCount) {
+        try {
+            LdapUploadCompletedEvent event = new LdapUploadCompletedEvent(
+                response.getUploadId(),
+                response.getSuccessCount(),
+                0,  // CRL count (현재는 인증서만 처리)
+                response.getFailureCount(),
+                LocalDateTime.now()
+            );
+
+            eventBus.publish(event);
+            log.info("✅ Published LdapUploadCompletedEvent: uploadId={}, success={}/{}, failed={}",
+                response.getUploadId(),
+                response.getSuccessCount(),
+                totalCount,
+                response.getFailureCount()
+            );
+        } catch (Exception e) {
+            log.error("Failed to publish LdapUploadCompletedEvent", e);
+        }
     }
 
     /**
-     * 업로드 실패 이벤트 발행 (향후 구현)
+     * 업로드 실패 이벤트 발행
      *
      * @param event 원본 이벤트
-     * @param exception 발생한 예외
+     * @param attemptedCount 시도한 인증서 개수
+     * @param errorMessage 에러 메시지
      */
-    private void publishUploadFailedEvent(CertificatesValidatedEvent event, Exception exception) {
-        // TODO: UploadToLdapFailedEvent 구현 및 발행
-        log.debug("Publishing UploadToLdapFailedEvent (TODO): {}", exception.getMessage());
+    private void publishUploadFailedEvent(CertificatesValidatedEvent event, int attemptedCount, String errorMessage) {
+        try {
+            LdapUploadFailedEvent failedEvent = new LdapUploadFailedEvent(
+                event.getUploadId(),
+                errorMessage,
+                attemptedCount,
+                LocalDateTime.now()
+            );
+
+            eventBus.publish(failedEvent);
+            log.error("❌ Published LdapUploadFailedEvent: uploadId={}, attempted={}, error={}",
+                event.getUploadId(),
+                attemptedCount,
+                errorMessage
+            );
+        } catch (Exception e) {
+            log.error("Failed to publish LdapUploadFailedEvent", e);
+        }
     }
 }

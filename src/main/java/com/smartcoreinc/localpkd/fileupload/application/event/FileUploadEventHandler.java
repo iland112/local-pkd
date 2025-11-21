@@ -1,8 +1,10 @@
 package com.smartcoreinc.localpkd.fileupload.application.event;
 
 import com.smartcoreinc.localpkd.fileparsing.application.command.ParseLdifFileCommand;
+import com.smartcoreinc.localpkd.fileparsing.application.command.ParseMasterListFileCommand;
 import com.smartcoreinc.localpkd.fileparsing.application.response.ParseFileResponse;
 import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUseCase;
+import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseMasterListFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.domain.event.DuplicateFileDetectedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.event.FileUploadedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
@@ -72,6 +74,7 @@ public class FileUploadEventHandler {
     private final UploadedFileRepository uploadedFileRepository;
     private final FileStoragePort fileStoragePort;
     private final ParseLdifFileUseCase parseLdifFileUseCase;
+    private final ParseMasterListFileUseCase parseMasterListFileUseCase;
     private final ProgressService progressService;
 
     /**
@@ -192,17 +195,38 @@ public class FileUploadEventHandler {
             byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
             log.info("File bytes read: size={} bytes", fileBytes.length);
 
-            // 5. ParseLdifFileCommand 생성
-            ParseLdifFileCommand command = ParseLdifFileCommand.builder()
-                .uploadId(event.uploadId().getId())
-                .fileBytes(fileBytes)
-                .fileFormat(uploadedFile.getFileFormatType())  // e.g., "CSCA_COMPLETE_LDIF"
-                .build();
+            // 5. 파일 포맷에 따라 적절한 Use Case 선택 및 파싱 실행
+            ParseFileResponse response;
+            String fileFormatType = uploadedFile.getFileFormatType();
 
-            // 6. 파일 파싱 실행 (Use Case가 자동으로 SSE progress 전송)
-            log.info("Triggering LDIF parsing: uploadId={}", event.uploadId().getId());
-            ParseFileResponse response = parseLdifFileUseCase.execute(command);
+            if (fileFormatType.equals("ML_SIGNED_CMS") || fileFormatType.equals("ML_UNSIGNED")) {
+                // Master List 파일 파싱
+                log.info("Triggering Master List parsing: uploadId={}, format={}",
+                        event.uploadId().getId(), fileFormatType);
 
+                ParseMasterListFileCommand command = ParseMasterListFileCommand.builder()
+                    .uploadId(event.uploadId().getId())
+                    .fileBytes(fileBytes)
+                    .fileFormat(fileFormatType)
+                    .build();
+
+                response = parseMasterListFileUseCase.execute(command);
+
+            } else {
+                // LDIF 파일 파싱
+                log.info("Triggering LDIF parsing: uploadId={}, format={}",
+                        event.uploadId().getId(), fileFormatType);
+
+                ParseLdifFileCommand command = ParseLdifFileCommand.builder()
+                    .uploadId(event.uploadId().getId())
+                    .fileBytes(fileBytes)
+                    .fileFormat(fileFormatType)
+                    .build();
+
+                response = parseLdifFileUseCase.execute(command);
+            }
+
+            // 6. 파싱 결과 로깅
             if (response.success()) {
                 log.info("Parsing completed successfully: uploadId={}, certificates={}, CRLs={}",
                         event.uploadId().getId(), response.certificateCount(), response.crlCount());
