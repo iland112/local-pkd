@@ -3,6 +3,9 @@ package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web;
 import com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.CertificatesValidatedResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificatesUseCase;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,6 +38,7 @@ import java.util.UUID;
 public class CertificateValidationApiController {
 
     private final ValidateCertificatesUseCase validateCertificatesUseCase;
+    private final CertificateRepository certificateRepository;
 
     /**
      * 인증서 검증 시작
@@ -145,6 +150,19 @@ public class CertificateValidationApiController {
      *
      * <p>업로드 ID에 따른 검증 상태를 조회합니다.</p>
      *
+     * <p><b>Response</b>:</p>
+     * <pre>
+     * {
+     *   "uploadId": "uuid",
+     *   "status": "COMPLETED", // PENDING, IN_PROGRESS, COMPLETED, FAILED
+     *   "totalCertificates": 100,
+     *   "validCertificates": 95,
+     *   "invalidCertificates": 5,
+     *   "successRate": 95.0,
+     *   "message": "검증 완료"
+     * }
+     * </pre>
+     *
      * @param uploadId 업로드 ID
      * @return 검증 상태 정보
      */
@@ -153,18 +171,71 @@ public class CertificateValidationApiController {
         log.debug("Getting validation status for uploadId: {}", uploadId);
 
         try {
+            // 1. 업로드 ID로 인증서 조회
+            List<Certificate> certificates = certificateRepository.findByUploadId(uploadId);
+
+            if (certificates.isEmpty()) {
+                // 인증서가 없으면 PENDING 상태
+                Map<String, Object> result = new HashMap<>();
+                result.put("uploadId", uploadId);
+                result.put("status", "PENDING");
+                result.put("totalCertificates", 0);
+                result.put("validCertificates", 0);
+                result.put("invalidCertificates", 0);
+                result.put("successRate", 0.0);
+                result.put("message", "검증 대기 중");
+                return ResponseEntity.ok(result);
+            }
+
+            // 2. 상태별 인증서 개수 계산
+            long totalCount = certificates.size();
+            long validCount = certificates.stream()
+                .filter(cert -> cert.getStatus() == CertificateStatus.VALID)
+                .count();
+            long invalidCount = totalCount - validCount;
+
+            // 3. 성공률 계산
+            double successRate = totalCount > 0 ? (validCount * 100.0 / totalCount) : 0.0;
+
+            // 4. 전체 상태 판단
+            String status;
+            String message;
+
+            // 모든 인증서가 검증되었는지 확인 (validationResult가 있는지 확인)
+            boolean allValidated = certificates.stream()
+                .allMatch(cert -> cert.getValidationResult() != null);
+
+            if (allValidated) {
+                status = "COMPLETED";
+                message = String.format("검증 완료: %d개 인증서 중 %d개 유효", totalCount, validCount);
+            } else {
+                status = "IN_PROGRESS";
+                long validatedCount = certificates.stream()
+                    .filter(cert -> cert.getValidationResult() != null)
+                    .count();
+                message = String.format("검증 진행 중: %d/%d 완료", validatedCount, totalCount);
+            }
+
+            // 5. 응답 생성
             Map<String, Object> result = new HashMap<>();
             result.put("uploadId", uploadId);
-            result.put("status", "IN_PROGRESS"); // TODO: 실제 상태 조회 구현
-            result.put("message", "검증이 진행 중입니다");
+            result.put("status", status);
+            result.put("totalCertificates", totalCount);
+            result.put("validCertificates", validCount);
+            result.put("invalidCertificates", invalidCount);
+            result.put("successRate", Math.round(successRate * 10.0) / 10.0); // 소수점 1자리
+            result.put("message", message);
+
+            log.info("Validation status retrieved: uploadId={}, status={}, valid={}/{}",
+                uploadId, status, validCount, totalCount);
 
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            log.error("Error getting validation status", e);
+            log.error("Error getting validation status for uploadId: {}", uploadId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(createErrorResponse(
                 false,
-                "상태 조회 중 오류가 발생했습니다",
+                "상태 조회 중 오류가 발생했습니다: " + e.getMessage(),
                 "INTERNAL_ERROR"
             ));
         }

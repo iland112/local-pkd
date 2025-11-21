@@ -3,7 +3,6 @@ package com.smartcoreinc.localpkd.certificatevalidation.domain.model;
 import com.smartcoreinc.localpkd.shared.domain.ValueObject;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.Lob;
 
 import java.security.PublicKey;
 import java.util.Arrays;
@@ -57,8 +56,10 @@ public class X509Data implements ValueObject {
      *
      * <p>X.509 인증서의 완전한 DER-encoded 바이너리 데이터입니다.</p>
      * <p>최대 크기: 약 16MB (대부분의 인증서는 1-10KB)</p>
+     *
+     * <p><b>NOTE</b>: @Lob 제거 - Hibernate/PostgreSQL bytea 매핑 버그 회피.
+     * columnDefinition="BYTEA"만으로도 충분함.</p>
      */
-    @Lob
     @Column(name = "certificate_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateBinary;
 

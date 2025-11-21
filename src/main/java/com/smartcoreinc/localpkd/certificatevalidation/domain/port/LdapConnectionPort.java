@@ -128,28 +128,28 @@ public interface LdapConnectionPort {
      *
      * <p><b>LDAP Entry 생성 규칙</b>:</p>
      * <pre>
-     * dn: cn={subject_cn},ou=certificates,{base_dn}
-     * objectClass: pkiCertificate
+     * dn: cn={subject_cn},o=ml,c={country_code},dc=data,dc=download,dc=pkd,{base_dn}
+     * objectClass: top
+     * objectClass: person
+     * objectClass: pkdMasterList
+     * objectClass: pkdDownload
      * cn: {subject_cn}
-     * serialNumber: {certificate_serial}
-     * certificateContent: {DER_encoded_certificate}
-     * issuer: {issuer_dn}
-     * validFrom: {validity_start}
-     * validTo: {validity_end}
-     * fingerprint: {sha256_fingerprint}
-     * uploadedAt: {current_timestamp}
+     * sn: 1
+     * pkdVersion: 70
+     * pkdMasterListContent:: {base64_encoded_certificate}
      * </pre>
      *
      * @param certificateDer DER 인코딩된 X.509 인증서 바이트 배열
-     * @param subjectCn 인증서 Subject CN (예: "CN=Test Certificate")
+     * @param subjectCn 인증서 Subject CN (예: "CSCA Kuwait")
+     * @param countryCode 국가 코드 (ISO 3166-1 alpha-2, 예: "KW", "KR", "US")
      * @param baseDn LDAP Base DN (예: "dc=ldap,dc=smartcoreinc,dc=com")
      * @return 업로드된 인증서의 LDAP Distinguished Name (DN)
      * @throws LdapOperationException 업로드 실패 시
      * @throws IllegalArgumentException 입력값 null/empty 시
      * @throws IllegalStateException 연결되지 않았을 때
-     * @since Phase 17 Task 1.5
+     * @since Phase 17 Task 1.5 (Updated: 2025-11-21 - Added countryCode parameter)
      */
-    String uploadCertificate(byte[] certificateDer, String subjectCn, String baseDn);
+    String uploadCertificate(byte[] certificateDer, String subjectCn, String countryCode, String baseDn);
 
     /**
      * CRL (Certificate Revocation List)을 LDAP에 업로드

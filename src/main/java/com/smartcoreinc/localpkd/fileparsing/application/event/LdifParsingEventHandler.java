@@ -72,7 +72,8 @@ public class LdifParsingEventHandler {
      * <ul>
      *   <li>SSE 진행 상황 전송 (VALIDATION_STARTED, 65%)</li>
      *   <li>추출된 인증서 개수 로깅</li>
-     *   <li>TODO: Certificate Validation Context로 검증 트리거</li>
+     *   <li>Certificate Validation Context로 검증 트리거 (ValidateCertificatesUseCase 호출)</li>
+     *   <li>검증 결과 로깅 (성공/실패)</li>
      * </ul>
      *
      * @param event 파일 파싱 완료 이벤트

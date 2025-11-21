@@ -156,17 +156,8 @@ public class FileFormat {
 
         // LDIF 파일 감지
         if (name.endsWith(".ldif")) {
-            // Collection 001 (CSCA)
+            // Collection 001 (eMRTD) - CORRECTED: 001 is eMRTD, not CSCA
             if (name.contains("001")) {
-                if (name.contains("complete")) {
-                    return new FileFormat(Type.CSCA_COMPLETE_LDIF);
-                } else if (name.contains("delta")) {
-                    return new FileFormat(Type.CSCA_DELTA_LDIF);
-                }
-            }
-
-            // Collection 002 (eMRTD)
-            if (name.contains("002")) {
                 if (name.contains("complete")) {
                     return new FileFormat(Type.EMRTD_COMPLETE_LDIF);
                 } else if (name.contains("delta")) {
@@ -174,8 +165,17 @@ public class FileFormat {
                 }
             }
 
-            // 기본값: CSCA Complete (Collection 001로 간주)
-            return new FileFormat(Type.CSCA_COMPLETE_LDIF);
+            // Collection 002 (CSCA) - CORRECTED: 002 is CSCA, not eMRTD
+            if (name.contains("002")) {
+                if (name.contains("complete")) {
+                    return new FileFormat(Type.CSCA_COMPLETE_LDIF);
+                } else if (name.contains("delta")) {
+                    return new FileFormat(Type.CSCA_DELTA_LDIF);
+                }
+            }
+
+            // 기본값: eMRTD Complete (Collection 001로 간주)
+            return new FileFormat(Type.EMRTD_COMPLETE_LDIF);
         }
 
         // Master List 파일 감지

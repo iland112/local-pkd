@@ -312,10 +312,11 @@
         </div>
       </div>
     </div>
+  </div>
 
-    <th:block layout:fragment="script-content">
-      <script>
-        function dashboardApp() {
+  <th:block layout:fragment="script-content">
+    <script>
+      function dashboardApp() {
           return {
             // 상태 데이터
             currentDate: '',
@@ -512,11 +513,11 @@
             window.location.href = '/upload-history';
           }
         });
-      </script>
+    </script>
 
-      <style>
-        /* 애니메이션 */
-        @keyframes slideIn {
+    <style>
+      /* 애니메이션 */
+      @keyframes slideIn {
           from {
             opacity: 0;
             transform: translateX(100%);
@@ -600,7 +601,7 @@
           outline: 2px solid #3b82f6;
           outline-offset: 2px;
         }
-      </style>
-    </th:block>
+    </style>
+  </th:block>
   </body>
 </html>
