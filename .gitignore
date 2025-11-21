@@ -42,3 +42,6 @@ node
 *.tmp
 localpkd.*.*
 /log/
+/logs/
+/data/
+/tmp/
