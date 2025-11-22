@@ -56,4 +56,16 @@ public interface SpringDataParsedFileRepository extends JpaRepository<ParsedFile
      */
     @Query("SELECT CASE WHEN COUNT(pf) > 0 THEN true ELSE false END FROM ParsedFile pf WHERE pf.uploadId = :uploadId")
     boolean existsByUploadId(@Param("uploadId") UploadId uploadId);
+
+    // Count all certificates in the parsed_certificate collection table
+    @Query(value = "SELECT COUNT(*) FROM parsed_certificate", nativeQuery = true)
+    long countAllCertificates();
+
+    // Count certificates by validation status in the parsed_certificate collection table
+    @Query(value = "SELECT COUNT(*) FROM parsed_certificate WHERE is_valid = :isValid", nativeQuery = true)
+    long countCertificatesByValidationStatus(@Param("isValid") boolean isValid);
+
+    // Count all CRLs in the parsed_crl collection table
+    @Query(value = "SELECT COUNT(*) FROM parsed_crl", nativeQuery = true)
+    long countAllCrls();
 }

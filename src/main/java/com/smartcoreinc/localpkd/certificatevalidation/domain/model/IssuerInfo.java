@@ -72,7 +72,7 @@ public class IssuerInfo implements ValueObject {
      *
      * <p>예: KR, US, JP, CN</p>
      */
-    @Column(name = "issuer_country_code", length = 2)
+    @Column(name = "issuer_country_code", length = 3)
     private String countryCode;
 
     /**

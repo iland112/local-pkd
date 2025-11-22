@@ -263,15 +263,13 @@
             </div>
 
             <!-- Progress Bar -->
-            <div class="w-full bg-base-300 rounded-full h-6 overflow-hidden">
-              <div
-                id="progressBar"
-                class="bg-primary h-full text-center text-white text-sm font-semibold leading-6 transition-all duration-300"
-                style="width: 0%"
-              >
-                0%
-              </div>
-            </div>
+            <span id="progressPercentage" class="text-sm font-semibold text-primary mb-1">0%</span>
+            <progress
+                id="progressModalBar"
+                class="progress progress-primary w-full"
+                :value="progress.percentage"
+                max="100"
+            ></progress>
           </div>
 
           <!-- Message -->
@@ -703,50 +701,91 @@
           };
         }
 
-        function updateProgressUI(progress) {
-          document.getElementById('progressStage').textContent = progress.stageName || progress.stage;
+                function updateProgressUI(progress) {
 
-          const progressBar = document.getElementById('progressBar');
-          progressBar.style.width = progress.percentage + '%';
-          progressBar.textContent = progress.percentage + '%';
+                  document.getElementById('progressStage').textContent = progress.stageName || progress.stage;
 
-          document.getElementById('progressMessage').textContent = progress.message;
+        
 
-          const countElement = document.getElementById('progressCount');
-          if (progress.totalCount > 0) {
-            countElement.textContent = `${progress.processedCount} / ${progress.totalCount}`;
-            countElement.classList.remove('hidden');
-          } else {
-            countElement.classList.add('hidden');
-          }
+                  const progressBar = document.getElementById('progressModalBar');
 
-          const detailsElement = document.getElementById('progressDetails');
-          if (progress.details) {
-            detailsElement.textContent = progress.details;
-            detailsElement.classList.remove('hidden');
-          } else {
-            detailsElement.classList.add('hidden');
-          }
+                  progressBar.value = progress.percentage;
 
-          const errorElement = document.getElementById('progressError');
-          if (progress.errorMessage) {
-            errorElement.textContent = progress.errorMessage;
-            errorElement.classList.remove('hidden');
-          } else {
-            errorElement.classList.add('hidden');
-          }
+                  // <progress> 태그에는 textContent를 직접 넣지 않으므로 해당 라인은 제거합니다.
 
-          if (progress.stage === 'COMPLETED') {
-            progressBar.classList.remove('bg-primary', 'bg-error');
-            progressBar.classList.add('bg-success');
-          } else if (progress.stage === 'FAILED') {
-            progressBar.classList.remove('bg-primary', 'bg-success');
-            progressBar.classList.add('bg-error');
-          } else {
-            progressBar.classList.remove('bg-success', 'bg-error');
-            progressBar.classList.add('bg-primary');
-          }
-        }
+        
+
+                  document.getElementById('progressMessage').textContent = progress.message;
+
+        
+
+                  const countElement = document.getElementById('progressCount');
+
+                  if (progress.totalCount > 0) {
+
+                    countElement.textContent = `${progress.processedCount} / ${progress.totalCount}`;
+
+                    countElement.classList.remove('hidden');
+
+                  } else {
+
+                    countElement.classList.add('hidden');
+
+                  }
+
+        
+
+                  const detailsElement = document.getElementById('progressDetails');
+
+                  if (progress.details) {
+
+                    detailsElement.textContent = progress.details;
+
+                    detailsElement.classList.remove('hidden');
+
+                  } else {
+
+                    detailsElement.classList.add('hidden');
+
+                  }
+
+        
+
+                  const errorElement = document.getElementById('progressError');
+
+                  if (progress.errorMessage) {
+
+                    errorElement.textContent = progress.errorMessage;
+
+                    errorElement.classList.remove('hidden');
+
+                  } else {
+
+                    errorElement.classList.add('hidden');
+
+                  }
+
+        
+
+                  // DaisyUI progress 컴포넌트의 색상 클래스 사용
+
+                  progressBar.classList.remove('progress-primary', 'progress-error', 'progress-success');
+
+                  if (progress.stage === 'COMPLETED') {
+
+                    progressBar.classList.add('progress-success');
+
+                  } else if (progress.stage === 'FAILED') {
+
+                    progressBar.classList.add('progress-error');
+
+                  } else {
+
+                    progressBar.classList.add('progress-primary');
+
+                  }
+
+                }
 
         function closeProgressModal(success) {
           const modal = document.getElementById('progressModal');

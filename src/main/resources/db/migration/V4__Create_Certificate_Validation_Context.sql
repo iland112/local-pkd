@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS certificate (
     -- ========== SubjectInfo Value Object ==========
     -- Subject Distinguished Name
     subject_dn VARCHAR(500) NOT NULL,
-    -- Subject country code (ISO 3166-1 alpha-2)
-    subject_country_code VARCHAR(2),
+    -- Subject country code (ISO 3166-1 alpha-3)
+    subject_country_code VARCHAR(3),
     -- Subject organization
     subject_organization VARCHAR(255),
     -- Subject organizational unit
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS certificate (
     -- ========== IssuerInfo Value Object ==========
     -- Issuer Distinguished Name
     issuer_dn VARCHAR(500) NOT NULL,
-    -- Issuer country code (ISO 3166-1 alpha-2)
-    issuer_country_code VARCHAR(2) NOT NULL,
+    -- Issuer country code (ISO 3166-1 alpha-3)
+    issuer_country_code VARCHAR(3) NOT NULL,
     -- Issuer organization
     issuer_organization VARCHAR(255),
     -- Issuer organizational unit

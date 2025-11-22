@@ -14,6 +14,8 @@ import lombok.Builder;
  *   <li>포맷 필터 (FileFormat.Type)</li>
  *   <li>페이지 번호 (0부터 시작)</li>
  *   <li>페이지 크기 (기본 20)</li>
+ *   <li>정렬 기준 (sortBy)</li>
+ *   <li>정렬 방향 (sortDirection)</li>
  * </ul>
  *
  * <h3>사용 예시</h3>
@@ -52,13 +54,15 @@ public record GetUploadHistoryQuery(
         String status,          // optional (UploadStatus name)
         String fileFormat,      // optional (FileFormat.Type name)
         int page,
-        int size
+        int size,
+        String sortBy,          // optional (e.g., uploadedAt, fileName)
+        String sortDirection    // optional (asc, desc)
 ) {
     /**
      * 기본 생성자 (page=0, size=20)
      */
     public GetUploadHistoryQuery() {
-        this(null, null, null, 0, 20);
+        this(null, null, null, 0, 20, "uploadedAt", "desc");
     }
 
     /**
@@ -70,6 +74,12 @@ public record GetUploadHistoryQuery(
         }
         if (size <= 0 || size > 100) {
             throw new IllegalArgumentException("size must be between 1 and 100");
+        }
+        if (sortBy != null && !sortBy.matches("^(uploadedAt|fileName|fileSize|status)$")) {
+            throw new IllegalArgumentException("sortBy must be one of: uploadedAt, fileName, fileSize, status");
+        }
+        if (sortDirection != null && !sortDirection.matches("^(asc|desc)$")) {
+            throw new IllegalArgumentException("sortDirection must be one of: asc, desc");
         }
     }
 }

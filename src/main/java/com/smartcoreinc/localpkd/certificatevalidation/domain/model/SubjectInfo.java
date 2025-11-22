@@ -55,7 +55,7 @@ public class SubjectInfo implements ValueObject {
      *
      * <p>예: KR, US, JP, CN</p>
      */
-    @Column(name = "subject_country_code", length = 2)
+    @Column(name = "subject_country_code", length = 3)
     private String countryCode;
 
     /**
