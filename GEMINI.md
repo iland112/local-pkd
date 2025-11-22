@@ -48,7 +48,7 @@ fileupload/              # File Upload Context
     └── repository/      # JPA Implementation + Event Publishing
 
 fileparsing/             # File Parsing Context
-├── domain/              # ParsedCertificate, Certificate, CertificateRevocationList
+├── domain/              # Aggregate (ParsedFile) + VOs (CertificateData, CrlData)
 ├── application/         # ParseFileUseCase, ExtractCertificatesUseCase
 └── infrastructure/      # LdifParserAdapter, MasterListParserAdapter
 
@@ -238,53 +238,70 @@ mcp__memory__search_nodes(query="performance optimization")
 
 ## 💾 Database Schema (Current State)
 
-### Key Tables (3개)
+### Key Tables (4개)
 
 ```sql
--- 1. uploaded_file (File Upload History)
+-- 1. uploaded_file (File Upload Aggregate)
 CREATE TABLE uploaded_file (
     id UUID PRIMARY KEY,
     file_name VARCHAR(255) NOT NULL,
     file_hash VARCHAR(64) NOT NULL UNIQUE,
-    file_size_bytes BIGINT NOT NULL CHECK (file_size_bytes > 0 AND file_size_bytes <= 104857600),
+    file_size_bytes BIGINT NOT NULL,
     file_format VARCHAR(50) NOT NULL,
-    collection_number VARCHAR(10),
-    version VARCHAR(50),
-    uploaded_at TIMESTAMP NOT NULL,
-    status VARCHAR(30) NOT NULL,
-    is_duplicate BOOLEAN DEFAULT FALSE
+    status VARCHAR(30) NOT NULL DEFAULT 'RECEIVED',
+    uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_duplicate BOOLEAN NOT NULL DEFAULT FALSE,
+    processing_mode VARCHAR(20) NOT NULL DEFAULT 'AUTO'
 );
 
--- 2. parsed_certificate (Parsed Certificate)
+-- 2. parsed_file (File Parsing Aggregate)
+CREATE TABLE parsed_file (
+    id UUID PRIMARY KEY,
+    upload_id UUID NOT NULL REFERENCES uploaded_file(id) ON DELETE CASCADE,
+    file_format VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'RECEIVED',
+    certificate_count INT DEFAULT 0,
+    crl_count INT DEFAULT 0,
+    error_count INT DEFAULT 0,
+    parsing_started_at TIMESTAMP,
+    parsing_completed_at TIMESTAMP
+);
+
+-- 3. parsed_certificate (Embedded in ParsedFile)
+-- This is an @ElementCollection table, not an aggregate.
 CREATE TABLE parsed_certificate (
-    id UUID PRIMARY KEY,
-    upload_id UUID NOT NULL REFERENCES uploaded_file(id),
-    certificate_type VARCHAR(20) NOT NULL,  -- CSCA, DSC, DSC_NC
-    country_code VARCHAR(3) NOT NULL,
-    subject VARCHAR(500),
-    issuer VARCHAR(500),
-    serial_number VARCHAR(100),
-    not_before TIMESTAMP,
-    not_after TIMESTAMP,
-    encoded BYTEA NOT NULL,
-    validation_status VARCHAR(20) DEFAULT 'PENDING'
+    parsed_file_id UUID NOT NULL REFERENCES parsed_file(id) ON DELETE CASCADE,
+    cert_type VARCHAR(20) NOT NULL,
+    country_code VARCHAR(3),
+    subject_dn VARCHAR(500) NOT NULL,
+    issuer_dn VARCHAR(500) NOT NULL,
+    serial_number VARCHAR(100) NOT NULL,
+    not_before TIMESTAMP NOT NULL,
+    not_after TIMESTAMP NOT NULL,
+    certificate_binary BYTEA NOT NULL,
+    fingerprint_sha256 VARCHAR(64) NOT NULL,
+    is_valid BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (fingerprint_sha256)
 );
 
--- 3. certificate_revocation_list (CRL)
-CREATE TABLE certificate_revocation_list (
+-- 4. certificate (Certificate Validation Aggregate)
+CREATE TABLE certificate (
     id UUID PRIMARY KEY,
-    upload_id UUID NOT NULL REFERENCES uploaded_file(id),
-    issuer_name VARCHAR(500) NOT NULL,
-    country_code VARCHAR(3) NOT NULL,
-    this_update TIMESTAMP NOT NULL,
-    next_update TIMESTAMP,
-    encoded BYTEA NOT NULL
+    upload_id UUID NOT NULL REFERENCES uploaded_file(id) ON DELETE CASCADE,
+    x509_fingerprint_sha256 VARCHAR(64) NOT NULL UNIQUE,
+    subject_dn VARCHAR(500) NOT NULL,
+    issuer_dn VARCHAR(500) NOT NULL,
+    issuer_country_code VARCHAR(3) NOT NULL,
+    not_before TIMESTAMP NOT NULL,
+    not_after TIMESTAMP NOT NULL,
+    certificate_type VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL -- (VALID, EXPIRED, REVOKED, etc.)
 );
 ```
 
-**Indexes**: file_hash (unique), uploaded_at, status, country_code, validation_status
+**Indexes**: Multiple indexes exist for performance on columns like `file_hash`, `status`, `uploaded_at`, `fingerprint_sha256`, etc.
 
-**Flyway Migrations**: V1 ~ V13 (Completed)
+**Flyway Migrations**: V1 ~ V7 (Completed)
 
 ---\n
 

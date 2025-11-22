@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.fileupload.infrastructure.repository;
 
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileHash;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -70,4 +71,6 @@ public interface SpringDataUploadedFileRepository extends JpaRepository<Uploaded
      */
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM UploadedFile u WHERE u.fileHash.value = :#{#fileHash.value}")
     boolean existsByFileHash(@Param("fileHash") FileHash fileHash);
+
+    long countByStatus(UploadStatus status);
 }

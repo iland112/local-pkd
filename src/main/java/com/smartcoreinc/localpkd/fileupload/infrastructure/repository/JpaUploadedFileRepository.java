@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.fileupload.infrastructure.repository;
 
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileHash;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
 import com.smartcoreinc.localpkd.shared.event.EventBus;
@@ -174,5 +175,17 @@ public class JpaUploadedFileRepository implements UploadedFileRepository {
     public boolean existsByFileHash(FileHash fileHash) {
         log.debug("Checking existence of UploadedFile by fileHash: {}", fileHash.getShortHash());
         return jpaRepository.existsByFileHash(fileHash);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long count() {
+        return jpaRepository.count();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countByStatus(UploadStatus status) {
+        return jpaRepository.countByStatus(status);
     }
 }

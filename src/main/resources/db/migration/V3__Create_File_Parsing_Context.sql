@@ -71,8 +71,8 @@ CREATE TABLE IF NOT EXISTS parsed_certificate (
     -- Certificate Type (CSCA, DSC, DSC_NC)
     cert_type VARCHAR(20) NOT NULL,
 
-    -- Issuing Country Code (ISO 3166-1 alpha-2) - ✅ KEY FIELD (was missing, causing error)
-    country_code VARCHAR(2),
+    -- Issuing Country Code (ISO 3166-1 alpha-3) - ✅ KEY FIELD (was missing, causing error)
+    country_code VARCHAR(3),
 
     -- Subject Distinguished Name
     subject_dn VARCHAR(500) NOT NULL,

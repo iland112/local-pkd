@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.fileupload.domain.repository;
 
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileHash;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus; // Added import
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 
 import java.util.Optional;
@@ -154,8 +155,7 @@ public interface UploadedFileRepository {
     /**
      * 파일 해시로 파일 조회
      *
-     * <p>중복 파일 검사에 사용됩니다.
-     * 동일한 해시를 가진 파일이 존재하면 반환합니다.</p>
+     * <p>중복 파일 검사에 사용됩니다.</p>
      *
      * @param fileHash 파일 해시 (SHA-256)
      * @return 업로드된 파일 (Optional)
@@ -188,4 +188,8 @@ public interface UploadedFileRepository {
      * @return 존재하면 true
      */
     boolean existsByFileHash(FileHash fileHash);
+
+    long count();
+
+    long countByStatus(UploadStatus status);
 }

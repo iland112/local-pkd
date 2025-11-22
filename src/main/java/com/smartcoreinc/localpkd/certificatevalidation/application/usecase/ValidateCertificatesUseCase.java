@@ -16,6 +16,8 @@ import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -446,6 +448,10 @@ public class ValidateCertificatesUseCase {
         // SubjectInfo 생성 (DN에서 CN, Country Code 추출)
         String subjectCN = extractCNFromDN(certData.getSubjectDN());
         String subjectCountryCode = extractCountryCodeFromDN(certData.getSubjectDN());
+        if (subjectCountryCode != null && subjectCountryCode.length() > 3) {
+            log.warn("Country code '{}' from subject is longer than 3 characters, truncating.", subjectCountryCode);
+            subjectCountryCode = subjectCountryCode.substring(0, 3);
+        }
         // Fallback to certData country code if DN doesn't contain it
         if (subjectCountryCode == null) {
             subjectCountryCode = certData.getCountryCode();
@@ -461,6 +467,10 @@ public class ValidateCertificatesUseCase {
         // IssuerInfo 생성 (DN에서 CN, Country Code 추출)
         String issuerCN = extractCNFromDN(certData.getIssuerDN());
         String issuerCountryCode = extractCountryCodeFromDN(certData.getIssuerDN());
+        if (issuerCountryCode != null && issuerCountryCode.length() > 3) {
+            log.warn("Country code '{}' from issuer is longer than 3 characters, truncating.", issuerCountryCode);
+            issuerCountryCode = issuerCountryCode.substring(0, 3);
+        }
         // Fallback to certData country code if DN doesn't contain it
         if (issuerCountryCode == null) {
             issuerCountryCode = certData.getCountryCode();
@@ -529,21 +539,15 @@ public class ValidateCertificatesUseCase {
         if (dn == null || dn.isBlank()) {
             return null;
         }
-
-        // DN 형식: "CN=Korea CSCA, O=Ministry, C=KR"
-        // C= 부분 찾기 (대소문자 구분 없이)
-        String dnUpper = dn.toUpperCase();
-        int cIndex = dnUpper.indexOf("C=");
-        if (cIndex >= 0) {
-            int startIndex = cIndex + 2;  // "C=" 다음부터
-            int endIndex = dn.indexOf(',', startIndex);
-            if (endIndex > 0) {
-                return dn.substring(startIndex, endIndex).trim().toUpperCase();
-            } else {
-                return dn.substring(startIndex).trim().toUpperCase();
+        try {
+            X500Name x500Name = new X500Name(dn);
+            var rdns = x500Name.getRDNs(BCStyle.C);
+            if (rdns != null && rdns.length > 0) {
+                return rdns[0].getFirst().getValue().toString().trim();
             }
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to parse DN: {}", dn, e);
         }
-
         return null;
     }
 
