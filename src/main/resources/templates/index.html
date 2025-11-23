@@ -182,6 +182,40 @@
             </div>
           </div>
 
+          <!-- Row 3.1: Certificate Type Statistics -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="Object.keys(certificateStatistics.certificatesByType).length > 0">
+            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <i class="fas fa-tags text-purple-500 mr-3"></i>
+                인증서 유형별 통계
+              </h3>
+              <div class="space-y-3 text-sm">
+                <template x-for="(count, type) in certificateStatistics.certificatesByType" :key="type">
+                  <div class="flex justify-between items-center p-2 bg-purple-50 rounded-md">
+                    <span class="text-gray-600 font-medium" x-text="type"></span>
+                    <span class="font-semibold text-purple-800" x-text="count"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Row 3.2: Certificate by Country Statistics -->
+            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <i class="fas fa-globe-asia text-orange-500 mr-3"></i>
+                국가별 인증서 통계
+              </h3>
+              <div class="space-y-3 text-sm">
+                <template x-for="(count, country) in certificateStatistics.certificatesByCountry" :key="country">
+                  <div class="flex justify-between items-center p-2 bg-orange-50 rounded-md">
+                    <span class="text-gray-600 font-medium" x-text="country"></span>
+                    <span class="font-semibold text-orange-800" x-text="count"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
           <!-- Row 4: Recent Upload Activity (1 card) -->
           <div class="grid grid-cols-1">
             <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
@@ -276,7 +310,7 @@
   
             async checkLdapStatus() {
               try {
-                const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
+                const response = await fetch('/api/ldap/health'); // TODO: 이 API 엔드포인트 구현 필요
                 const data = await response.json();
                 this.ldapStatus.connected = data.success;
                 this.ldapStatus.message = data.message || '연결 실패';
@@ -290,7 +324,7 @@
             async testLdapConnection() {
               this.ldapTesting = true;
               try {
-                const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
+                const response = await fetch('/api/ldap/health'); // TODO: 이 API 엔드포인트 구현 필요
                 const data = await response.json();
                 showNotification(data.message, data.success ? 'success' : 'error');
                 await this.checkLdapStatus();
@@ -322,7 +356,9 @@
                   validCertificates: 0,
                   invalidCertificates: 0,
                   totalCrls: 0,
-                  lastUpdated: null
+                  lastUpdated: null,
+                  certificatesByType: {}, // 새로 추가
+                  certificatesByCountry: {} // 새로 추가
               },
               recentActivity: [],
               loadingRecent: false,
@@ -422,7 +458,9 @@
                               validCertificates: data.validCertificates || 0,
                               invalidCertificates: data.invalidCertificates || 0,
                               totalCrls: data.totalCrls || 0,
-                              lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null
+                              lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null,
+                              certificatesByType: data.certificatesByType || {}, // 새로 할당
+                              certificatesByCountry: data.certificatesByCountry || {} // 새로 할당
                           };
                       } else {
                           console.warn('Failed to load certificate statistics, API might not be implemented yet.');

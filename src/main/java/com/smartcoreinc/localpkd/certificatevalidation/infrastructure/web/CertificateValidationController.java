@@ -4,6 +4,11 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.command.Valid
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.ValidateCertificateResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificateUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.request.CertificateValidationRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -92,6 +97,7 @@ import java.util.UUID;
  * @version 1.0
  * @since 2025-10-25
  */
+@Tag(name = "인증서 검증 API", description = "인증서의 유효성을 검증하는 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/validate")
@@ -100,41 +106,12 @@ public class CertificateValidationController {
 
     private final ValidateCertificateUseCase validateCertificateUseCase;
 
-    /**
-     * 인증서 검증 API
-     *
-     * <p>요청된 인증서에 대해 선택된 검증 옵션들을 수행합니다.</p>
-     *
-     * @param request 검증 요청 (certificateId 필수, 최소 1개 이상의 검증 옵션 필수)
-     * @return 검증 결과 응답
-     *   - HTTP 200: 검증 완료 (success true/false 필드로 결과 표시)
-     *   - HTTP 400: 요청 파라미터 오류
-     *   - HTTP 500: 서버 오류
-     *
-     * @apiNote
-     * 모든 검증 옵션을 false로 설정할 수 없습니다. 최소 1개 이상의 검증이 필요합니다.
-     *
-     * @example
-     * <pre>{@code
-     * POST /api/validate
-     * {
-     *   "certificateId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "validateSignature": true,
-     *   "validateChain": false,
-     *   "checkRevocation": false,
-     *   "validateValidity": true,
-     *   "validateConstraints": false
-     * }
-     *
-     * Response: 200 OK
-     * {
-     *   "success": true,
-     *   "message": "인증서 검증 완료",
-     *   "certificateId": "550e8400-e29b-41d4-a716-446655440000",
-     *   ...
-     * }
-     * }</pre>
-     */
+    @Operation(summary = "인증서 검증",
+               description = "주어진 ID의 인증서에 대해 다양한 검증(서명, 체인, 폐기, 유효기간, 제약사항)을 수행합니다.")
+    @ApiResponse(responseCode = "200", description = "검증 성공 또는 실패 (상세 내용은 응답 본문 확인)",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = ValidateCertificateResponse.class)))
+    @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터")
     @PostMapping
     public ResponseEntity<ValidateCertificateResponse> validateCertificate(
             @RequestBody CertificateValidationRequest request
@@ -169,21 +146,9 @@ public class CertificateValidationController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 인증서 검증 API (Health Check)
-     *
-     * <p>이 엔드포인트의 가용성을 확인합니다.</p>
-     *
-     * @return 상태 메시지
-     *
-     * @example
-     * <pre>{@code
-     * GET /api/validate/health
-     *
-     * Response: 200 OK
-     * "Certificate Validation API is ready"
-     * }</pre>
-     */
+    @Operation(summary = "API 상태 확인",
+               description = "인증서 검증 API의 현재 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "API 정상 동작 중")
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         log.debug("Certificate Validation API health check");

@@ -4,6 +4,11 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.command.Check
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.CheckRevocationResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.CheckRevocationUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.request.RevocationCheckRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -110,6 +115,7 @@ import java.util.UUID;
  * @version 1.0
  * @since 2025-10-25
  */
+@Tag(name = "인증서 검증 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/check-revocation")
@@ -118,58 +124,12 @@ public class RevocationCheckController {
 
     private final CheckRevocationUseCase checkRevocationUseCase;
 
-    /**
-     * 인증서 폐기 여부 확인 API
-     *
-     * <p>발급자 DN과 일련번호를 통해 인증서가 폐기되었는지 확인합니다.
-     * CRL (Certificate Revocation List)을 조회하여 검증합니다.</p>
-     *
-     * @param request 폐기 확인 요청 (certificateId, issuerDn, serialNumber 필수)
-     * @return 폐기 확인 결과 응답
-     *   - revocationStatus: NOT_REVOKED, REVOKED, CRL_UNAVAILABLE, CRL_FETCH_TIMEOUT
-     *   - revoked: boolean 폐기 여부
-     *   - HTTP 200: 확인 완료 (성공/실패 모두 200 반환)
-     *   - HTTP 400: 요청 파라미터 오류
-     *   - HTTP 500: 서버 오류
-     *
-     * <p><b>Timeout 설정</b>:</p>
-     * <ul>
-     *   <li>기본값: 30초</li>
-     *   <li>최소: 5초</li>
-     *   <li>최대: 300초</li>
-     * </ul>
-     *
-     * <p><b>forceFresh 옵션</b>:</p>
-     * <ul>
-     *   <li>false (기본값): 캐시된 CRL 사용 (성능 향상)</li>
-     *   <li>true: 항상 최신 CRL 다운로드 (성능 저하)</li>
-     * </ul>
-     *
-     * @apiNote
-     * CRL 조회 실패 시 Fail-Open 정책에 따라 NOT_REVOKED를 반환합니다.
-     * 이는 시스템 가용성을 우선하는 보수적인 접근입니다.
-     *
-     * @example
-     * <pre>{@code
-     * POST /api/check-revocation
-     * {
-     *   "certificateId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "issuerDn": "CN=CSCA KR, O=Korea, C=KR",
-     *   "serialNumber": "0a1b2c3d4e5f",
-     *   "forceFresh": false,
-     *   "crlFetchTimeoutSeconds": 30
-     * }
-     *
-     * Response: 200 OK
-     * {
-     *   "success": true,
-     *   "message": "인증서 폐기 확인 완료",
-     *   "revocationStatus": "NOT_REVOKED",
-     *   "revoked": false,
-     *   ...
-     * }
-     * }</pre>
-     */
+    @Operation(summary = "인증서 폐기 여부 확인",
+               description = "발급자 DN과 일련번호를 통해 인증서가 CRL(인증서 폐기 목록)에 포함되어 있는지 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "확인 성공 (상세 내용은 응답 본문 확인)",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = CheckRevocationResponse.class)))
+    @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터")
     @PostMapping
     public ResponseEntity<CheckRevocationResponse> checkRevocation(
             @RequestBody RevocationCheckRequest request
@@ -205,21 +165,9 @@ public class RevocationCheckController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 인증서 폐기 여부 확인 API (Health Check)
-     *
-     * <p>이 엔드포인트의 가용성을 확인합니다.</p>
-     *
-     * @return 상태 메시지
-     *
-     * @example
-     * <pre>{@code
-     * GET /api/check-revocation/health
-     *
-     * Response: 200 OK
-     * "Revocation Check API is ready"
-     * }</pre>
-     */
+    @Operation(summary = "API 상태 확인",
+               description = "폐기 확인 API의 현재 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "API 정상 동작 중")
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         log.debug("Revocation Check API health check");

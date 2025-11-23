@@ -1,5 +1,8 @@
 package com.smartcoreinc.localpkd.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +22,7 @@ import java.util.Map;
  * @author SmartCore Inc.
  * @version 1.0
  */
+@Tag(name = "시스템 상태 API")
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -26,11 +30,9 @@ public class DatabaseHealthController {
 
     private final DataSource dataSource;
 
-    /**
-     * PostgreSQL 데이터베이스 연결 테스트
-     *
-     * @return 연결 상태 정보
-     */
+    @Operation(summary = "데이터베이스 상태 확인",
+               description = "PostgreSQL 데이터베이스의 연결 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "상태 확인 성공 (상세 내용은 응답 본문 확인)")
     @GetMapping("/api/database-health")
     public ResponseEntity<Map<String, Object>> checkDatabaseHealth() {
         Map<String, Object> response = new HashMap<>();

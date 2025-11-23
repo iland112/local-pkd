@@ -4,6 +4,11 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.command.Verif
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.VerifyTrustChainResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.VerifyTrustChainUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.request.TrustChainVerificationRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -116,6 +121,7 @@ import java.util.UUID;
  * @version 1.0
  * @since 2025-10-25
  */
+@Tag(name = "인증서 검증 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/verify-trust-chain")
@@ -124,49 +130,12 @@ public class TrustChainVerificationController {
 
     private final VerifyTrustChainUseCase verifyTrustChainUseCase;
 
-    /**
-     * Trust Chain 검증 API
-     *
-     * <p>End Entity 인증서부터 Trust Anchor (CSCA)까지의 전체 체인을 검증합니다.</p>
-     *
-     * @param request Trust Chain 검증 요청 (certificateId 필수)
-     * @return Trust Chain 검증 결과 응답
-     *   - HTTP 200: 검증 완료 (success true/false 필드로 결과 표시)
-     *   - HTTP 400: 요청 파라미터 오류
-     *   - HTTP 500: 서버 오류
-     *
-     * <p><b>검증 결과 타입</b>:</p>
-     * <ul>
-     *   <li>success=true, chainValid=true: 완전한 신뢰 체인 확인</li>
-     *   <li>success=true, chainValid=false: 체인 부분적 검증 실패</li>
-     *   <li>success=false: Trust Anchor 미발견 또는 심각한 오류</li>
-     * </ul>
-     *
-     * @apiNote
-     * maxChainDepth는 1-10 범위만 허용됩니다.
-     * trustAnchorCountryCode는 2자리 대문자 ISO 3166-1 국가 코드입니다.
-     *
-     * @example
-     * <pre>{@code
-     * POST /api/verify-trust-chain
-     * {
-     *   "certificateId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "trustAnchorCountryCode": "KR",
-     *   "checkRevocation": true,
-     *   "validateValidity": true,
-     *   "maxChainDepth": 5
-     * }
-     *
-     * Response: 200 OK
-     * {
-     *   "success": true,
-     *   "message": "Trust Chain 검증 완료",
-     *   "chainValid": true,
-     *   "chainDepth": 3,
-     *   ...
-     * }
-     * }</pre>
-     */
+    @Operation(summary = "인증서 신뢰 체인 검증",
+               description = "End-Entity 인증서부터 최상위 CSCA(Trust Anchor)까지의 전체 인증서 체인을 검증합니다.")
+    @ApiResponse(responseCode = "200", description = "검증 성공 또는 실패 (상세 내용은 응답 본문 확인)",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = VerifyTrustChainResponse.class)))
+    @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터")
     @PostMapping
     public ResponseEntity<VerifyTrustChainResponse> verifyTrustChain(
             @RequestBody TrustChainVerificationRequest request
@@ -200,21 +169,9 @@ public class TrustChainVerificationController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Trust Chain 검증 API (Health Check)
-     *
-     * <p>이 엔드포인트의 가용성을 확인합니다.</p>
-     *
-     * @return 상태 메시지
-     *
-     * @example
-     * <pre>{@code
-     * GET /api/verify-trust-chain/health
-     *
-     * Response: 200 OK
-     * "Trust Chain Verification API is ready"
-     * }</pre>
-     */
+    @Operation(summary = "API 상태 확인",
+               description = "신뢰 체인 검증 API의 현재 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "API 정상 동작 중")
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         log.debug("Trust Chain Verification API health check");

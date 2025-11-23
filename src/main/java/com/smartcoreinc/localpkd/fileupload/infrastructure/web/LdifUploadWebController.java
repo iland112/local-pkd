@@ -7,6 +7,9 @@ import com.smartcoreinc.localpkd.fileupload.application.response.UploadFileRespo
 import com.smartcoreinc.localpkd.fileupload.application.usecase.CheckDuplicateFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.application.usecase.UploadLdifFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +30,7 @@ import java.io.IOException;
  * @version 2.0 (DDD Refactoring)
  * @since 2025-10-19
  */
+@Tag(name = "LDIF 파일 업로드", description = "LDIF 파일 업로드 및 중복 검사 API")
 @Slf4j
 @Controller
 @RequestMapping("/ldif")
@@ -115,9 +119,9 @@ public class LdifUploadWebController {
         }
     }
 
-    /**
-     * 중복 파일 검사 API
-     */
+    @Operation(summary = "중복 파일 검사",
+               description = "제공된 파일 해시를 기반으로 파일이 이미 업로드되었는지 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "중복 검사 성공")
     @PostMapping("/api/check-duplicate")
     @ResponseBody
     public ResponseEntity<CheckDuplicateResponse> checkDuplicate(

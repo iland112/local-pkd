@@ -4,6 +4,8 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCount;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.TypeCount;
 
 import java.util.List;
 import java.util.Optional;
@@ -193,17 +195,7 @@ public interface CertificateRepository {
      * @param status 인증서 상태 (VALID, EXPIRED, REVOKED 등)
      * @return Certificate 목록 (빈 리스트 가능)
      */
-    List<Certificate> findByStatus(CertificateStatus status);
-
-    /**
-     * 타입별 Certificate 목록 조회
-     *
-     * <p>CSCA, DSC 등 특정 타입의 인증서들을 조회합니다.</p>
-     *
-     * @param type 인증서 타입
-     * @return Certificate 목록 (빈 리스트 가능)
-     */
-    List<Certificate> findByType(CertificateType type);
+    List<Certificate> findByStatus(String status);
 
     /**
      * 국가 코드별 Certificate 목록 조회
@@ -235,25 +227,31 @@ public interface CertificateRepository {
     List<Certificate> findExpiringSoon(int daysThreshold);
 
     /**
-     * 전체 Certificate 개수 조회
+     * 전체 Certificate 개수 조회 (GetCertificateStatisticsUseCase에서 사용)
      *
      * @return 전체 인증서 개수
      */
-    long count();
+    long countAllBy();
 
     /**
-     * 상태별 Certificate 개수 조회
+     * 상태별 Certificate 개수 조회 (GetCertificateStatisticsUseCase에서 사용)
      *
-     * @param status 인증서 상태
+     * @param status 인증서 상태 (String, 예: "VALID")
      * @return 해당 상태의 인증서 개수
      */
-    long countByStatus(CertificateStatus status);
+    long countByStatus(String status);
 
     /**
-     * 타입별 Certificate 개수 조회
+     * 인증서 타입별 개수 조회 (GetCertificateStatisticsUseCase에서 사용)
      *
-     * @param type 인증서 타입
-     * @return 해당 타입의 인증서 개수
+     * @return 인증서 타입별 개수
      */
-    long countByType(CertificateType type);
+    List<TypeCount> countCertificatesByType();
+
+    /**
+     * 발행 국가 코드별 인증서 개수 조회 (GetCertificateStatisticsUseCase에서 사용)
+     *
+     * @return 인증서 타입별 개수
+     */
+    List<CountryCount> countCertificatesByCountry();
 }
