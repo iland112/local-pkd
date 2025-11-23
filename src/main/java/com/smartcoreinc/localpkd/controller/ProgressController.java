@@ -2,6 +2,9 @@ package com.smartcoreinc.localpkd.controller;
 
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -40,6 +43,7 @@ import java.util.UUID;
  * @version 1.0
  * @since 2025-10-22
  */
+@Tag(name = "실시간 진행상황 API (SSE)", description = "파일 처리 진행상황을 실시간으로 전송하는 API")
 @Slf4j
 @RestController
 @RequestMapping("/progress")
@@ -48,13 +52,9 @@ public class ProgressController {
 
     private final ProgressService progressService;
 
-    /**
-     * SSE 스트림 연결
-     *
-     * <p>클라이언트가 이 엔드포인트에 연결하면 실시간으로 진행 상황을 수신할 수 있습니다.</p>
-     *
-     * @return SseEmitter
-     */
+    @Operation(summary = "SSE 스트림 연결",
+               description = "클라이언트가 실시간으로 파일 처리 진행 상황을 수신하기 위해 연결하는 Server-Sent Events 스트림입니다.")
+    @ApiResponse(responseCode = "200", description = "SSE 스트림 연결 성공")
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamProgress() {
         log.info("=== SSE connection request ===");
@@ -64,14 +64,10 @@ public class ProgressController {
         return emitter;
     }
 
-    /**
-     * 특정 uploadId의 최근 진행 상황 조회
-     *
-     * <p>SSE 연결 전에 현재 상태를 확인하거나, 연결 없이 상태만 조회할 때 사용합니다.</p>
-     *
-     * @param uploadId 업로드 ID
-     * @return 최근 진행 상황 (JSON)
-     */
+    @Operation(summary = "특정 업로드의 진행 상황 조회",
+               description = "주어진 업로드 ID에 대한 가장 최근의 처리 진행 상황을 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "진행 상황 조회 성공")
+    @ApiResponse(responseCode = "404", description = "해당 업로드 ID에 대한 진행 상황을 찾을 수 없음")
     @GetMapping("/status/{uploadId}")
     public ResponseEntity<Map<String, Object>> getProgressStatus(@PathVariable UUID uploadId) {
         log.debug("Progress status requested for uploadId: {}", uploadId);
@@ -79,7 +75,7 @@ public class ProgressController {
         ProcessingProgress progress = progressService.getRecentProgress(uploadId);
 
         if (progress == null) {
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.status(404).body(Map.of(
                 "exists", false,
                 "message", "No progress found for uploadId: " + uploadId
             ));
@@ -103,11 +99,9 @@ public class ProgressController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 활성 SSE 연결 수 조회 (관리/모니터링용)
-     *
-     * @return 연결 정보
-     */
+    @Operation(summary = "활성 SSE 연결 수 조회 (관리용)",
+               description = "현재 서버에 연결된 활성 SSE 클라이언트의 수와 캐시된 진행 정보 수를 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/connections")
     public ResponseEntity<Map<String, Object>> getConnections() {
         int activeConnections = progressService.getActiveConnectionCount();
@@ -120,13 +114,9 @@ public class ProgressController {
         ));
     }
 
-    /**
-     * 하트비트 엔드포인트 (테스트용)
-     *
-     * <p>SSE 연결이 정상인지 테스트할 때 사용합니다.</p>
-     *
-     * @return 성공 메시지
-     */
+    @Operation(summary = "하트비트 전송 (테스트용)",
+               description = "모든 활성 SSE 연결에 하트비트 이벤트를 전송하여 연결 상태를 테스트합니다.")
+    @ApiResponse(responseCode = "200", description = "하트비트 전송 성공")
     @GetMapping("/heartbeat")
     public ResponseEntity<Map<String, Object>> sendHeartbeat() {
         progressService.sendHeartbeat();

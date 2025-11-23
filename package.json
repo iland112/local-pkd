@@ -36,5 +36,8 @@
     "watch:svg": "onchange \"src/main/resources/static/svg/**/*.svg\" -- npm run build:svg",
     "watch:serve": "browser-sync start --no-inject-changes --proxy localhost:8081 --files \"target/classes/templates\" \"target/classes/static\""
   },
-  "private": false
+  "private": false,
+  "dependencies": {
+    "@playwright/test": "^1.56.1"
+  }
 }

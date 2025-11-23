@@ -4,6 +4,9 @@ import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingRespo
 import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingStatusResponse;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -116,6 +119,7 @@ import java.util.UUID;
  * @version 1.0
  * @since 2025-10-24
  */
+@Tag(name = "파일 처리 관리 API", description = "MANUAL 모드에서의 파일 처리 단계를 관리하는 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/processing")
@@ -128,44 +132,11 @@ public class ProcessingController {
     // private final ValidateCertificatesUseCase validateCertificatesUseCase;
     // private final UploadToLdapUseCase uploadToLdapUseCase;
 
-    /**
-     * 파일 파싱 시작 (MANUAL 모드)
-     *
-     * <p>사용자가 "파싱 시작" 버튼을 클릭했을 때 호출되는 엔드포인트입니다.
-     * MANUAL 모드일 경우에만 처리됩니다.</p>
-     *
-     * <h3>요청</h3>
-     * <pre>POST /api/processing/parse/{uploadId}</pre>
-     *
-     * <h3>응답 (202 Accepted)</h3>
-     * <pre>{@code
-     * {
-     *   "uploadId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "step": "PARSING",
-     *   "status": "IN_PROGRESS",
-     *   "message": "파일 파싱을 시작했습니다.",
-     *   "nextStep": "VALIDATION",
-     *   "success": true,
-     *   "errorMessage": null
-     * }
-     * }</pre>
-     *
-     * <h3>오류 응답 (400 Bad Request)</h3>
-     * <pre>{@code
-     * {
-     *   "uploadId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "step": null,
-     *   "status": "REJECTED",
-     *   "message": "이 파일은 수동 처리 모드가 아닙니다.",
-     *   "nextStep": null,
-     *   "success": false,
-     *   "errorMessage": "MANUAL 모드에서만 개별 단계를 트리거할 수 있습니다."
-     * }
-     * }</pre>
-     *
-     * @param uploadId 업로드 ID (UUID 문자열)
-     * @return ResponseEntity<ProcessingResponse>
-     */
+    @Operation(summary = "파일 파싱 시작 (MANUAL 모드)",
+               description = "MANUAL 처리 모드로 업로드된 파일의 파싱 단계를 시작합니다.")
+    @ApiResponse(responseCode = "202", description = "파싱 요청 성공")
+    @ApiResponse(responseCode = "400", description = "MANUAL 모드가 아님")
+    @ApiResponse(responseCode = "404", description = "파일을 찾을 수 없음")
     @PostMapping("/parse/{uploadId}")
     public ResponseEntity<ProcessingResponse> parseFile(
             @PathVariable String uploadId
@@ -217,31 +188,11 @@ public class ProcessingController {
         }
     }
 
-    /**
-     * 인증서 검증 시작 (MANUAL 모드)
-     *
-     * <p>파일 파싱이 완료된 후 사용자가 "검증 시작" 버튼을 클릭했을 때 호출되는 엔드포인트입니다.
-     * MANUAL 모드일 경우에만 처리됩니다.</p>
-     *
-     * <h3>요청</h3>
-     * <pre>POST /api/processing/validate/{uploadId}</pre>
-     *
-     * <h3>응답 (202 Accepted)</h3>
-     * <pre>{@code
-     * {
-     *   "uploadId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "step": "VALIDATION",
-     *   "status": "IN_PROGRESS",
-     *   "message": "인증서 검증을 시작했습니다.",
-     *   "nextStep": "LDAP_SAVING",
-     *   "success": true,
-     *   "errorMessage": null
-     * }
-     * }</pre>
-     *
-     * @param uploadId 업로드 ID (UUID 문자열)
-     * @return ResponseEntity<ProcessingResponse>
-     */
+    @Operation(summary = "인증서 검증 시작 (MANUAL 모드)",
+               description = "MANUAL 처리 모드로 파싱이 완료된 파일의 인증서 검증 단계를 시작합니다.")
+    @ApiResponse(responseCode = "202", description = "검증 요청 성공")
+    @ApiResponse(responseCode = "400", description = "MANUAL 모드가 아님")
+    @ApiResponse(responseCode = "404", description = "파일을 찾을 수 없음")
     @PostMapping("/validate/{uploadId}")
     public ResponseEntity<ProcessingResponse> validateCertificates(
             @PathVariable String uploadId
@@ -293,31 +244,11 @@ public class ProcessingController {
         }
     }
 
-    /**
-     * LDAP 서버에 업로드 시작 (MANUAL 모드)
-     *
-     * <p>인증서 검증이 완료된 후 사용자가 "LDAP 업로드" 버튼을 클릭했을 때 호출되는 엔드포인트입니다.
-     * MANUAL 모드일 경우에만 처리됩니다.</p>
-     *
-     * <h3>요청</h3>
-     * <pre>POST /api/processing/upload-to-ldap/{uploadId}</pre>
-     *
-     * <h3>응답 (202 Accepted)</h3>
-     * <pre>{@code
-     * {
-     *   "uploadId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "step": "LDAP_SAVING",
-     *   "status": "IN_PROGRESS",
-     *   "message": "LDAP 서버에 저장을 시작했습니다.",
-     *   "nextStep": "COMPLETED",
-     *   "success": true,
-     *   "errorMessage": null
-     * }
-     * }</pre>
-     *
-     * @param uploadId 업로드 ID (UUID 문자열)
-     * @return ResponseEntity<ProcessingResponse>
-     */
+    @Operation(summary = "LDAP 서버에 업로드 시작 (MANUAL 모드)",
+               description = "MANUAL 처리 모드로 검증이 완료된 파일의 인증서/CRL을 LDAP 서버에 업로드하는 단계를 시작합니다.")
+    @ApiResponse(responseCode = "202", description = "LDAP 업로드 요청 성공")
+    @ApiResponse(responseCode = "400", description = "MANUAL 모드가 아님")
+    @ApiResponse(responseCode = "404", description = "파일을 찾을 수 없음")
     @PostMapping("/upload-to-ldap/{uploadId}")
     public ResponseEntity<ProcessingResponse> uploadToLdap(
             @PathVariable String uploadId
@@ -369,41 +300,10 @@ public class ProcessingController {
         }
     }
 
-    /**
-     * 파일 처리 상태 조회
-     *
-     * <p>특정 파일의 현재 처리 상태를 조회합니다.
-     * AUTO/MANUAL 모든 모드에서 사용할 수 있습니다.</p>
-     *
-     * <h3>요청</h3>
-     * <pre>GET /api/processing/status/{uploadId}</pre>
-     *
-     * <h3>응답 (200 OK)</h3>
-     * <pre>{@code
-     * {
-     *   "uploadId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "fileName": "icaopkd-002-complete-009410.ldif",
-     *   "processingMode": "MANUAL",
-     *   "currentStage": "PARSING_COMPLETED",
-     *   "currentPercentage": 60,
-     *   "uploadedAt": "2025-10-24T10:30:00",
-     *   "lastUpdateAt": "2025-10-24T10:35:45",
-     *   "parsingStartedAt": "2025-10-24T10:31:00",
-     *   "parsingCompletedAt": "2025-10-24T10:33:30",
-     *   "validationStartedAt": null,
-     *   "validationCompletedAt": null,
-     *   "ldapUploadStartedAt": null,
-     *   "ldapUploadCompletedAt": null,
-     *   "totalProcessingTimeSeconds": 345,
-     *   "status": "IN_PROGRESS",
-     *   "errorMessage": null,
-     *   "manualPauseAtStep": "VALIDATION_STARTED"
-     * }
-     * }</pre>
-     *
-     * @param uploadId 업로드 ID (UUID 문자열)
-     * @return ResponseEntity<ProcessingStatusResponse>
-     */
+    @Operation(summary = "파일 처리 상태 조회",
+               description = "특정 파일의 현재 처리 상태를 조회합니다. AUTO/MANUAL 모든 모드에서 사용할 수 있습니다.")
+    @ApiResponse(responseCode = "200", description = "상태 조회 성공")
+    @ApiResponse(responseCode = "404", description = "파일을 찾을 수 없음")
     @GetMapping("/status/{uploadId}")
     public ResponseEntity<ProcessingStatusResponse> getProcessingStatus(
             @PathVariable String uploadId

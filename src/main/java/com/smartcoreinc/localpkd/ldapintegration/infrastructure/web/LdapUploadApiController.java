@@ -1,9 +1,6 @@
 package com.smartcoreinc.localpkd.ldapintegration.infrastructure.web;
 
-import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
-import com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse;
 import com.smartcoreinc.localpkd.ldapintegration.application.usecase.LdapHealthCheckUseCase;
-import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -48,131 +45,21 @@ import java.util.UUID;
 @CrossOrigin(origins = "*")
 public class LdapUploadApiController {
 
-    private final UploadToLdapUseCase uploadToLdapUseCase;
     private final LdapHealthCheckUseCase ldapHealthCheckUseCase;
 
     /**
-     * 검증된 인증서/CRL을 LDAP 서버에 업로드
-     *
-     * <p><b>Request</b>:</p>
-     * <pre>
-     * POST /api/ldap/upload
-     * {
-     *   "uploadId": "uuid",
-     *   "validCertificateCount": 795,
-     *   "validCrlCount": 48,
-     *   "batchSize": 100
-     * }
-     * </pre>
-     *
-     * <p><b>Response (Success)</b>:</p>
-     * <pre>
-     * {
-     *   "success": true,
-     *   "uploadId": "uuid",
-     *   "uploadedCertificateCount": 787,
-     *   "uploadedCrlCount": 47,
-     *   "failedCertificateCount": 8,
-     *   "failedCrlCount": 1,
-     *   "totalUploaded": 834,
-     *   "totalFailed": 9,
-     *   "successRate": 98,
-     *   "uploadedAt": "2025-10-29T18:00:00",
-     *   "durationMillis": 5432,
-     *   "message": "LDAP 업로드 완료"
-     * }
-     * </pre>
-     *
-     * <p><b>Response (Error)</b>:</p>
-     * <pre>
-     * {
-     *   "success": false,
-     *   "errorMessage": "Error message",
-     *   "errorCode": "UPLOAD_ERROR"
-     * }
-     * </pre>
-     *
-     * @param command LDAP 업로드 명령
-     * @return 업로드 결과
+     * @deprecated This endpoint is deprecated and will be removed. Use a new endpoint that is compatible with the new UploadToLdapUseCase.
      */
-    @Operation(summary = "LDAP 업로드 시작",
-               description = "검증된 인증서 및 CRL을 LDAP 서버에 업로드하는 작업을 시작합니다.",
-               requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                   description = "업로드할 파일 정보 및 통계",
-                   required = true,
-                   content = @Content(mediaType = "application/json",
-                       schema = @Schema(implementation = UploadToLdapCommand.class))))
-    @ApiResponse(responseCode = "200", description = "LDAP 업로드 성공",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(implementation = UploadToLdapResponse.class)))
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"유효성 검증 실패\", \"errorCode\": \"VALIDATION_ERROR\"}")))
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"LDAP 업로드 중 오류가 발생했습니다: ...\", \"errorCode\": \"INTERNAL_ERROR\"}")))
+    @Deprecated(forRemoval = true, since = "2025-11-23")
+    @Operation(summary = "LDAP 업로드 시작 (Deprecated)",
+               description = "이 API는 더 이상 사용되지 않습니다. 새로운 업로드 API를 사용하세요.")
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadToLdap(@RequestBody UploadToLdapCommand command) {
-        log.info("=== LDAP upload API called ===");
-        log.info("UploadId: {}, Certificates: {}, CRLs: {}",
-            command.uploadId(), command.validCertificateCount(), command.validCrlCount());
-
-        try {
-            // Validate command
-            command.validate();
-
-            // Execute use case
-            UploadToLdapResponse response = uploadToLdapUseCase.execute(command);
-
-            // Return response
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", response.success());
-            result.put("uploadId", response.uploadId());
-            result.put("uploadedCertificateCount", response.uploadedCertificateCount());
-            result.put("uploadedCrlCount", response.uploadedCrlCount());
-            result.put("failedCertificateCount", response.failedCertificateCount());
-            result.put("failedCrlCount", response.failedCrlCount());
-            result.put("totalUploaded", response.getTotalUploaded());
-            result.put("totalFailed", response.getTotalFailed());
-            result.put("successRate", response.getSuccessRate());
-            result.put("uploadedAt", response.uploadedAt());
-            result.put("durationMillis", response.durationMillis());
-            result.put("isAllUploaded", response.isAllUploaded());
-
-            if (response.success()) {
-                result.put("message", "LDAP 업로드 완료");
-                log.info("LDAP upload completed: uploadId={}, uploaded={}, failed={}",
-                    command.uploadId(), response.getTotalUploaded(), response.getTotalFailed());
-                return ResponseEntity.ok(result);
-            } else {
-                result.put("message", "LDAP 업로드 실패");
-                result.put("errorMessage", response.errorMessage());
-                log.error("LDAP upload failed: {}", response.errorMessage());
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
-            }
-
-        } catch (DomainException e) {
-            log.error("Domain error during LDAP upload: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(
-                false,
-                e.getMessage(),
-                e.getErrorCode()
-            ));
-        } catch (IllegalArgumentException e) {
-            log.error("Validation error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(createErrorResponse(
-                false,
-                e.getMessage(),
-                "VALIDATION_ERROR"
-            ));
-        } catch (Exception e) {
-            log.error("Unexpected error during LDAP upload", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(createErrorResponse(
-                false,
-                "LDAP 업로드 중 오류가 발생했습니다: " + e.getMessage(),
-                "INTERNAL_ERROR"
-            ));
-        }
+    public ResponseEntity<?> uploadToLdap() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", "This endpoint is deprecated and no longer supported.");
+        response.put("errorCode", "ENDPOINT_DEPRECATED");
+        return ResponseEntity.status(HttpStatus.GONE).body(response);
     }
 
     /**

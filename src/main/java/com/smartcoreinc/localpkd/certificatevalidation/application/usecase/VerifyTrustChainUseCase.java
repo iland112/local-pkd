@@ -160,32 +160,13 @@ public class VerifyTrustChainUseCase {
     private Certificate findTrustAnchor(String countryCode) {
         log.debug("Searching for Trust Anchor: countryCode={}", countryCode);
 
-        // TODO: 실제 로직 구현 필요
-        // if (countryCode != null) {
-        //     List<Certificate> cscas = certificateRepository.findByTypeAndCountry(
-        //         CertificateType.CSCA, countryCode
-        //     );
-        //     return cscas.isEmpty() ? null : cscas.get(0);
-        // } else {
-        //     List<Certificate> cscas = certificateRepository.findByType(CertificateType.CSCA);
-        //     return cscas.isEmpty() ? null : cscas.get(0);
-        // }
+        List<Certificate> validCerts = certificateRepository.findByStatus("VALID");
 
-        // Skeleton: DB에서 CSCA 조회 (첫 번째 것 반환)
-        List<Certificate> cscas = certificateRepository.findByType(CertificateType.CSCA);
-        if (cscas.isEmpty()) {
-            return null;
-        }
-
-        // countryCode 필터링
-        if (countryCode != null) {
-            return cscas.stream()
-                .filter(csca -> countryCode.equals(csca.getSubjectInfo().getCountryCode()))
-                .findFirst()
-                .orElse(null);
-        }
-
-        return cscas.get(0);
+        return validCerts.stream()
+            .filter(cert -> cert.getCertificateType() == CertificateType.CSCA)
+            .filter(csca -> countryCode == null || countryCode.equals(csca.getSubjectInfo().getCountryCode()))
+            .findFirst()
+            .orElse(null);
     }
 
     /**

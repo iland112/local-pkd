@@ -22,6 +22,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <ul>
  *   <li>동기 처리: 이벤트 발행과 동시에 처리 (읽기 전용 작업)</li>
  *   <li>비동기 처리: 트랜잭션 커밋 후 처리 (추가 작업, 외부 API 호출 등)</li>
+ *   <li>Lombok {@code @Slf4j}를 사용하여 로거를 자동 주입합니다.</li>
  * </ul>
  *
  * <p><b>처리 순서</b>:</p>
