@@ -5,6 +5,11 @@ import com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLd
 import com.smartcoreinc.localpkd.ldapintegration.application.usecase.LdapHealthCheckUseCase;
 import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -44,6 +49,7 @@ import java.util.UUID;
 public class LdapUploadApiController {
 
     private final UploadToLdapUseCase uploadToLdapUseCase;
+    private final LdapHealthCheckUseCase ldapHealthCheckUseCase;
 
     /**
      * 검증된 인증서/CRL을 LDAP 서버에 업로드
@@ -89,6 +95,22 @@ public class LdapUploadApiController {
      * @param command LDAP 업로드 명령
      * @return 업로드 결과
      */
+    @Operation(summary = "LDAP 업로드 시작",
+               description = "검증된 인증서 및 CRL을 LDAP 서버에 업로드하는 작업을 시작합니다.",
+               requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                   description = "업로드할 파일 정보 및 통계",
+                   required = true,
+                   content = @Content(mediaType = "application/json",
+                       schema = @Schema(implementation = UploadToLdapCommand.class))))
+    @ApiResponse(responseCode = "200", description = "LDAP 업로드 성공",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = UploadToLdapResponse.class)))
+    @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"유효성 검증 실패\", \"errorCode\": \"VALIDATION_ERROR\"}")))
+    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"LDAP 업로드 중 오류가 발생했습니다: ...\", \"errorCode\": \"INTERNAL_ERROR\"}")))
     @PostMapping("/upload")
     public ResponseEntity<?> uploadToLdap(@RequestBody UploadToLdapCommand command) {
         log.info("=== LDAP upload API called ===");
@@ -161,6 +183,14 @@ public class LdapUploadApiController {
      * @param uploadId 업로드 ID
      * @return 업로드 상태 정보
      */
+    @Operation(summary = "LDAP 업로드 상태 조회",
+               description = "특정 업로드 ID에 대한 LDAP 업로드 진행 상태를 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "업로드 상태 조회 성공",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"uploadId\": \"uuid\", \"status\": \"IN_PROGRESS\", \"message\": \"LDAP 업로드가 진행 중입니다\"}")))
+    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"상태 조회 중 오류가 발생했습니다\", \"errorCode\": \"INTERNAL_ERROR\"}")))
     @GetMapping("/upload/{uploadId}")
     public ResponseEntity<?> getUploadStatus(@PathVariable UUID uploadId) {
         log.debug("Getting LDAP upload status for uploadId: {}", uploadId);
@@ -190,6 +220,13 @@ public class LdapUploadApiController {
      *
      * @return LDAP 연결 상태 정보를 담은 JSON 응답
      */
+    @Operation(summary = "LDAP 서버 헬스 체크", description = "LDAP 서버와의 연결 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "LDAP 서버에 성공적으로 연결됨",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"success\": true, \"message\": \"LDAP 서버에 성공적으로 연결되었습니다.\"}")))
+    @ApiResponse(responseCode = "503", description = "LDAP 서버 연결 실패",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(example = "{\"success\": false, \"message\": \"LDAP 서버 연결 실패: [에러 메시지]\"}")))
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> checkLdapHealth() {
         log.debug("Checking LDAP health status...");
@@ -215,3 +252,5 @@ public class LdapUploadApiController {
         return response;
     }
 }
+
+
