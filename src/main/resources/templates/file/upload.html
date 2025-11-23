@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html
   lang="ko"
@@ -589,8 +590,7 @@
         }
 
         // Global utility functions
-        let currentUploadId = null;
-        let sseEventSource = null;
+
 
         function formatFileSize(bytes) {
           if (bytes === 0) return '0 Bytes';
@@ -702,89 +702,65 @@
         }
 
                 function updateProgressUI(progress) {
-
                   document.getElementById('progressStage').textContent = progress.stageName || progress.stage;
 
-        
-
                   const progressBar = document.getElementById('progressModalBar');
-
                   progressBar.value = progress.percentage;
-
-                  // <progress> 태그에는 textContent를 직접 넣지 않으므로 해당 라인은 제거합니다.
-
-        
 
                   document.getElementById('progressMessage').textContent = progress.message;
 
-        
-
                   const countElement = document.getElementById('progressCount');
-
                   if (progress.totalCount > 0) {
-
                     countElement.textContent = `${progress.processedCount} / ${progress.totalCount}`;
-
                     countElement.classList.remove('hidden');
-
                   } else {
-
                     countElement.classList.add('hidden');
-
                   }
-
-        
 
                   const detailsElement = document.getElementById('progressDetails');
-
                   if (progress.details) {
-
                     detailsElement.textContent = progress.details;
-
                     detailsElement.classList.remove('hidden');
-
                   } else {
-
                     detailsElement.classList.add('hidden');
-
                   }
-
-        
 
                   const errorElement = document.getElementById('progressError');
-
                   if (progress.errorMessage) {
-
                     errorElement.textContent = progress.errorMessage;
-
                     errorElement.classList.remove('hidden');
-
                   } else {
-
                     errorElement.classList.add('hidden');
-
                   }
-
-        
-
-                  // DaisyUI progress 컴포넌트의 색상 클래스 사용
 
                   progressBar.classList.remove('progress-primary', 'progress-error', 'progress-success');
-
                   if (progress.stage === 'COMPLETED') {
-
                     progressBar.classList.add('progress-success');
-
                   } else if (progress.stage === 'FAILED') {
-
                     progressBar.classList.add('progress-error');
-
                   } else {
-
                     progressBar.classList.add('progress-primary');
-
                   }
 
+                  // === ADDED LOGIC FOR STEP UI UPDATE ===
+                  const steps = document.querySelectorAll('#progressModal .steps-vertical li.step');
+                  const stageMap = {
+                    'RECEIVED': 0, // 파일 업로드 완료
+                    'PARSING': 1,  // 파일 파싱
+                    'VALIDATING': 2, // 인증서 검증
+                    'LDAP_UPLOAD': 3, // LDAP 서버 저장
+                    'COMPLETED': 4   // 처리 완료
+                  };
+                  const currentStageIndex = stageMap[progress.stage];
+
+                  steps.forEach((step, index) => {
+                    if (index <= currentStageIndex) {
+                      step.classList.add('step-primary');
+                    } else {
+                      step.classList.remove('step-primary');
+                    }
+                  });
+                  // === END ADDED LOGIC ===
                 }
 
         function closeProgressModal(success) {

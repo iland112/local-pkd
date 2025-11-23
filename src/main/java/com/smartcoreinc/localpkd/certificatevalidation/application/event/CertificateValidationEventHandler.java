@@ -1,12 +1,12 @@
 package com.smartcoreinc.localpkd.certificatevalidation.application.event;
 
+import com.smartcoreinc.localpkd.certificatevalidation.application.command.UploadToLdapCommand;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateRevokedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateValidatedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.TrustChainVerifiedEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.ValidationFailedEvent;
-import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
-import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -422,23 +422,23 @@ public class CertificateValidationEventHandler {
 
         try {
             // 1. UploadToLdapCommand 생성
-            UploadToLdapCommand command = UploadToLdapCommand.create(
-                event.getUploadId(),
-                event.getValidCertificateCount(),
-                event.getValidCrlCount()
-            );
+            UploadToLdapCommand command = UploadToLdapCommand.builder()
+                .uploadId(event.getUploadId())
+                .certificateIds(event.getValidCertificateIds())
+                .isBatch(true)
+                .build();
 
             // 2. LDAP 업로드 실행 (UploadToLdapUseCase)
             log.info("Executing LDAP upload: uploadId={}, total items={}",
-                event.getUploadId(), command.getTotalCount());
+                event.getUploadId(), command.getCertificateCount());
             var response = uploadToLdapUseCase.execute(command);
 
-            if (response.success()) {
+            if (response.isSuccess()) {
                 log.info("LDAP upload completed successfully: uploadId={}, uploaded={}, failed={}",
-                    event.getUploadId(), response.getTotalUploaded(), response.getTotalFailed());
+                    event.getUploadId(), response.getSuccessCount(), response.getFailureCount());
             } else {
                 log.error("LDAP upload failed: uploadId={}, error={}",
-                    event.getUploadId(), response.errorMessage());
+                    event.getUploadId(), response.getErrorMessage());
             }
 
         } catch (Exception e) {

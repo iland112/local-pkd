@@ -555,13 +555,51 @@
 
   <th:block layout:fragment="script-content">
     <script>
+      // Alpine.js Global Store for application-wide state
+      document.addEventListener('alpine:init', () => {
+        Alpine.store('app', {
+          ldapStatus: {
+            connected: false,
+            message: '확인 중...',
+          },
+          ldapTesting: false,
+
+          async checkLdapStatus() {
+            try {
+              const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
+              const data = await response.json();
+              this.ldapStatus.connected = data.success;
+              this.ldapStatus.message = data.message || '연결 실패';
+            } catch (error) {
+              console.error('LDAP status check failed:', error);
+              this.ldapStatus.connected = false;
+              this.ldapStatus.message = '연결 확인 불가';
+            }
+          },
+
+          async testLdapConnection() {
+            this.ldapTesting = true;
+            try {
+              const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
+              const data = await response.json();
+              showNotification(data.message, data.success ? 'success' : 'error');
+              await this.checkLdapStatus();
+            } catch (error) {
+              showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
+            } finally {
+              this.ldapTesting = false;
+            }
+          }
+        });
+      });
+
       function dashboardApp() {
           return {
             // 상태 데이터
             currentDate: '',
             currentTime: '',
             dbConnected: false,
-            dbMessage: '확인 중...', 
+            dbMessage: '확인 중...',
             dbTesting: false,
             statistics: {
               totalCount: 0,
@@ -583,6 +621,7 @@
             init() {
               this.updateDateTime();
               this.checkDatabaseStatus();
+              Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
               this.loadStatistics();
               this.loadRecentActivity();
               this.loadCertificateStatistics(); // 새로 추가
@@ -593,7 +632,7 @@
               // 5분마다 데이터베이스 상태 체크
               setInterval(() => {
                 this.checkDatabaseStatus();
-                // LDAP 상태는 Alpine.store('app')에서 관리하므로 여기서 직접 호출 안함
+                Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
               }, 300000);
             },
 
@@ -639,8 +678,7 @@
                 this.checkDatabaseStatus();
               } catch (error) {
                 showNotification('연결 테스트에 실패했습니다.', 'error');
-              }
-            } finally {
+              } finally {
                 this.dbTesting = false;
               }
             },

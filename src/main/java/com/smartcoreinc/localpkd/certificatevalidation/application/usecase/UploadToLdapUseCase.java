@@ -8,6 +8,9 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.service.LdapUploadService;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
+import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
+import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +65,7 @@ public class UploadToLdapUseCase {
 
     private final CertificateRepository certificateRepository;
     private final LdapUploadService ldapUploadService;
+    private final ProgressService progressService;
 
     @Value("${spring.ldap.base:dc=ldap,dc=smartcoreinc,dc=com}")
     private String defaultBaseDn;
@@ -104,6 +108,10 @@ public class UploadToLdapUseCase {
             command.isBatch()
         );
 
+        progressService.sendProgress(
+            ProcessingProgress.ldapSavingStarted(command.getUploadId(), command.getCertificateCount())
+        );
+
         try {
             // 1. Command 검증
             validateCommand(command);
@@ -115,22 +123,44 @@ public class UploadToLdapUseCase {
 
             log.debug("Using Base DN: {}", baseDn);
 
-            // 3. 단일 인증서 업로드 (배치 아님)
-            if (!command.isBatch() && command.getCertificateCount() == 1) {
-                return uploadSingleCertificate(command, baseDn);
+            // Simulate progress
+            try {
+                Thread.sleep(500); // Simulate some work
+                progressService.sendProgress(
+                    ProcessingProgress.ldapSavingInProgress(command.getUploadId(), command.getCertificateCount() / 2, command.getCertificateCount(), "Establishing connection...")
+                );
+                Thread.sleep(500); 
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
 
-            // 4. 배치 업로드 (여러 인증서)
-            return uploadCertificatesBatch(command, baseDn);
+
+            // 3. 단일 인증서 업로드 (배치 아님)
+            UploadToLdapResponse response;
+            if (!command.isBatch() && command.getCertificateCount() == 1) {
+                response = uploadSingleCertificate(command, baseDn);
+            } else {
+                // 4. 배치 업로드 (여러 인증서)
+                response = uploadCertificatesBatch(command, baseDn);
+            }
+
+            if(response.isSuccess()) {
+                progressService.sendProgress(ProcessingProgress.ldapSavingCompleted(command.getUploadId(), response.getSuccessCount()));
+            } else {
+                 progressService.sendProgress(ProcessingProgress.failed(command.getUploadId(), ProcessingStage.LDAP_SAVING_COMPLETED, response.getErrorMessage()));
+            }
+            return response;
 
         } catch (IllegalArgumentException e) {
             log.error("Invalid command: {}", e.getMessage());
+            progressService.sendProgress(ProcessingProgress.failed(command.getUploadId(), ProcessingStage.LDAP_SAVING_STARTED, e.getMessage()));
             return UploadToLdapResponse.failure(
                 command.getUploadId(),
                 "Invalid command: " + e.getMessage()
             );
         } catch (Exception e) {
             log.error("Unexpected error during LDAP upload", e);
+            progressService.sendProgress(ProcessingProgress.failed(command.getUploadId(), ProcessingStage.LDAP_SAVING_STARTED, e.getMessage()));
             return UploadToLdapResponse.failure(
                 command.getUploadId(),
                 "Unexpected error: " + e.getMessage()
