@@ -262,656 +262,366 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <th:block layout:fragment="script-content">
-    <script>
-      function dashboardApp() {
-          return {
-            // 상태 데이터
-            currentDate: '',
-            currentTime: '',
-            dbConnected: false,
-            dbMessage: '확인 중...',
-            dbTesting: false,
-            statistics: {
-              totalCount: 0,
-              successCount: 0,
-              failedCount: 0,
-              successRate: 0
+    
+    <th:block layout:fragment="script-content">
+      <script>
+        // Alpine.js Global Store for application-wide state
+        document.addEventListener('alpine:init', () => {
+          Alpine.store('app', {
+            ldapStatus: {
+              connected: false,
+              message: '확인 중...',
             },
-            certificateStatistics: {
-                totalCertificates: 0,
-                validCertificates: 0,
-                invalidCertificates: 0,
-                totalCrls: 0,
-                lastUpdated: null
-            },
-            recentActivity: [],
-            loadingRecent: false,
-
-            // 초기화
-            init() {
-              this.updateDateTime();
-              this.checkDatabaseStatus();
-              this.loadStatistics();
-              this.loadRecentActivity();
-              this.loadCertificateStatistics(); // 새로 추가
-
-              // 1분마다 시간 업데이트
-              setInterval(() => this.updateDateTime(), 60000);
-
-              // 5분마다 상태 체크
-              setInterval(() => {
-                this.checkDatabaseStatus();
-                // LDAP 상태는 Alpine.store('app')에서 관리하므로 여기서 직접 호출 안함
-              }, 300000);
-            },
-
-            // 날짜/시간 업데이트
-            updateDateTime() {
-              const now = new Date();
-              this.currentDate = now.toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'short'
-              });
-              this.currentTime = now.toLocaleTimeString('ko-KR');
-            },
-
-            // PostgreSQL 데이터베이스 상태 확인
-            async checkDatabaseStatus() {
+            ldapTesting: false,
+  
+            async checkLdapStatus() {
               try {
-                const response = await fetch('/api/database-health');
+                const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
                 const data = await response.json();
-
-                this.dbConnected = data.success;
-                if (data.success) {
-                  this.dbMessage = `${data.database} ${data.version}`;
-                } else {
-                  this.dbMessage = data.message || '연결 실패';
-                }
+                this.ldapStatus.connected = data.success;
+                this.ldapStatus.message = data.message || '연결 실패';
               } catch (error) {
-                console.error('Database status check failed:', error);
-                this.dbConnected = false;
-                this.dbMessage = '연결 확인 불가';
+                console.error('LDAP status check failed:', error);
+                this.ldapStatus.connected = false;
+                this.ldapStatus.message = '연결 확인 불가';
               }
             },
-
-            // PostgreSQL 데이터베이스 연결 테스트
-            async testDatabaseConnection() {
-              this.dbTesting = true;
+  
+            async testLdapConnection() {
+              this.ldapTesting = true;
               try {
-                const response = await fetch('/api/database-health');
+                const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
                 const data = await response.json();
-
                 showNotification(data.message, data.success ? 'success' : 'error');
-                this.checkDatabaseStatus();
+                await this.checkLdapStatus();
               } catch (error) {
-                showNotification('연결 테스트에 실패했습니다.', 'error');
+                showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
               } finally {
-                this.dbTesting = false;
+                this.ldapTesting = false;
               }
-            },
-
-            // 통계 로드
-            async loadStatistics() {
-              try {
-                const response = await fetch('/upload-history/statistics');
-                if (response.ok) {
-                  const data = await response.json();
-                  this.statistics = {
-                    totalCount: data.totalCount || 0,
-                    successCount: data.successCount || 0,
-                    failedCount: data.failedCount || 0,
-                    successRate: data.successRate || 0
-                  };
-                }
-              } catch (error) {
-                console.error('Failed to load statistics:', error);
-              }
-            },
-
-            // 저장된 인증서 통계 로드 (새로 추가)
-            async loadCertificateStatistics() {
-                try {
-                    const response = await fetch('/api/certificates/statistics'); // TODO: 이 API 엔드포인트 구현 필요
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.certificateStatistics = {
-                            totalCertificates: data.totalCertificates || 0,
-                            validCertificates: data.validCertificates || 0,
-                            invalidCertificates: data.invalidCertificates || 0,
-                            totalCrls: data.totalCrls || 0,
-                            lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null
-                        };
-                    } else {
-                        console.warn('Failed to load certificate statistics, API might not be implemented yet.');
-                    }
-                } catch (error) {
-                    console.error('Error loading certificate statistics:', error);
-                }
-            },
-
-            // 최근 활동 로드
-            async loadRecentActivity() {
-              this.loadingRecent = true;
-              try {
-                const response = await fetch('/upload-history/recent?limit=5');
-                if (response.ok) {
-                  const data = await response.json();
-                  this.recentActivity = data.map(item => ({
-                    ...item,
-                    statusDisplay: this.getStatusDisplay(item.status)
-                  }));
-                }
-              } catch (error) {
-                console.error('Failed to load recent activity:', error);
-              } finally {
-                this.loadingRecent = false;
-              }
-            },
-
-            // 상태 표시명 가져오기
-            getStatusDisplay(status) {
-              const statusMap = {
-                'RECEIVED': '수신됨',
-                'VALIDATING': '검증 중',
-                'VALIDATED': '검증 완료',
-                'PARSING': '파싱 중',
-                'PARSED': '파싱 완료',
-                'UPLOADING_TO_LDAP': 'LDAP 업로드 중',
-                'COMPLETED': '완료',
-                'FAILED': '실패'
-              };
-              return statusMap[status] || status;
-            },
-
-            // 날짜 포맷팅
-            formatDateTime(dateString) {
-              if (!dateString) return '';
-              const date = new Date(dateString);
-              return date.toLocaleString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
             }
-          }
-        }
-
-        // 키보드 단축키
-        document.addEventListener('keydown', function(e) {
-          // Ctrl+1: File Upload (Unified)
-          if (e.ctrlKey && e.key === '1') {
-            e.preventDefault();
-            window.location.href = '/file/upload';
-          }
-          // Ctrl+2: Upload History
-          if (e.ctrlKey && e.key === '2') {
-            e.preventDefault();
-            window.location.href = '/upload-history';
-          }
+          });
         });
-    </script>
-
-    <style>
-      /* 애니메이션 */
-      @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-
-        /* 카드 호버 효과 */
-        .hover\:shadow-xl:hover {
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-
-        /* 전환 효과 */
-        .transition-all {
-          transition: all 0.3s ease;
-        }
-
-        .transition-colors {
-          transition: color 0.2s ease, background-color 0.2s ease;
-        }
-
-        .transition-shadow {
-          transition: box-shadow 0.3s ease;
-        }
-
-        /* Badge 스타일 */
-        .badge {
-          display: inline-block;
-          padding: 0.25rem 0.75rem;
-          font-size: 0.75rem;
-          font-weight: 600;
-          line-height: 1;
-          border-radius: 0.375rem;
-        }
-
-        .badge-success {
-          background-color: rgb(220 252 231);
-          color: rgb(22 163 74);
-        }
-
-        .badge-error {
-          background-color: rgb(254 226 226);
-          color: rgb(220 38 38);
-        }
-
-        .badge-warning {
-          background-color: rgb(254 249 195);
-          color: rgb(202 138 4);
-        }
-
-        /* 반응형 */
-        @media (max-width: 768px) {
-          .grid {
-            grid-template-columns: 1fr;
-          }
-
-          .text-3xl {
-            font-size: 1.5rem;
-          }
-        }
-
-        /* 포커스 스타일 */
-        button:focus,
-        a:focus {
-          outline: 2px solid #3b82f6;
-          outline-offset: 2px;
-        }
-    </style>
-  </th:block>
-  </body>
-</html>
-
-      </div>
-    </div>
-  </div>
-
-  <th:block layout:fragment="script-content">
-    <script>
-      // Alpine.js Global Store for application-wide state
-      document.addEventListener('alpine:init', () => {
-        Alpine.store('app', {
-          ldapStatus: {
-            connected: false,
-            message: '확인 중...',
-          },
-          ldapTesting: false,
-
-          async checkLdapStatus() {
-            try {
-              const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
-              const data = await response.json();
-              this.ldapStatus.connected = data.success;
-              this.ldapStatus.message = data.message || '연결 실패';
-            } catch (error) {
-              console.error('LDAP status check failed:', error);
-              this.ldapStatus.connected = false;
-              this.ldapStatus.message = '연결 확인 불가';
-            }
-          },
-
-          async testLdapConnection() {
-            this.ldapTesting = true;
-            try {
-              const response = await fetch('/api/ldap-health'); // TODO: 이 API 엔드포인트 구현 필요
-              const data = await response.json();
-              showNotification(data.message, data.success ? 'success' : 'error');
-              await this.checkLdapStatus();
-            } catch (error) {
-              showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
-            } finally {
-              this.ldapTesting = false;
-            }
-          }
-        });
-      });
-
-      function dashboardApp() {
-          return {
-            // 상태 데이터
-            currentDate: '',
-            currentTime: '',
-            dbConnected: false,
-            dbMessage: '확인 중...',
-            dbTesting: false,
-            statistics: {
-              totalCount: 0,
-              successCount: 0,
-              failedCount: 0,
-              successRate: 0
-            },
-            certificateStatistics: {
-                totalCertificates: 0,
-                validCertificates: 0,
-                invalidCertificates: 0,
-                totalCrls: 0,
-                lastUpdated: null
-            },
-            recentActivity: [],
-            loadingRecent: false,
-
-            // 초기화
-            init() {
-              this.updateDateTime();
-              this.checkDatabaseStatus();
-              Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
-              this.loadStatistics();
-              this.loadRecentActivity();
-              this.loadCertificateStatistics(); // 새로 추가
-
-              // 1분마다 시간 업데이트
-              setInterval(() => this.updateDateTime(), 60000);
-
-              // 5분마다 데이터베이스 상태 체크
-              setInterval(() => {
+  
+        function dashboardApp() {
+            return {
+              // 상태 데이터
+              currentDate: '',
+              currentTime: '',
+              dbConnected: false,
+              dbMessage: '확인 중...',
+              dbTesting: false,
+              statistics: {
+                totalCount: 0,
+                successCount: 0,
+                failedCount: 0,
+                successRate: 0
+              },
+              certificateStatistics: {
+                  totalCertificates: 0,
+                  validCertificates: 0,
+                  invalidCertificates: 0,
+                  totalCrls: 0,
+                  lastUpdated: null
+              },
+              recentActivity: [],
+              loadingRecent: false,
+  
+              // 초기화
+              init() {
+                this.updateDateTime();
                 this.checkDatabaseStatus();
                 Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
-              }, 300000);
-            },
-
-            // 날짜/시간 업데이트
-            updateDateTime() {
-              const now = new Date();
-              this.currentDate = now.toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'short'
-              });
-              this.currentTime = now.toLocaleTimeString('ko-KR');
-            },
-
-            // PostgreSQL 데이터베이스 상태 확인
-            async checkDatabaseStatus() {
-              try {
-                const response = await fetch('/api/database-health');
-                const data = await response.json();
-
-                this.dbConnected = data.success;
-                if (data.success) {
-                  this.dbMessage = `${data.database} ${data.version}`;
-                } else {
-                  this.dbMessage = data.message || '연결 실패';
-                }
-              } catch (error) {
-                console.error('Database status check failed:', error);
-                this.dbConnected = false;
-                this.dbMessage = '연결 확인 불가';
-              }
-            },
-
-            // PostgreSQL 데이터베이스 연결 테스트
-            async testDatabaseConnection() {
-              this.dbTesting = true;
-              try {
-                const response = await fetch('/api/database-health');
-                const data = await response.json();
-
-                showNotification(data.message, data.success ? 'success' : 'error');
-                this.checkDatabaseStatus();
-              } catch (error) {
-                showNotification('연결 테스트에 실패했습니다.', 'error');
-              } finally {
-                this.dbTesting = false;
-              }
-            },
-
-            // 통계 로드
-            async loadStatistics() {
-              try {
-                const response = await fetch('/upload-history/statistics');
-                if (response.ok) {
-                  const data = await response.json();
-                  this.statistics = {
-                    totalCount: data.totalCount || 0,
-                    successCount: data.successCount || 0,
-                    failedCount: data.failedCount || 0,
-                    successRate: data.successRate || 0
-                  };
-                }
-              } catch (error) {
-                console.error('Failed to load statistics:', error);
-              }
-            },
-
-            // 저장된 인증서 통계 로드 (새로 추가)
-            async loadCertificateStatistics() {
+                this.loadStatistics();
+                this.loadRecentActivity();
+                this.loadCertificateStatistics(); // 새로 추가
+  
+                // 1분마다 시간 업데이트
+                setInterval(() => this.updateDateTime(), 60000);
+  
+                // 5분마다 데이터베이스 상태 체크
+                setInterval(() => {
+                  this.checkDatabaseStatus();
+                  Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
+                }, 300000);
+              },
+  
+              // 날짜/시간 업데이트
+              updateDateTime() {
+                const now = new Date();
+                this.currentDate = now.toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'short'
+                });
+                this.currentTime = now.toLocaleTimeString('ko-KR');
+              },
+  
+              // PostgreSQL 데이터베이스 상태 확인
+              async checkDatabaseStatus() {
                 try {
-                    const response = await fetch('/api/certificates/statistics'); // TODO: 이 API 엔드포인트 구현 필요
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.certificateStatistics = {
-                            totalCertificates: data.totalCertificates || 0,
-                            validCertificates: data.validCertificates || 0,
-                            invalidCertificates: data.invalidCertificates || 0,
-                            totalCrls: data.totalCrls || 0,
-                            lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null
-                        };
-                    } else {
-                        console.warn('Failed to load certificate statistics, API might not be implemented yet.');
-                    }
-                } catch (error) {
-                    console.error('Error loading certificate statistics:', error);
-                }
-            },
-
-            // 최근 활동 로드
-            async loadRecentActivity() {
-              this.loadingRecent = true;
-              try {
-                const response = await fetch('/upload-history/recent?limit=5');
-                if (response.ok) {
+                  const response = await fetch('/api/database-health');
                   const data = await response.json();
-                  this.recentActivity = data.map(item => ({
-                    ...item,
-                    statusDisplay: this.getStatusDisplay(item.status)
-                  }));
+  
+                  this.dbConnected = data.success;
+                  if (data.success) {
+                    this.dbMessage = `${data.database} ${data.version}`;
+                  } else {
+                    this.dbMessage = data.message || '연결 실패';
+                  }
+                } catch (error) {
+                  console.error('Database status check failed:', error);
+                  this.dbConnected = false;
+                  this.dbMessage = '연결 확인 불가';
                 }
-              } catch (error) {
-                console.error('Failed to load recent activity:', error);
-              } finally {
-                this.loadingRecent = false;
+              },
+  
+              // PostgreSQL 데이터베이스 연결 테스트
+              async testDatabaseConnection() {
+                this.dbTesting = true;
+                try {
+                  const response = await fetch('/api/database-health');
+                  const data = await response.json();
+  
+                  showNotification(data.message, data.success ? 'success' : 'error');
+                  this.checkDatabaseStatus();
+                } catch (error) {
+                  showNotification('연결 테스트에 실패했습니다.', 'error');
+                } finally {
+                  this.dbTesting = false;
+                }
+              },
+  
+              // 통계 로드
+              async loadStatistics() {
+                try {
+                  const response = await fetch('/upload-history/statistics');
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.statistics = {
+                      totalCount: data.totalCount || 0,
+                      successCount: data.successCount || 0,
+                      failedCount: data.failedCount || 0,
+                      successRate: data.successRate || 0
+                    };
+                  }
+                } catch (error) {
+                  console.error('Failed to load statistics:', error);
+                }
+              },
+  
+              // 저장된 인증서 통계 로드 (새로 추가)
+              async loadCertificateStatistics() {
+                  try {
+                      const response = await fetch('/api/certificates/statistics'); // TODO: 이 API 엔드포인트 구현 필요
+                      if (response.ok) {
+                          const data = await response.json();
+                          this.certificateStatistics = {
+                              totalCertificates: data.totalCertificates || 0,
+                              validCertificates: data.validCertificates || 0,
+                              invalidCertificates: data.invalidCertificates || 0,
+                              totalCrls: data.totalCrls || 0,
+                              lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null
+                          };
+                      } else {
+                          console.warn('Failed to load certificate statistics, API might not be implemented yet.');
+                      }
+                  } catch (error) {
+                      console.error('Error loading certificate statistics:', error);
+                  }
+              },
+  
+              // 최근 활동 로드
+              async loadRecentActivity() {
+                this.loadingRecent = true;
+                try {
+                  const response = await fetch('/upload-history/recent?limit=5');
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.recentActivity = data.map(item => ({
+                      ...item,
+                      statusDisplay: this.getStatusDisplay(item.status)
+                    }));
+                  }
+                } catch (error) {
+                  console.error('Failed to load recent activity:', error);
+                } finally {
+                  this.loadingRecent = false;
+                }
+              },
+  
+              // 상태 표시명 가져오기
+              getStatusDisplay(status) {
+                const statusMap = {
+                  'RECEIVED': '수신됨',
+                  'VALIDATING': '검증 중',
+                  'VALIDATED': '검증 완료',
+                  'PARSING': '파싱 중',
+                  'PARSED': '파싱 완료',
+                  'UPLOADING_TO_LDAP': 'LDAP 업로드 중',
+                  'COMPLETED': '완료',
+                  'FAILED': '실패'
+                };
+                return statusMap[status] || status;
+              },
+  
+              // 날짜 포맷팅
+              formatDateTime(dateString) {
+                if (!dateString) return '';
+                const date = new Date(dateString);
+                return date.toLocaleString('ko-KR', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
               }
-            },
-
-            // 상태 표시명 가져오기
-            getStatusDisplay(status) {
-              const statusMap = {
-                'RECEIVED': '수신됨',
-                'VALIDATING': '검증 중',
-                'VALIDATED': '검증 완료',
-                'PARSING': '파싱 중',
-                'PARSED': '파싱 완료',
-                'UPLOADING_TO_LDAP': 'LDAP 업로드 중',
-                'COMPLETED': '완료',
-                'FAILED': '실패'
-              };
-              return statusMap[status] || status;
-            },
-
-            // 날짜 포맷팅
-            formatDateTime(dateString) {
-              if (!dateString) return '';
-              const date = new Date(dateString);
-              return date.toLocaleString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
             }
           }
-        }
-
-        // 알림 표시 함수 (전역)
-        function showNotification(message, type = 'info') {
-          const colors = {
-            info: 'bg-blue-50 border-blue-200 text-blue-700',
-            success: 'bg-green-50 border-green-200 text-green-700',
-            warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-            error: 'bg-red-50 border-red-200 text-red-700'
-          };
-
-          const icons = {
-            info: 'fas fa-info-circle',
-            success: 'fas fa-check-circle',
-            warning: 'fas fa-exclamation-triangle',
-            error: 'fas fa-times-circle'
-          };
-
-          const notification = document.createElement('div');
-          notification.className = `fixed top-4 right-4 p-4 rounded-lg border ${colors[type]} shadow-lg z-50 max-w-md animate-slideIn`;
-          notification.innerHTML = `
-            <div class="flex items-center">
-              <i class="${icons[type]} mr-2"></i>
-              <span class="flex-1">${message}</span>
-              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-          `;
-
-          document.body.appendChild(notification);
-
-          setTimeout(() => {
-            if (notification.parentNode) {
-              notification.style.opacity = '0';
-              notification.style.transform = 'translateX(100%)';
-              setTimeout(() => notification.remove(), 300);
+  
+          // 알림 표시 함수 (전역)
+          function showNotification(message, type = 'info') {
+            const colors = {
+              info: 'bg-blue-50 border-blue-200 text-blue-700',
+              success: 'bg-green-50 border-green-200 text-green-700',
+              warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+              error: 'bg-red-50 border-red-200 text-red-700'
+            };
+  
+            const icons = {
+              info: 'fas fa-info-circle',
+              success: 'fas fa-check-circle',
+              warning: 'fas fa-exclamation-triangle',
+              error: 'fas fa-times-circle'
+            };
+  
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg border ${colors[type]} shadow-lg z-50 max-w-md animate-slideIn`;
+            notification.innerHTML = `
+              <div class="flex items-center">
+                <i class="${icons[type]} mr-2"></i>
+                <span class="flex-1">${message}</span>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            `;
+  
+            document.body.appendChild(notification);
+  
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => notification.remove(), 300);
+              }
+            }, 5000);
+          }
+  
+          // 키보드 단축키
+          document.addEventListener('keydown', function(e) {
+            // Ctrl+1: File Upload (Unified)
+            if (e.ctrlKey && e.key === '1') {
+              e.preventDefault();
+              window.location.href = '/file/upload';
             }
-          }, 5000);
-        }
-
-        // 키보드 단축키
-        document.addEventListener('keydown', function(e) {
-          // Ctrl+1: File Upload (Unified)
-          if (e.ctrlKey && e.key === '1') {
-            e.preventDefault();
-            window.location.href = '/file/upload';
+            // Ctrl+2: Upload History
+            if (e.ctrlKey && e.key === '2') {
+              e.preventDefault();
+              window.location.href = '/upload-history';
+            }
+          });
+      </script>
+  
+      <style>
+        /* 애니메이션 */
+        @keyframes slideIn {
+            from {
+              opacity: 0;
+              transform: translateX(100%);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
           }
-          // Ctrl+2: Upload History
-          if (e.ctrlKey && e.key === '2') {
-            e.preventDefault();
-            window.location.href = '/upload-history';
+  
+          .animate-slideIn {
+            animation: slideIn 0.3s ease-out;
           }
-        });
-    </script>
-
-    <style>
-      /* 애니메이션 */
-      @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
+  
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
           }
-          to {
-            opacity: 1;
-            transform: translateX(0);
+  
+          .animate-spin {
+            animation: spin 1s linear infinite;
           }
-        }
-
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-
-        /* 카드 호버 효과 */
-        .hover\:shadow-xl:hover {
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-
-        /* 전환 효과 */
-        .transition-all {
-          transition: all 0.3s ease;
-        }
-
-        .transition-colors {
-          transition: color 0.2s ease, background-color 0.2s ease;
-        }
-
-        .transition-shadow {
-          transition: box-shadow 0.3s ease;
-        }
-
-        /* Badge 스타일 */
-        .badge {
-          display: inline-block;
-          padding: 0.25rem 0.75rem;
-          font-size: 0.75rem;
-          font-weight: 600;
-          line-height: 1;
-          border-radius: 0.375rem;
-        }
-
-        .badge-success {
-          background-color: rgb(220 252 231);
-          color: rgb(22 163 74);
-        }
-
-        .badge-error {
-          background-color: rgb(254 226 226);
-          color: rgb(220 38 38);
-        }
-
-        .badge-warning {
-          background-color: rgb(254 249 195);
-          color: rgb(202 138 4);
-        }
-
-        /* 반응형 */
-        @media (max-width: 768px) {
-          .grid {
-            grid-template-columns: 1fr;
+  
+          /* 카드 호버 효과 */
+          .hover\:shadow-xl:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
           }
-
-          .text-3xl {
-            font-size: 1.5rem;
+  
+          /* 전환 효과 */
+          .transition-all {
+            transition: all 0.3s ease;
           }
-        }
-
-        /* 포커스 스타일 */
-        button:focus,
-        a:focus {
-          outline: 2px solid #3b82f6;
-          outline-offset: 2px;
-        }
-    </style>
-  </th:block>
+  
+          .transition-colors {
+            transition: color 0.2s ease, background-color 0.2s ease;
+          }
+  
+          .transition-shadow {
+            transition: box-shadow 0.3s ease;
+          }
+  
+          /* Badge 스타일 */
+          .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1;
+            border-radius: 0.375rem;
+          }
+  
+          .badge-success {
+            background-color: rgb(220 252 231);
+            color: rgb(22 163 74);
+          }
+  
+          .badge-error {
+            background-color: rgb(254 226 226);
+            color: rgb(220 38 38);
+          }
+  
+          .badge-warning {
+            background-color: rgb(254 249 195);
+            color: rgb(202 138 4);
+          }
+  
+          /* 반응형 */
+          @media (max-width: 768px) {
+            .grid {
+              grid-template-columns: 1fr;
+            }
+  
+            .text-3xl {
+              font-size: 1.5rem;
+            }
+          }
+  
+          /* 포커스 스타일 */
+          button:focus,
+          a:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+          }
+      </style>
+    </th:block>
   </body>
 </html>
