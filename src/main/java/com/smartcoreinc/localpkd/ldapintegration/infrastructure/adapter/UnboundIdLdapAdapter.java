@@ -53,7 +53,9 @@ import java.util.List;
  */
 @Slf4j
 @Component
-public class UnboundIdLdapAdapter {
+import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
+
+public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
     @Value("${spring.ldap.urls}")
     private String ldapUrl;
@@ -97,8 +99,11 @@ public class UnboundIdLdapAdapter {
             log.info("LDAP Connection Pool created successfully");
             log.info("Connection Pool: {} connections (initial), {} max", 5, 20);
 
+        } catch (LDAPException e) {
+            log.error("LDAP connection failed: {}", e.getMessage(), e);
+            throw e; // LDAPException은 이미 명확하므로 다시 래핑하지 않음
         } catch (Exception e) {
-            log.error("LDAP connection failed", e);
+            log.error("Unexpected error during LDAP connection: {}", e.getMessage(), e);
             throw new LDAPException(ResultCode.CONNECT_ERROR,
                 "Failed to connect to LDAP: " + e.getMessage(), e);
         }
@@ -108,7 +113,7 @@ public class UnboundIdLdapAdapter {
      * LDAP 연결 해제
      */
     @PreDestroy
-    public void disconnect() {
+    private void disconnect() {
         log.info("=== UnboundID LDAP Disconnection started ===");
 
         if (connectionPool != null) {
@@ -122,6 +127,33 @@ public class UnboundIdLdapAdapter {
      */
     public boolean isConnected() {
         return connectionPool != null && !connectionPool.isClosed();
+    }
+
+    @Override
+    public boolean testConnection() {
+        if (connectionPool == null || connectionPool.isClosed()) {
+            try {
+                connect(); // 연결이 없으면 다시 시도
+            } catch (LDAPException e) {
+                log.error("Failed to re-establish LDAP connection for health check", e);
+                return false;
+            }
+        }
+        // 연결 풀의 유효한 연결을 하나 가져와서 테스트 후 반환
+        LDAPConnection connection = null;
+        try {
+            connection = connectionPool.getConnection();
+            connection.getConnectionOptions().setResponseTimeoutMillis(2000); // 2초 타임아웃
+            connection.getRootDSE(); // 간단한 작업으로 연결 유효성 확인
+            return true;
+        } catch (LDAPException e) {
+            log.error("LDAP connection test failed: {}", e.getMessage());
+            return false;
+        } finally {
+            if (connection != null) {
+                connectionPool.releaseConnection(connection);
+            }
+        }
     }
 
     /**

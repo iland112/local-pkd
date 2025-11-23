@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.ldapintegration.infrastructure.web;
 
 import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
 import com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse;
+import com.smartcoreinc.localpkd.ldapintegration.application.usecase.LdapHealthCheckUseCase;
 import com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import lombok.RequiredArgsConstructor;
@@ -180,6 +181,22 @@ public class LdapUploadApiController {
                 "INTERNAL_ERROR"
             ));
         }
+    }
+
+    /**
+     * LDAP 서버 헬스 체크 엔드포인트
+     *
+     * <p>LDAP 서버와의 연결 상태를 확인하고 그 결과를 반환합니다.</p>
+     *
+     * @return LDAP 연결 상태 정보를 담은 JSON 응답
+     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> checkLdapHealth() {
+        log.debug("Checking LDAP health status...");
+        Map<String, Object> healthStatus = ldapHealthCheckUseCase.execute();
+        HttpStatus status = (boolean) healthStatus.getOrDefault("success", false) ?
+            HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
+        return new ResponseEntity<>(healthStatus, status);
     }
 
     /**
