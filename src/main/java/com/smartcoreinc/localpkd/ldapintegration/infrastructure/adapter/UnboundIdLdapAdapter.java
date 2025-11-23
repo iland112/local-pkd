@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort; // 이 위치가 올바른 위치입니다.
 
 /**
  * UnboundIdLdapAdapter - UnboundID SDK 기반 LDAP Adapter
@@ -53,8 +54,6 @@ import java.util.List;
  */
 @Slf4j
 @Component
-import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
-
 public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
     @Value("${spring.ldap.urls}")
@@ -113,7 +112,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
      * LDAP 연결 해제
      */
     @PreDestroy
-    private void disconnect() {
+    public void disconnect() {
         log.info("=== UnboundID LDAP Disconnection started ===");
 
         if (connectionPool != null) {
