@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -24,10 +25,10 @@ import java.util.UUID;
  * <pre>
  * CertificatesValidatedEvent event = new CertificatesValidatedEvent(
  *     uploadId,           // 원본 업로드 파일 ID
- *     795,                // validCertificateCount
- *     5,                  // invalidCertificateCount
- *     48,                 // validCrlCount
- *     2,                  // invalidCrlCount
+ *     validCertIds,
+ *     invalidCertIds,
+ *     validCrlIds,
+ *     invalidCrlIds,
  *     LocalDateTime.now()
  * );
  * </pre>
@@ -46,25 +47,11 @@ public class CertificatesValidatedEvent implements DomainEvent {
      */
     private final UUID uploadId;
 
-    /**
-     * 검증 성공한 인증서 개수
-     */
-    private final int validCertificateCount;
+    private final List<UUID> validCertificateIds;
+    private final List<UUID> invalidCertificateIds;
+    private final List<UUID> validCrlIds;
+    private final List<UUID> invalidCrlIds;
 
-    /**
-     * 검증 실패한 인증서 개수
-     */
-    private final int invalidCertificateCount;
-
-    /**
-     * 검증 성공한 CRL 개수
-     */
-    private final int validCrlCount;
-
-    /**
-     * 검증 실패한 CRL 개수
-     */
-    private final int invalidCrlCount;
 
     /**
      * 검증 완료 시각
@@ -78,34 +65,51 @@ public class CertificatesValidatedEvent implements DomainEvent {
 
     public CertificatesValidatedEvent(
         UUID uploadId,
-        int validCertificateCount,
-        int invalidCertificateCount,
-        int validCrlCount,
-        int invalidCrlCount,
+        List<UUID> validCertificateIds,
+        List<UUID> invalidCertificateIds,
+        List<UUID> validCrlIds,
+        List<UUID> invalidCrlIds,
         LocalDateTime completedAt
     ) {
         this.eventId = UUID.randomUUID();
         this.uploadId = uploadId;
-        this.validCertificateCount = validCertificateCount;
-        this.invalidCertificateCount = invalidCertificateCount;
-        this.validCrlCount = validCrlCount;
-        this.invalidCrlCount = invalidCrlCount;
+        this.validCertificateIds = validCertificateIds;
+        this.invalidCertificateIds = invalidCertificateIds;
+        this.validCrlIds = validCrlIds;
+        this.invalidCrlIds = invalidCrlIds;
         this.completedAt = completedAt;
         this.occurredOn = LocalDateTime.now();
     }
+
+    public int getValidCertificateCount() {
+        return validCertificateIds.size();
+    }
+
+    public int getInvalidCertificateCount() {
+        return invalidCertificateIds.size();
+    }
+
+    public int getValidCrlCount() {
+        return validCrlIds.size();
+    }
+    
+    public int getInvalidCrlCount() {
+        return invalidCrlIds.size();
+    }
+
 
     /**
      * 검증된 총 항목 수 (성공 + 실패)
      */
     public int getTotalValidated() {
-        return validCertificateCount + invalidCertificateCount + validCrlCount + invalidCrlCount;
+        return getValidCertificateCount() + getInvalidCertificateCount() + getValidCrlCount() + getInvalidCrlCount();
     }
 
     /**
      * 검증 성공 항목 수
      */
     public int getTotalValid() {
-        return validCertificateCount + validCrlCount;
+        return getValidCertificateCount() + getValidCrlCount();
     }
 
     /**
@@ -123,7 +127,7 @@ public class CertificatesValidatedEvent implements DomainEvent {
      * 모든 항목이 유효한지 확인
      */
     public boolean isAllValid() {
-        return invalidCertificateCount == 0 && invalidCrlCount == 0;
+        return getInvalidCertificateCount() == 0 && getInvalidCrlCount() == 0;
     }
 
     @Override

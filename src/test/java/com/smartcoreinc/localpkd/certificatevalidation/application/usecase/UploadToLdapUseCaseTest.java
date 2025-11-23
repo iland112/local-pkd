@@ -64,6 +64,9 @@ public class UploadToLdapUseCaseTest {
     @Mock
     private LdapUploadService ldapUploadService;
 
+    @Mock // ProgressService Mock 추가
+    private com.smartcoreinc.localpkd.shared.progress.ProgressService progressService; // fully qualified name
+
     @InjectMocks
     private UploadToLdapUseCase uploadToLdapUseCase;
 

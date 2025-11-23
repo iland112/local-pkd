@@ -31,6 +31,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * ValidateCertificatesUseCase - 인증서 검증 Use Case
@@ -127,8 +128,8 @@ public class ValidateCertificatesUseCase {
 
             // 4. 파싱된 인증서 검증 및 저장 (Two-Pass 처리)
             List<CertificateData> certificateDataList = parsedFile.getCertificates();
-            int validCertificateCount = 0;
-            int invalidCertificateCount = 0;
+            List<UUID> validCertificateIds = new ArrayList<>();
+            List<UUID> invalidCertificateIds = new ArrayList<>();
 
             // === Pass 1: CSCA 인증서만 먼저 검증/저장 ===
             log.info("=== Pass 1: CSCA certificate validation started ===");
@@ -139,6 +140,7 @@ public class ValidateCertificatesUseCase {
                     continue;  // CSCA가 아니면 스킵
                 }
 
+                UUID tempId = UUID.randomUUID(); // Temporary ID for tracking
                 try {
                     log.debug("Validating CSCA {}: country={}, subject={}",
                         i + 1, certData.getCountryCode(), certData.getSubjectDN());
@@ -148,23 +150,23 @@ public class ValidateCertificatesUseCase {
 
                     if (isValid) {
                         Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                        certificateRepository.save(certificate);
-                        validCertificateCount++;
+                        Certificate savedCert = certificateRepository.save(certificate);
+                        validCertificateIds.add(savedCert.getId().getId());
                         log.info("CSCA certificate validated and saved: country={}, subject={}",
                             certData.getCountryCode(), certData.getSubjectDN());
                     } else {
-                        invalidCertificateCount++;
+                        invalidCertificateIds.add(tempId); // Use temp ID for failed ones
                         log.warn("CSCA certificate validation failed: country={}, subject={}",
                             certData.getCountryCode(), certData.getSubjectDN());
                     }
 
                 } catch (Exception e) {
-                    invalidCertificateCount++;
+                    invalidCertificateIds.add(tempId);
                     log.error("CSCA certificate validation failed: subject={}", certData.getSubjectDN(), e);
                 }
 
                 // SSE 진행 상황 업데이트 (70-77% 범위 - Pass 1)
-                int processed = validCertificateCount + invalidCertificateCount;
+                int processed = validCertificateIds.size() + invalidCertificateIds.size();
                 int percentage = 70 + (int) ((processed / (double) command.getTotalCount()) * 7);
                 progressService.sendProgress(
                     ProcessingProgress.builder()
@@ -179,7 +181,7 @@ public class ValidateCertificatesUseCase {
             }
 
             log.info("Pass 1 completed: {} CSCA certificates validated ({} valid, {} invalid)",
-                validCertificateCount + invalidCertificateCount, validCertificateCount, invalidCertificateCount);
+                validCertificateIds.size() + invalidCertificateIds.size(), validCertificateIds.size(), invalidCertificateIds.size());
 
             // === Pass 2: DSC/DSC_NC 인증서 검증/저장 ===
             log.info("=== Pass 2: DSC/DSC_NC certificate validation started ===");
@@ -189,7 +191,8 @@ public class ValidateCertificatesUseCase {
                 if (certData.isCsca()) {
                     continue;  // CSCA는 이미 처리했으므로 스킵
                 }
-
+                
+                UUID tempId = UUID.randomUUID();
                 try {
                     log.debug("Validating DSC/DSC_NC {}: type={}, country={}, subject={}",
                         i + 1, certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
@@ -201,23 +204,23 @@ public class ValidateCertificatesUseCase {
 
                     if (isValid) {
                         Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                        certificateRepository.save(certificate);
-                        validCertificateCount++;
+                        Certificate savedCert = certificateRepository.save(certificate);
+                        validCertificateIds.add(savedCert.getId().getId());
                         log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
                             certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
                     } else {
-                        invalidCertificateCount++;
+                        invalidCertificateIds.add(tempId);
                         log.warn("DSC/DSC_NC certificate validation failed: type={}, country={}, subject={}",
                             certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
                     }
 
                 } catch (Exception e) {
-                    invalidCertificateCount++;
+                    invalidCertificateIds.add(tempId);
                     log.error("DSC/DSC_NC certificate validation failed: subject={}", certData.getSubjectDN(), e);
                 }
 
                 // SSE 진행 상황 업데이트 (77-85% 범위 - Pass 2)
-                int processed = validCertificateCount + invalidCertificateCount;
+                int processed = validCertificateIds.size() + invalidCertificateIds.size();
                 int percentage = 77 + (int) ((processed / (double) command.getTotalCount()) * 8);
                 progressService.sendProgress(
                     ProcessingProgress.builder()
@@ -232,20 +235,20 @@ public class ValidateCertificatesUseCase {
             }
 
             log.info("Pass 2 completed: Total certificates validated: {} ({} valid, {} invalid)",
-                validCertificateCount + invalidCertificateCount, validCertificateCount, invalidCertificateCount);
+                validCertificateIds.size() + invalidCertificateIds.size(), validCertificateIds.size(), invalidCertificateIds.size());
 
             // 5. CRL은 현재 스킵 (향후 Phase에서 구현)
-            int validCrlCount = 0;
-            int invalidCrlCount = 0;
+            List<UUID> validCrlIds = new ArrayList<>();
+            List<UUID> invalidCrlIds = new ArrayList<>();
             log.info("CRL validation skipped (future implementation)");
 
             // 5. CertificatesValidatedEvent 생성 및 발행
             CertificatesValidatedEvent event = new CertificatesValidatedEvent(
                 command.uploadId(),
-                validCertificateCount,
-                invalidCertificateCount,
-                validCrlCount,
-                invalidCrlCount,
+                validCertificateIds,
+                invalidCertificateIds,
+                validCrlIds,
+                invalidCrlIds,
                 LocalDateTime.now()
             );
 
@@ -259,9 +262,9 @@ public class ValidateCertificatesUseCase {
                     .stage(ProcessingStage.VALIDATION_COMPLETED)
                     .percentage(85)
                     .message(String.format("인증서 검증 완료: %d 유효, %d 실패",
-                        validCertificateCount + validCrlCount,
-                        invalidCertificateCount + invalidCrlCount))
-                    .processedCount(validCertificateCount + invalidCertificateCount + validCrlCount + invalidCrlCount)
+                        validCertificateIds.size() + validCrlIds.size(),
+                        invalidCertificateIds.size() + invalidCrlIds.size()))
+                    .processedCount(validCertificateIds.size() + invalidCertificateIds.size() + validCrlIds.size() + invalidCrlIds.size())
                     .totalCount(command.getTotalCount())
                     .build()
             );
@@ -270,10 +273,10 @@ public class ValidateCertificatesUseCase {
             long durationMillis = System.currentTimeMillis() - startTime;
             return CertificatesValidatedResponse.success(
                 command.uploadId(),
-                validCertificateCount,
-                invalidCertificateCount,
-                validCrlCount,
-                invalidCrlCount,
+                validCertificateIds.size(),
+                invalidCertificateIds.size(),
+                validCrlIds.size(),
+                invalidCrlIds.size(),
                 LocalDateTime.now(),
                 durationMillis
             );
