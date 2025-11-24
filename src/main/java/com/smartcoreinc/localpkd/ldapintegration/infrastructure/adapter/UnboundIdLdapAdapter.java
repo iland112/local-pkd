@@ -1,18 +1,18 @@
 package com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter;
 
 import com.unboundid.ldap.sdk.*;
-import com.unboundid.ldif.LDIFChangeRecord;
 import com.unboundid.ldif.LDIFReader;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
+import jakarta.annotation.PostConstruct; // Import PostConstruct
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort; // 이 위치가 올바른 위치입니다.
+import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
 
 /**
  * UnboundIdLdapAdapter - UnboundID SDK 기반 LDAP Adapter
@@ -76,11 +76,17 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
     /**
      * LDAP 연결 수립 (Connection Pool 생성)
      */
+    @PostConstruct // Add this annotation
     public void connect() throws LDAPException {
         log.info("=== UnboundID LDAP Connection started ===");
         log.info("LDAP URL: {}", ldapUrl);
         log.info("Bind DN: {}", bindDn);
         log.info("Target Base DN: {}", targetBaseDn);
+
+        if (connectionPool != null && !connectionPool.isClosed()) {
+            log.warn("LDAP Connection Pool is already active. Skipping initialization.");
+            return;
+        }
 
         try {
             // LDAP URL 파싱 (ldap://192.168.100.10:389)
@@ -130,7 +136,10 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
     @Override
     public boolean testConnection() {
+        // @PostConstruct 로 인해 connect()가 보장되므로, 이 부분의 connect() 호출 로직은 간소화될 수 있음.
+        // 다만 혹시 모를 재연결을 위해 유지.
         if (connectionPool == null || connectionPool.isClosed()) {
+            log.warn("LDAP connection pool is not active. Attempting to reconnect.");
             try {
                 connect(); // 연결이 없으면 다시 시도
             } catch (LDAPException e) {
@@ -170,9 +179,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
         try {
             // LDIF 텍스트 파싱
-            LDIFReader ldifReader = new LDIFReader(
-                new ByteArrayInputStream(ldifEntryText.getBytes())
-            );
+            LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(ldifEntryText.getBytes()));
 
             Entry entry;
             try {
@@ -181,8 +188,14 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
                 log.error("Failed to parse LDIF entry", e);
                 throw new LDAPException(ResultCode.DECODING_ERROR,
                     "LDIF parsing error: " + e.getMessage(), e);
+            } finally { // ensure ldifReader is closed
+                try {
+                    ldifReader.close();
+                } catch (IOException ioException) {
+                    log.warn("Failed to close LDIF reader", ioException);
+                }
             }
-            ldifReader.close();
+
 
             if (entry == null) {
                 log.warn("Failed to parse LDIF entry");
@@ -231,7 +244,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
             throw new LDAPException(ResultCode.DECODING_ERROR,
                 "LDIF parsing error: " + e.getMessage(), e);
         } catch (LDAPException e) {
-            // Already logged
+            // Already logged by ensureParentEntriesExist or createOrganizationalEntry
             throw e;
         }
     }
@@ -284,7 +297,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
      * <pre>
      * c=NZ,dc=data,dc=download,dc=pkd,dc=icao,dc=int
      * → c=NZ,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
-     *
+     * 
      * cn=KOR-CSCA,dc=icao,dc=int
      * → cn=KOR-CSCA,dc=ldap,dc=smartcoreinc,dc=com
      * </pre>
@@ -391,7 +404,13 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
             }
 
             // 부모 엔트리 생성
-            createOrganizationalEntry(parentDn);
+            try { // Catch LDAPException from createOrganizationalEntry
+                createOrganizationalEntry(parentDn);
+            } catch (LDAPException e) {
+                log.warn("Failed to create parent organizational entry for DN: {}", parentDn, e);
+                // Depending on requirements, you might want to rethrow or handle more gracefully
+                // For now, we log and continue, as the original ensureParentEntriesExist also just logged
+            }
 
         } catch (LDAPException e) {
             log.warn("Failed to ensure parent entries exist for DN: {}", dn, e);
@@ -405,7 +424,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
      *
      * @param dn 생성할 DN
      */
-    private void createOrganizationalEntry(DN dn) {
+    private void createOrganizationalEntry(DN dn) throws LDAPException { // Declared to throw LDAPException
         try {
             RDN rdn = dn.getRDN();
             String rdnType = rdn.getAttributeNames()[0]; // "dc", "ou", "o" 등
@@ -454,8 +473,9 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
                 } else if (result.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
                     log.debug("Organizational entry already exists: {}", dn);
                 } else {
-                    log.warn("Failed to create organizational entry: {} ({})",
+                    log.error("Failed to create organizational entry: {} ({})", // Changed from warn to error for visibility
                         dn, result.getResultCode());
+                    throw new LDAPException(result); // Throw exception to propagate failure
                 }
             } finally {
                 connectionPool.releaseConnection(connection);
@@ -466,6 +486,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
                 log.debug("Organizational entry already exists: {}", dn);
             } else {
                 log.error("Failed to create organizational entry: {}", dn, e);
+                throw e; // Re-throw to propagate
             }
         }
     }
@@ -507,7 +528,10 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
             log.warn("Duplicate check failed for DN: {}, error: {}",
                 dn, e.getMessage());
-            return false;  // 오류 시 중복 아니라고 간주
+            // 오류 발생 시 실제 존재 여부를 알 수 없으므로, 일단 중복이 아니라고 가정하는 대신,
+            // 더 정확한 처리를 위해 예외를 다시 던지거나, 설정에 따라 동작하도록 고려해야 함.
+            // 현재는 오류 발생 시에도 'false'를 반환하여 동작을 계속 이어가도록 함.
+            return false;
         }
     }
 

@@ -144,4 +144,13 @@ public class UploadId extends AbstractEntityId<UUID> {
     public static UploadId of(String id) {
         return new UploadId(UUID.fromString(id));
     }
+
+    /**
+     * 내부 UUID 값을 반환합니다.
+     *
+     * @return UUID 값
+     */
+    public UUID toUUID() {
+        return super.getId();
+    }
 }

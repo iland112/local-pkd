@@ -1,16 +1,21 @@
 package com.smartcoreinc.localpkd.fileupload.application.event;
 
+import com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand;
+import com.smartcoreinc.localpkd.certificatevalidation.application.response.CertificatesValidatedResponse;
+import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificatesUseCase;
 import com.smartcoreinc.localpkd.fileparsing.application.command.ParseLdifFileCommand;
 import com.smartcoreinc.localpkd.fileparsing.application.command.ParseMasterListFileCommand;
 import com.smartcoreinc.localpkd.fileparsing.application.response.ParseFileResponse;
 import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUseCase;
 import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseMasterListFileUseCase;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.event.DuplicateFileDetectedEvent;
 import com.smartcoreinc.localpkd.fileupload.domain.event.FileUploadedEvent;
-import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.domain.port.FileStoragePort;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -23,49 +28,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Optional;
+import java.util.UUID;
 
-/**
- * File Upload Event Handler - 파일 업로드 도메인 이벤트 핸들러
- *
- * <p>File Upload Context에서 발행되는 Domain Event를 처리합니다.
- * 파일 업로드 완료 후 파싱 트리거, 통계 업데이트, 알림 등의 후속 작업을 수행합니다.</p>
- *
- * <h3>처리하는 이벤트</h3>
- * <ul>
- *   <li>{@link FileUploadedEvent} - 신규 파일 업로드 완료</li>
- *   <li>{@link DuplicateFileDetectedEvent} - 중복 파일 감지</li>
- * </ul>
- *
- * <h3>이벤트 처리 전략</h3>
- * <ul>
- *   <li><b>동기 처리</b>: 통계 업데이트, 로깅</li>
- *   <li><b>비동기 처리</b>: 파일 파싱, LDAP 업로드, 알림</li>
- *   <li><b>트랜잭션 후 처리</b>: {@code @TransactionalEventListener(AFTER_COMMIT)}</li>
- * </ul>
- *
- * <h3>사용 예시 - 이벤트 발행 흐름</h3>
- * <pre>
- * 1. UploadedFile.create() → FileUploadedEvent 추가
- * 2. repository.save() → JpaRepository 저장
- * 3. EventBus.publishAll() → Spring ApplicationEventPublisher
- * 4. [Transaction Commit]
- * 5. @TransactionalEventListener(AFTER_COMMIT) → 이벤트 핸들러 실행
- * 6. 파일 파싱 트리거 (비동기)
- * </pre>
- *
- * <h3>향후 확장</h3>
- * <ul>
- *   <li>파일 파싱 Context로 ParseFileCommand 발행</li>
- *   <li>LDAP Integration Context로 UploadToLdapCommand 발행</li>
- *   <li>Notification Context로 SendNotificationCommand 발행</li>
- * </ul>
- *
- * @author SmartCore Inc.
- * @version 1.0
- * @since 2025-10-18
- * @see FileUploadedEvent
- * @see DuplicateFileDetectedEvent
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -75,261 +39,128 @@ public class FileUploadEventHandler {
     private final FileStoragePort fileStoragePort;
     private final ParseLdifFileUseCase parseLdifFileUseCase;
     private final ParseMasterListFileUseCase parseMasterListFileUseCase;
+    private final ValidateCertificatesUseCase validateCertificatesUseCase;
     private final ProgressService progressService;
+    private final ParsedFileRepository parsedFileRepository;
 
-    /**
-     * 파일 업로드 완료 이벤트 처리 (동기)
-     *
-     * <p>파일 업로드 직후 동기적으로 처리해야 할 작업을 수행합니다.
-     * 현재는 로깅만 수행하며, 향후 통계 업데이트를 추가할 예정입니다.</p>
-     *
-     * <h4>처리 내용</h4>
-     * <ul>
-     *   <li>업로드 성공 로깅</li>
-     *   <li>TODO: 업로드 통계 즉시 업데이트</li>
-     * </ul>
-     *
-     * @param event 파일 업로드 이벤트
-     */
     @EventListener
     public void handleFileUploaded(FileUploadedEvent event) {
         log.info("=== [Event] FileUploaded ===");
         log.info("Upload ID: {}", event.uploadId().getId());
         log.info("File name: {}", event.fileName());
-        log.info("File hash: {}", event.fileHash().substring(0, 8) + "...");
-        log.info("File size: {} bytes ({})",
-                event.fileSizeBytes(),
-                formatFileSize(event.fileSizeBytes()));
-        log.info("Uploaded at: {}", event.uploadedAt());
-
-        // TODO: 통계 업데이트
-        // updateStatisticsUseCase.execute(new UpdateStatsCommand(...));
     }
 
-    /**
-     * 파일 업로드 완료 이벤트 처리 (비동기, 트랜잭션 커밋 후)
-     *
-     * <p>트랜잭션 커밋 후 비동기적으로 처리 모드에 따라 다르게 동작합니다.
-     *
-     * <h4>AUTO 모드</h4>
-     * <ul>
-     *   <li>자동으로 파일 파싱을 트리거합니다</li>
-     *   <li>파싱 완료 후 검증도 자동으로 시작</li>
-     *   <li>검증 완료 후 LDAP 업로드도 자동으로 시작</li>
-     * </ul>
-     *
-     * <h4>MANUAL 모드</h4>
-     * <ul>
-     *   <li>파일 업로드 완료까지만 처리</li>
-     *   <li>사용자가 "파싱 시작" 버튼을 클릭할 때까지 대기</li>
-     *   <li>ProcessingController의 POST /api/processing/parse/{uploadId}로 수동 트리거</li>
-     * </ul>
-     *
-     * <h4>처리 내용 (AUTO 모드)</h4>
-     * <ul>
-     *   <li>UploadedFile 조회 (file path, format 정보)</li>
-     *   <li>파일 bytes 읽기 (FileStoragePort)</li>
-     *   <li>SSE 진행 상황 전송 (UPLOAD_COMPLETED)</li>
-     *   <li>파일 파싱 트리거 (ParseLdifFileUseCase)</li>
-     * </ul>
-     *
-     * <h4>처리 내용 (MANUAL 모드)</h4>
-     * <ul>
-     *   <li>UploadedFile 조회</li>
-     *   <li>SSE 진행 상황 전송 (UPLOAD_COMPLETED + 사용자 액션 대기 메시지)</li>
-     *   <li>사용자 입력 대기 (UI에서 파싱 시작 버튼 클릭)</li>
-     * </ul>
-     *
-     * @param event 파일 업로드 이벤트 (processingMode 포함)
-     */
-    @Async
+    @Async("taskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleFileUploadedAsync(FileUploadedEvent event) {
-        log.info("=== [Event-Async] FileUploaded (Processing Mode: {}) ===",
-                event.processingMode().getDisplayName());
-        log.info("Upload ID: {}", event.uploadId().getId());
+        log.info("=== [Event-Async] FileUploaded (Processing Mode: {}) ===", event.processingMode().getDisplayName());
+
+        if (event.processingMode().isManual()) {
+            log.info("MANUAL mode: Waiting for user to trigger parsing for uploadId={}", event.uploadId().getId());
+            return;
+        }
 
         try {
-            // 1. UploadedFile 조회 (file path, format 필요)
             Optional<UploadedFile> uploadedFileOpt = uploadedFileRepository.findById(event.uploadId());
             if (uploadedFileOpt.isEmpty()) {
-                log.error("UploadedFile not found: uploadId={}", event.uploadId().getId());
-                progressService.sendProgress(
-                    ProcessingProgress.failed(
-                        event.uploadId().getId(),
-                        ProcessingStage.FAILED,
-                        "업로드된 파일 정보를 찾을 수 없습니다"
-                    )
-                );
-                return;
+                throw new IllegalStateException("UploadedFile not found: " + event.uploadId().getId());
             }
-
             UploadedFile uploadedFile = uploadedFileOpt.get();
-            log.info("UploadedFile retrieved: fileName={}, format={}, path={}",
-                    uploadedFile.getFileName().getValue(),
-                    uploadedFile.getFileFormatType(),
-                    uploadedFile.getFilePath().getValue());
 
-            // 2. SSE 진행 상황 전송: UPLOAD_COMPLETED (5%)
-            progressService.sendProgress(
-                ProcessingProgress.uploadCompleted(
-                    event.uploadId().getId(),
-                    event.fileName()
-                )
-            );
-
-            // 3. 처리 모드 확인: AUTO vs MANUAL
-            if (event.processingMode().isManual()) {
-                // MANUAL 모드: 사용자 액션 대기
-                log.info("MANUAL mode: Waiting for user to trigger parsing for uploadId={}",
-                        event.uploadId().getId());
-                log.info("User must click '파싱 시작' button in UI to proceed with parsing");
-                return;  // 사용자 액션 대기, 자동 파싱 안 함
+            // 1. Parse File
+            ParseFileResponse parseResponse = parseFile(uploadedFile);
+            if (!parseResponse.success()) {
+                throw new RuntimeException("Parsing failed: " + parseResponse.errorMessage());
             }
 
-            // AUTO 모드: 자동으로 파싱 시작
-            log.info("AUTO mode: Automatically starting file parsing for uploadId={}",
-                    event.uploadId().getId());
+            // 2. Validate Certificates
+            if (parseResponse.certificateCount() > 0 || parseResponse.crlCount() > 0) {
+                 // Retrieve parsedFileId using uploadId
+                 ParsedFile parsedFile = parsedFileRepository.findByUploadId(uploadedFile.getId())
+                     .orElseThrow(() -> new DomainException("PARSED_FILE_NOT_FOUND", "Parsed file not found for uploadId: " + uploadedFile.getId().getId()));
 
-            // 4. 파일 bytes 읽기
-            byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
-            log.info("File bytes read: size={} bytes", fileBytes.length);
-
-            // 5. 파일 포맷에 따라 적절한 Use Case 선택 및 파싱 실행
-            ParseFileResponse response;
-            String fileFormatType = uploadedFile.getFileFormatType();
-
-            if (fileFormatType.equals("ML_SIGNED_CMS") || fileFormatType.equals("ML_UNSIGNED")) {
-                // Master List 파일 파싱
-                log.info("Triggering Master List parsing: uploadId={}, format={}",
-                        event.uploadId().getId(), fileFormatType);
-
-                ParseMasterListFileCommand command = ParseMasterListFileCommand.builder()
-                    .uploadId(event.uploadId().getId())
-                    .fileBytes(fileBytes)
-                    .fileFormat(fileFormatType)
-                    .build();
-
-                response = parseMasterListFileUseCase.execute(command);
-
-            } else {
-                // LDIF 파일 파싱
-                log.info("Triggering LDIF parsing: uploadId={}, format={}",
-                        event.uploadId().getId(), fileFormatType);
-
-                ParseLdifFileCommand command = ParseLdifFileCommand.builder()
-                    .uploadId(event.uploadId().getId())
-                    .fileBytes(fileBytes)
-                    .fileFormat(fileFormatType)
-                    .build();
-
-                response = parseLdifFileUseCase.execute(command);
+                 CertificatesValidatedResponse validationResponse = validateCertificates(
+                     uploadedFile.getId().getId(),
+                     parsedFile.getId().getId(), // Pass parsedFileId
+                     parseResponse.certificateCount(),
+                     parseResponse.crlCount() // Pass crlCount
+                 );
+                 if (!validationResponse.success()) {
+                    throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
+                 }
             }
-
-            // 6. 파싱 결과 로깅
-            if (response.success()) {
-                log.info("Parsing completed successfully: uploadId={}, certificates={}, CRLs={}",
-                        event.uploadId().getId(), response.certificateCount(), response.crlCount());
-            } else {
-                log.error("Parsing failed: uploadId={}, error={}",
-                        event.uploadId().getId(), response.errorMessage());
-            }
+            // TODO: Chain to LDAP Upload
 
         } catch (Exception e) {
-            log.error("Failed to trigger file parsing for uploadId: {}",
-                    event.uploadId().getId(), e);
-
-            // SSE 진행 상황 전송: FAILED
+            log.error("Failed to process file for uploadId: {}", event.uploadId().getId(), e);
             progressService.sendProgress(
-                ProcessingProgress.failed(
-                    event.uploadId().getId(),
-                    ProcessingStage.FAILED,
-                    "파일 파싱 트리거 실패: " + e.getMessage()
-                )
+                ProcessingProgress.failed(event.uploadId().getId(), ProcessingStage.FAILED, "File processing failed: " + e.getMessage())
             );
         }
     }
 
-    /**
-     * 중복 파일 감지 이벤트 처리 (동기)
-     *
-     * <p>중복 파일이 감지되었을 때 로깅 및 통계를 업데이트합니다.</p>
-     *
-     * <h4>처리 내용</h4>
-     * <ul>
-     *   <li>중복 파일 경고 로깅</li>
-     *   <li>TODO: 중복 파일 통계 업데이트</li>
-     *   <li>TODO: 관리자 알림 (설정에 따라)</li>
-     * </ul>
-     *
-     * @param event 중복 파일 감지 이벤트
-     */
+    private ParseFileResponse parseFile(UploadedFile uploadedFile) throws Exception {
+        progressService.sendProgress(ProcessingProgress.parsingStarted(uploadedFile.getId().getId(), uploadedFile.getFileName().getValue()));
+        
+        byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
+        String fileFormatType = uploadedFile.getFileFormatType();
+
+        ParseFileResponse response;
+        if (fileFormatType.equals("ML_SIGNED_CMS") || fileFormatType.equals("ML_UNSIGNED")) {
+            ParseMasterListFileCommand command = ParseMasterListFileCommand.builder()
+                .uploadId(uploadedFile.getId().getId())
+                .fileBytes(fileBytes)
+                .fileFormat(fileFormatType)
+                .build();
+            response = parseMasterListFileUseCase.execute(command);
+        } else {
+            ParseLdifFileCommand command = ParseLdifFileCommand.builder()
+                .uploadId(uploadedFile.getId().getId())
+                .fileBytes(fileBytes)
+                .fileFormat(fileFormatType)
+                .build();
+            response = parseLdifFileUseCase.execute(command);
+        }
+
+        if (response.success()) {
+            progressService.sendProgress(ProcessingProgress.parsingCompleted(uploadedFile.getId().getId(), response.certificateCount()));
+            log.info("Parsing completed successfully for uploadId={}", uploadedFile.getId().getId());
+        } else {
+            progressService.sendProgress(ProcessingProgress.failed(uploadedFile.getId().getId(), ProcessingStage.PARSING_COMPLETED, response.errorMessage()));
+            log.error("Parsing failed for uploadId={}: {}", uploadedFile.getId().getId(), response.errorMessage());
+        }
+        return response;
+    }
+
+    private CertificatesValidatedResponse validateCertificates(
+            UUID uploadId, UUID parsedFileId, int certificateCount, int crlCount) { 
+        progressService.sendProgress(ProcessingProgress.validationStarted(uploadId, certificateCount));
+        log.info("Triggering certificate validation for uploadId={}", uploadId);
+        ValidateCertificatesCommand validationCommand = ValidateCertificatesCommand.builder()
+            .uploadId(uploadId)
+            .parsedFileId(parsedFileId)
+            .certificateCount(certificateCount)
+            .crlCount(crlCount)
+            .build();
+        return validateCertificatesUseCase.execute(validationCommand);
+    }
+    
+
     @EventListener
     public void handleDuplicateFileDetected(DuplicateFileDetectedEvent event) {
         log.warn("=== [Event] DuplicateFileDetected ===");
         log.warn("Duplicate upload ID: {}", event.duplicateUploadId().getId());
-        log.warn("Original upload ID: {}", event.originalUploadId().getId());
-        log.warn("File name: {}", event.fileName());
-        log.warn("File hash: {}", event.fileHash().substring(0, 8) + "...");
-        log.warn("Detected at: {}", event.detectedAt());
-
-        // TODO: 중복 파일 통계 업데이트
-        // updateStatisticsUseCase.incrementDuplicateCount();
-
-        // TODO: 알림 발송 (설정에 따라)
-        // if (notificationEnabled) {
-        //     sendNotificationUseCase.execute(new DuplicateFileNotification(...));
-        // }
     }
 
-    /**
-     * 중복 파일 감지 이벤트 처리 (비동기, 트랜잭션 커밋 후)
-     *
-     * <p>중복 파일에 대한 추가 분석 및 정리 작업을 비동기로 수행합니다.</p>
-     *
-     * <h4>처리 내용</h4>
-     * <ul>
-     *   <li>TODO: 중복 파일 자동 삭제 정책 적용</li>
-     *   <li>TODO: 중복 패턴 분석 및 리포트 생성</li>
-     * </ul>
-     *
-     * @param event 중복 파일 감지 이벤트
-     */
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleDuplicateFileDetectedAsync(DuplicateFileDetectedEvent event) {
         log.info("=== [Event-Async] DuplicateFileDetected (Additional processing) ===");
-        log.info("Duplicate upload ID: {}", event.duplicateUploadId().getId());
-
-        try {
-            // TODO: 중복 파일 자동 정리 정책
-            // if (autoDeletionEnabled) {
-            //     deleteFileUseCase.execute(new DeleteFileCommand(
-            //         event.duplicateUploadId().getId().toString()
-            //     ));
-            // }
-
-            log.info("Duplicate file additional processing would happen here (Phase 4)");
-
-        } catch (Exception e) {
-            log.error("Failed to process duplicate file: {}",
-                    event.duplicateUploadId().getId(), e);
-        }
     }
-
-    /**
-     * 파일 크기를 사람이 읽기 쉬운 형식으로 변환
-     *
-     * @param bytes 파일 크기 (바이트)
-     * @return 사람이 읽기 쉬운 형식 (예: "75.0 MB")
-     */
+    
     private String formatFileSize(long bytes) {
-        if (bytes >= 1024 * 1024) {
-            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
-        } else if (bytes >= 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        } else {
-            return bytes + " bytes";
-        }
+        if (bytes >= 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+        if (bytes >= 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return bytes + " bytes";
     }
 }

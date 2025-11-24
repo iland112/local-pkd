@@ -1,6 +1,7 @@
 package com.smartcoreinc.localpkd.fileupload.application.command;
 
 import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import lombok.Builder;
 
 /**
@@ -10,6 +11,7 @@ import lombok.Builder;
  *
  * <h3>포함 정보</h3>
  * <ul>
+ *   <li>업로드 ID (optional)</li>
  *   <li>파일명</li>
  *   <li>파일 내용 (byte array)</li>
  *   <li>파일 크기 (bytes)</li>
@@ -19,27 +21,13 @@ import lombok.Builder;
  *   <li>처리 모드 (AUTO 또는 MANUAL)</li>
  * </ul>
  *
- * <h3>사용 예시</h3>
- * <pre>{@code
- * UploadMasterListFileCommand command = UploadMasterListFileCommand.builder()
- *     .fileName("masterlist-KOR2024.ml")
- *     .fileContent(fileBytes)
- *     .fileSize(43521024L)
- *     .fileHash("b2c3d4e5...")
- *     .expectedChecksum("sha1-checksum")  // optional
- *     .forceUpload(false)
- *     .processingMode(ProcessingMode.AUTO)  // AUTO 또는 MANUAL
- *     .build();
- *
- * UploadFileResponse response = uploadMasterListFileUseCase.execute(command);
- * }</pre>
- *
  * @author SmartCore Inc.
- * @version 1.0
- * @since 2025-10-19
+ * @version 1.1
+ * @since 2025-11-24
  */
 @Builder
 public record UploadMasterListFileCommand(
+        UploadId uploadId, // Added to support pre-generated ID for async processing
         String fileName,
         byte[] fileContent,
         Long fileSize,
@@ -49,7 +37,23 @@ public record UploadMasterListFileCommand(
         ProcessingMode processingMode  // AUTO (default) or MANUAL
 ) {
     /**
-     * 기본 생성자 (forceUpload = false, processingMode = AUTO)
+     * All-args constructor for the builder.
+     */
+    public UploadMasterListFileCommand(
+            UploadId uploadId, String fileName, byte[] fileContent, Long fileSize,
+            String fileHash, String expectedChecksum, boolean forceUpload, ProcessingMode processingMode) {
+        this.uploadId = uploadId;
+        this.fileName = fileName;
+        this.fileContent = fileContent;
+        this.fileSize = fileSize;
+        this.fileHash = fileHash;
+        this.expectedChecksum = expectedChecksum;
+        this.forceUpload = forceUpload;
+        this.processingMode = processingMode;
+    }
+
+    /**
+     * Legacy constructor for backward compatibility.
      */
     public UploadMasterListFileCommand(
             String fileName,
@@ -58,11 +62,11 @@ public record UploadMasterListFileCommand(
             String fileHash,
             String expectedChecksum
     ) {
-        this(fileName, fileContent, fileSize, fileHash, expectedChecksum, false, ProcessingMode.AUTO);
+        this(null, fileName, fileContent, fileSize, fileHash, expectedChecksum, false, ProcessingMode.AUTO);
     }
 
     /**
-     * 생성자 (processingMode 포함, forceUpload = false)
+     * Legacy constructor for backward compatibility.
      */
     public UploadMasterListFileCommand(
             String fileName,
@@ -72,7 +76,7 @@ public record UploadMasterListFileCommand(
             String expectedChecksum,
             ProcessingMode processingMode
     ) {
-        this(fileName, fileContent, fileSize, fileHash, expectedChecksum, false, processingMode);
+        this(null, fileName, fileContent, fileSize, fileHash, expectedChecksum, false, processingMode);
     }
 
     /**
