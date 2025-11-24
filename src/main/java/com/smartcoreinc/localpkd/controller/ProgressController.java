@@ -25,19 +25,10 @@ import java.util.UUID;
  *
  * <h3>Endpoints</h3>
  * <ul>
- *   <li>GET /progress/stream - SSE 스트림 연결</li>
+ *   <li>GET /progress/stream/{uploadId} - 특정 uploadId에 대한 SSE 스트림 연결</li>
  *   <li>GET /progress/status/{uploadId} - 최근 진행 상황 조회</li>
  *   <li>GET /progress/connections - 활성 연결 수 조회 (관리용)</li>
  * </ul>
- *
- * <h3>HTMX SSE 통합</h3>
- * <pre>{@code
- * <div hx-ext="sse" sse-connect="/progress/stream">
- *   <div sse-swap="progress" hx-swap="innerHTML">
- *     <!-- 진행 상황 표시 영역 -->
- *   </div>
- * </div>
- * }</pre>
  *
  * @author SmartCore Inc.
  * @version 1.0
@@ -52,15 +43,15 @@ public class ProgressController {
 
     private final ProgressService progressService;
 
-    @Operation(summary = "SSE 스트림 연결",
-               description = "클라이언트가 실시간으로 파일 처리 진행 상황을 수신하기 위해 연결하는 Server-Sent Events 스트림입니다.")
+    @Operation(summary = "특정 uploadId에 대한 SSE 스트림 연결",
+               description = "클라이언트가 특정 파일 업로드의 실시간 진행 상황을 수신하기 위해 연결하는 Server-Sent Events 스트림입니다.")
     @ApiResponse(responseCode = "200", description = "SSE 스트림 연결 성공")
-    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamProgress() {
-        log.info("=== SSE connection request ===");
-        SseEmitter emitter = progressService.createEmitter();
-        log.info("SSE emitter created. Active connections: {}",
-            progressService.getActiveConnectionCount());
+    @GetMapping(value = "/stream/{uploadId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamProgress(@PathVariable UUID uploadId) {
+        log.info("=== SSE connection request for uploadId: {} ===", uploadId);
+        SseEmitter emitter = progressService.createEmitter(uploadId);
+        log.info("SSE emitter created for uploadId: {}. Active connections: {}",
+            uploadId, progressService.getActiveConnectionCount());
         return emitter;
     }
 

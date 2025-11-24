@@ -82,18 +82,18 @@ public class LdifParsingEventHandler {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleFileParsingCompletedAndTriggerValidation(FileParsingCompletedEvent event) {
         log.info("=== [Event-Async] FileParsingCompleted (Triggering certificate validation) ===");
-        log.info("Upload ID: {}", event.getUploadId());
-        log.info("Extracted: {} certificates, {} CRLs", event.getCertificateCount(), event.getCrlCount());
+        log.info("Upload ID: {}, Valid certificates: {}, Invalid certificates: {}",
+            event.getUploadId(),
+            event.getCertificateCount(),
+            event.getCrlCount()
+        );
 
         try {
-            // 1. SSE 진행 상황 전송: VALIDATION_STARTED (65%)
+            int totalCertAndCrlCount = event.getCertificateCount() + event.getCrlCount();
+
+            // 1. SSE 진행 상황 전송: VALIDATION_STARTED (55%)
             progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(event.getUploadId())
-                    .stage(ProcessingStage.VALIDATION_STARTED)
-                    .percentage(65)
-                    .message("인증서 검증 시작")
-                    .build()
+                ProcessingProgress.validationStarted(event.getUploadId(), totalCertAndCrlCount)
             );
 
             // 2. Certificate Validation Context로 검증 트리거
@@ -123,12 +123,11 @@ public class LdifParsingEventHandler {
 
             // SSE 진행 상황 전송: FAILED
             progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(event.getUploadId())
-                    .stage(ProcessingStage.FAILED)
-                    .percentage(0)
-                    .errorMessage("인증서 검증 트리거 실패: " + e.getMessage())
-                    .build()
+                ProcessingProgress.failed(
+                    event.getUploadId(),
+                    ProcessingStage.VALIDATION_STARTED, // FAILED 이전에 어떤 단계였는지 명시
+                    "인증서 검증 트리거 실패: " + e.getMessage()
+                )
             );
         }
     }

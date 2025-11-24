@@ -103,19 +103,11 @@ public class ValidateCertificatesUseCase {
             // 1. Command 검증
             command.validate();
 
-            // 2. SSE 진행 상황 전송: VALIDATION_IN_PROGRESS (70%)
-            progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(command.uploadId())
-                    .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
-                    .percentage(70)
-                    .message("인증서 검증 중")
-                    .processedCount(0)
-                    .totalCount(command.getTotalCount())
-                    .build()
-            );
+            // LdifParsingEventHandler에서 VALIDATION_STARTED 이벤트를 55%로 보내므로,
+            // 이 UseCase에서는 시작 시점을 알리는 이벤트를 보내지 않습니다.
+            // 대신 55%부터 진행률을 업데이트합니다.
 
-            // 3. 파싱된 파일 조회
+            // 2. 파싱된 파일 조회
             UploadId uploadId = UploadId.of(command.uploadId().toString());
             ParsedFile parsedFile = parsedFileRepository.findByUploadId(uploadId)
                 .orElseThrow(() -> new DomainException(
@@ -126,118 +118,116 @@ public class ValidateCertificatesUseCase {
             log.info("Found parsed file: {} certificates, {} CRLs",
                 parsedFile.getCertificates().size(), parsedFile.getCrls().size());
 
-            // 4. 파싱된 인증서 검증 및 저장 (Two-Pass 처리)
+            // 3. 파싱된 인증서 검증 및 저장 (Two-Pass 처리)
             List<CertificateData> certificateDataList = parsedFile.getCertificates();
             List<UUID> validCertificateIds = new ArrayList<>();
             List<UUID> invalidCertificateIds = new ArrayList<>();
 
             // === Pass 1: CSCA 인증서만 먼저 검증/저장 ===
             log.info("=== Pass 1: CSCA certificate validation started ===");
-            for (int i = 0; i < certificateDataList.size(); i++) {
-                CertificateData certData = certificateDataList.get(i);
-
-                if (!certData.isCsca()) {
-                    continue;  // CSCA가 아니면 스킵
-                }
-
-                UUID tempId = UUID.randomUUID(); // Temporary ID for tracking
-                try {
-                    log.debug("Validating CSCA {}: country={}, subject={}",
-                        i + 1, certData.getCountryCode(), certData.getSubjectDN());
-
-                    X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
-                    boolean isValid = validateCscaCertificate(x509Cert, certData);
-
-                    if (isValid) {
-                        Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                        Certificate savedCert = certificateRepository.save(certificate);
-                        validCertificateIds.add(savedCert.getId().getId());
-                        log.info("CSCA certificate validated and saved: country={}, subject={}",
-                            certData.getCountryCode(), certData.getSubjectDN());
-                    } else {
-                        invalidCertificateIds.add(tempId); // Use temp ID for failed ones
-                        log.warn("CSCA certificate validation failed: country={}, subject={}",
-                            certData.getCountryCode(), certData.getSubjectDN());
-                    }
-
-                } catch (Exception e) {
-                    invalidCertificateIds.add(tempId);
-                    log.error("CSCA certificate validation failed: subject={}", certData.getSubjectDN(), e);
-                }
-
-                // SSE 진행 상황 업데이트 (70-77% 범위 - Pass 1)
-                int processed = validCertificateIds.size() + invalidCertificateIds.size();
-                int percentage = 70 + (int) ((processed / (double) command.getTotalCount()) * 7);
-                progressService.sendProgress(
-                    ProcessingProgress.builder()
-                        .uploadId(command.uploadId())
-                        .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
-                        .percentage(Math.min(77, percentage))
-                        .message(String.format("CSCA 인증서 검증 중 (%d/%d)", processed, command.getTotalCount()))
-                        .processedCount(processed)
-                        .totalCount(command.getTotalCount())
-                        .build()
-                );
-            }
-
-            log.info("Pass 1 completed: {} CSCA certificates validated ({} valid, {} invalid)",
-                validCertificateIds.size() + invalidCertificateIds.size(), validCertificateIds.size(), invalidCertificateIds.size());
-
-            // === Pass 2: DSC/DSC_NC 인증서 검증/저장 ===
-            log.info("=== Pass 2: DSC/DSC_NC certificate validation started ===");
-            for (int i = 0; i < certificateDataList.size(); i++) {
+            int cscaProcessed = 0;
+            int totalCertificates = certificateDataList.size();
+            for (int i = 0; i < totalCertificates; i++) { // Loop over all certificates
                 CertificateData certData = certificateDataList.get(i);
 
                 if (certData.isCsca()) {
-                    continue;  // CSCA는 이미 처리했으므로 스킵
-                }
-                
-                UUID tempId = UUID.randomUUID();
-                try {
-                    log.debug("Validating DSC/DSC_NC {}: type={}, country={}, subject={}",
-                        i + 1, certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                    cscaProcessed++;
+                    UUID tempId = UUID.randomUUID(); // Temporary ID for tracking
+                    try {
+                        log.debug("Validating CSCA {}: country={}, subject={}",
+                            cscaProcessed, certData.getCountryCode(), certData.getSubjectDN());
 
-                    X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
+                        X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
+                        boolean isValid = validateCscaCertificate(x509Cert, certData);
 
-                    // DSC/DSC_NC 검증 (CSCA로 서명 검증)
-                    boolean isValid = validateDscCertificate(x509Cert, certData, command.uploadId());
+                        if (isValid) {
+                            Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
+                            Certificate savedCert = certificateRepository.save(certificate);
+                            validCertificateIds.add(savedCert.getId().getId());
+                            log.info("CSCA certificate validated and saved: country={}, subject={}",
+                                certData.getCountryCode(), certData.getSubjectDN());
+                        } else {
+                            invalidCertificateIds.add(tempId); // Use temp ID for failed ones
+                            log.warn("CSCA certificate validation failed: country={}, subject={}",
+                                certData.getCountryCode(), certData.getSubjectDN());
+                        }
 
-                    if (isValid) {
-                        Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                        Certificate savedCert = certificateRepository.save(certificate);
-                        validCertificateIds.add(savedCert.getId().getId());
-                        log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
-                            certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
-                    } else {
+                    } catch (Exception e) {
                         invalidCertificateIds.add(tempId);
-                        log.warn("DSC/DSC_NC certificate validation failed: type={}, country={}, subject={}",
-                            certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                        log.error("CSCA certificate validation failed: subject={}", certData.getSubjectDN(), e);
                     }
 
-                } catch (Exception e) {
-                    invalidCertificateIds.add(tempId);
-                    log.error("DSC/DSC_NC certificate validation failed: subject={}", certData.getSubjectDN(), e);
+                    // SSE 진행 상황 업데이트 (55-70% 범위 - Pass 1)
+                    progressService.sendProgress(
+                        ProcessingProgress.validationInProgress(
+                            command.uploadId(),
+                            cscaProcessed,
+                            totalCertificates, // Use totalCertificates as total for now
+                            String.format("CSCA 인증서 검증 중 (%d/%d)", cscaProcessed, totalCertificates),
+                            55, // minPercent for Pass 1
+                            70  // maxPercent for Pass 1
+                        )
+                    );
                 }
+            }
 
-                // SSE 진행 상황 업데이트 (77-85% 범위 - Pass 2)
-                int processed = validCertificateIds.size() + invalidCertificateIds.size();
-                int percentage = 77 + (int) ((processed / (double) command.getTotalCount()) * 8);
-                progressService.sendProgress(
-                    ProcessingProgress.builder()
-                        .uploadId(command.uploadId())
-                        .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
-                        .percentage(Math.min(85, percentage))
-                        .message(String.format("DSC/DSC_NC 인증서 검증 중 (%d/%d)", processed, command.getTotalCount()))
-                        .processedCount(processed)
-                        .totalCount(command.getTotalCount())
-                        .build()
-                );
+            log.info("Pass 1 completed: {} CSCA certificates validated ({} valid, {} invalid)",
+                cscaProcessed, validCertificateIds.size(), invalidCertificateIds.size());
+
+            // === Pass 2: DSC/DSC_NC 인증서 검증/저장 ===
+            log.info("=== Pass 2: DSC/DSC_NC certificate validation started ===");
+            int dscProcessed = 0;
+            for (int i = 0; i < totalCertificates; i++) { // Loop over all certificates
+                CertificateData certData = certificateDataList.get(i);
+
+                if (!certData.isCsca()) { // CSCA가 아니면 DSC/DSC_NC
+                    dscProcessed++;
+                    UUID tempId = UUID.randomUUID();
+                    try {
+                        log.debug("Validating DSC/DSC_NC {}: type={}, country={}, subject={}",
+                            dscProcessed, certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+
+                        X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
+
+                        // DSC/DSC_NC 검증 (CSCA로 서명 검증)
+                        boolean isValid = validateDscCertificate(x509Cert, certData, command.uploadId());
+
+                        if (isValid) {
+                            Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
+                            Certificate savedCert = certificateRepository.save(certificate);
+                            validCertificateIds.add(savedCert.getId().getId());
+                            log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
+                                certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                        } else {
+                            invalidCertificateIds.add(tempId);
+                            log.warn("DSC/DSC_NC certificate validation failed: type={}, country={}, subject={}",
+                                certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                        }
+
+                    } catch (Exception e) {
+                        invalidCertificateIds.add(tempId);
+                        log.error("DSC/DSC_NC certificate validation failed: subject={}", certData.getSubjectDN(), e);
+                    }
+
+                    // SSE 진행 상황 업데이트 (70-85% 범위 - Pass 2)
+                    progressService.sendProgress(
+                        ProcessingProgress.validationInProgress(
+                            command.uploadId(),
+                            dscProcessed,
+                            totalCertificates - cscaProcessed, // Only count non-CSCA for this pass's total
+                            String.format("DSC/DSC_NC 인증서 검증 중 (%d/%d)", dscProcessed, totalCertificates - cscaProcessed),
+                            70, // minPercent for Pass 2
+                            85  // maxPercent for Pass 2
+                        )
+                    );
+                }
             }
 
             log.info("Pass 2 completed: Total certificates validated: {} ({} valid, {} invalid)",
-                validCertificateIds.size() + invalidCertificateIds.size(), validCertificateIds.size(), invalidCertificateIds.size());
+                totalCertificates, validCertificateIds.size(), invalidCertificateIds.size());
 
-            // 5. CRL은 현재 스킵 (향후 Phase에서 구현)
+
+            // 4. CRL은 현재 스킵 (향후 Phase에서 구현)
             List<UUID> validCrlIds = new ArrayList<>();
             List<UUID> invalidCrlIds = new ArrayList<>();
             log.info("CRL validation skipped (future implementation)");
@@ -257,16 +247,10 @@ public class ValidateCertificatesUseCase {
 
             // 6. SSE 진행 상황 전송: VALIDATION_COMPLETED (85%)
             progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(command.uploadId())
-                    .stage(ProcessingStage.VALIDATION_COMPLETED)
-                    .percentage(85)
-                    .message(String.format("인증서 검증 완료: %d 유효, %d 실패",
-                        validCertificateIds.size() + validCrlIds.size(),
-                        invalidCertificateIds.size() + invalidCrlIds.size()))
-                    .processedCount(validCertificateIds.size() + invalidCertificateIds.size() + validCrlIds.size() + invalidCrlIds.size())
-                    .totalCount(command.getTotalCount())
-                    .build()
+                ProcessingProgress.validationCompleted(
+                    command.uploadId(),
+                    validCertificateIds.size() + invalidCertificateIds.size() + validCrlIds.size() + invalidCrlIds.size()
+                )
             );
 
             // 7. Response 반환
@@ -286,7 +270,7 @@ public class ValidateCertificatesUseCase {
             progressService.sendProgress(
                 ProcessingProgress.failed(
                     command.uploadId(),
-                    ProcessingStage.FAILED,
+                    ProcessingStage.VALIDATION_IN_PROGRESS, // FAILED 이전에 어떤 단계였는지 명시
                     "인증서 검증 중 도메인 오류: " + e.getMessage()
                 )
             );
@@ -297,7 +281,7 @@ public class ValidateCertificatesUseCase {
             progressService.sendProgress(
                 ProcessingProgress.failed(
                     command.uploadId(),
-                    ProcessingStage.FAILED,
+                    ProcessingStage.VALIDATION_IN_PROGRESS, // FAILED 이전에 어떤 단계였는지 명시
                     "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
                 )
             );

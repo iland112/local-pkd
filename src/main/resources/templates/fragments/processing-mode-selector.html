@@ -7,7 +7,7 @@
        파일 처리 방식을 선택할 수 있는 라디오 버튼 그룹
 
        사용 예시:
-       <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}">
+       <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}" />
   -->
 
   <th:block th:fragment="mode-selector(selected)">
@@ -19,52 +19,55 @@
         </span>
       </label>
 
-      <!-- AUTO Mode Option -->
-      <div class="form-control">
-        <label class="label cursor-pointer justify-start gap-3">
-          <input
-            type="radio"
-            name="processingMode"
-            value="AUTO"
-            class="radio radio-primary"
-            th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
-            x-model="processingMode"
-          />
-          <span class="label-text flex-1">
-            <span class="font-semibold text-base text-primary">
-              🤖 자동 처리 (AUTO)
+      <!-- Grid for radio buttons (2 columns) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- AUTO Mode Option -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="radio"
+              name="processingMode"
+              value="AUTO"
+              class="radio radio-primary"
+              th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
+              x-model="processingMode"
+            />
+            <span class="label-text flex-1">
+              <span class="font-semibold text-base text-primary">
+                🤖 자동 처리 (AUTO)
+              </span>
+              <span class="block text-xs text-base-content opacity-70 mt-1">
+                업로드 후 자동으로 파싱, 검증, LDAP 등록까지 처리됩니다.
+                <br/>
+                프로덕션 환경에 권장됩니다.
+              </span>
             </span>
-            <span class="block text-xs text-base-content opacity-70 mt-1">
-              업로드 후 자동으로 파싱, 검증, LDAP 등록까지 처리됩니다.
-              <br/>
-              프로덕션 환경에 권장됩니다.
-            </span>
-          </span>
-        </label>
-      </div>
+          </label>
+        </div>
 
-      <!-- MANUAL Mode Option -->
-      <div class="form-control mt-3">
-        <label class="label cursor-pointer justify-start gap-3">
-          <input
-            type="radio"
-            name="processingMode"
-            value="MANUAL"
-            class="radio radio-secondary"
-            th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
-            x-model="processingMode"
-          />
-          <span class="label-text flex-1">
-            <span class="font-semibold text-base text-secondary">
-              🎮 수동 처리 (MANUAL)
+        <!-- MANUAL Mode Option -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="radio"
+              name="processingMode"
+              value="MANUAL"
+              class="radio radio-secondary"
+              th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
+              x-model="processingMode"
+            />
+            <span class="label-text flex-1">
+              <span class="font-semibold text-base text-secondary">
+                🎮 수동 처리 (MANUAL)
+              </span>
+              <span class="block text-xs text-base-content opacity-70 mt-1">
+                각 단계를 사용자가 수동으로 진행할 수 있습니다.
+                <br/>
+                개발/테스트 환경이나 품질 검수에 권장됩니다.
+              </span>
             </span>
-            <span class="block text-xs text-base-content opacity-70 mt-1">
-              각 단계를 사용자가 수동으로 진행할 수 있습니다.
-              <br/>
-              개발/테스트 환경이나 품질 검수에 권장됩니다.
-            </span>
-          </span>
-        </label>
+          </label>
+        </div>
       </div>
 
       <!-- Info Box -->

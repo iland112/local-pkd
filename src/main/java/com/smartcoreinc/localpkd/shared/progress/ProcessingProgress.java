@@ -109,10 +109,9 @@ public class ProcessingProgress {
      * SSE 이벤트 데이터로 변환 (JSON 형식)
      */
     public String toJson() {
+        // String.format 대신 ObjectMapper를 사용하는 것이 더 견고하고 안전함 (향후 고려)
         return String.format(
-            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"percentage\":%d," +
-            "\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\"," +
-            "\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\"}",
+            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"percentage\":%d,\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\",\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\"}",
             uploadId,
             stage.name(),
             escapeJson(stage.getDisplayName()),
@@ -133,8 +132,8 @@ public class ProcessingProgress {
         if (value == null) {
             return "";
         }
-        return value.replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
+        return value.replace("\\", "\\\\") // 백슬래시를 이스케이프
+                    .replace("\"", "\\\"") // 큰따옴표를 이스케이프
                     .replace("\n", "\\n")
                     .replace("\r", "\\r")
                     .replace("\t", "\\t");
@@ -149,7 +148,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.UPLOAD_COMPLETED)
-            .percentage(5)
+            .percentage(5) // 5%로 변경
             .processedCount(0)
             .totalCount(0)
             .message("파일 업로드 완료")
@@ -164,7 +163,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.PARSING_STARTED)
-            .percentage(10)
+            .percentage(10) // 10%로 변경
             .processedCount(0)
             .totalCount(0)
             .message("파일 파싱 시작")
@@ -176,16 +175,15 @@ public class ProcessingProgress {
      * 파싱 진행 중
      */
     public static ProcessingProgress parsingInProgress(
-            UUID uploadId, int processedCount, int totalCount, String currentItem) {
-        int percentage = calculatePercentage(processedCount, totalCount, 20, 50);
+            UUID uploadId, int processedCount, int totalCount, String message, int minPercent, int maxPercent) {
+        int percentage = calculatePercentage(processedCount, totalCount, minPercent, maxPercent);
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.PARSING_IN_PROGRESS)
             .percentage(percentage)
             .processedCount(processedCount)
             .totalCount(totalCount)
-            .message(String.format("파일 파싱 중 (%d/%d)", processedCount, totalCount))
-            .details(currentItem)
+            .message(message)
             .build();
     }
 
@@ -196,7 +194,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.PARSING_COMPLETED)
-            .percentage(60)
+            .percentage(50) // 50%로 변경
             .processedCount(totalCount)
             .totalCount(totalCount)
             .message(String.format("파일 파싱 완료 (총 %d개)", totalCount))
@@ -210,7 +208,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.VALIDATION_STARTED)
-            .percentage(65)
+            .percentage(55) // 55%로 변경 (파싱 완료 50% 이후)
             .processedCount(0)
             .totalCount(totalCount)
             .message("인증서 검증 시작")
@@ -221,16 +219,15 @@ public class ProcessingProgress {
      * 검증 진행 중
      */
     public static ProcessingProgress validationInProgress(
-            UUID uploadId, int processedCount, int totalCount, String currentCert) {
-        int percentage = calculatePercentage(processedCount, totalCount, 70, 80);
+            UUID uploadId, int processedCount, int totalCount, String message, int minPercent, int maxPercent) {
+        int percentage = calculatePercentage(processedCount, totalCount, minPercent, maxPercent);
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
             .percentage(percentage)
             .processedCount(processedCount)
             .totalCount(totalCount)
-            .message(String.format("인증서 검증 중 (%d/%d)", processedCount, totalCount))
-            .details(currentCert)
+            .message(message)
             .build();
     }
 
@@ -241,7 +238,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.VALIDATION_COMPLETED)
-            .percentage(85)
+            .percentage(85) // 85%로 변경
             .processedCount(totalCount)
             .totalCount(totalCount)
             .message(String.format("인증서 검증 완료 (총 %d개)", totalCount))
@@ -255,7 +252,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.LDAP_SAVING_STARTED)
-            .percentage(90)
+            .percentage(90) // 90%로 변경
             .processedCount(0)
             .totalCount(totalCount)
             .message("LDAP 저장 시작")
@@ -266,16 +263,15 @@ public class ProcessingProgress {
      * LDAP 저장 진행 중
      */
     public static ProcessingProgress ldapSavingInProgress(
-            UUID uploadId, int processedCount, int totalCount, String currentEntry) {
-        int percentage = calculatePercentage(processedCount, totalCount, 92, 98);
+            UUID uploadId, int processedCount, int totalCount, String message, int minPercent, int maxPercent) {
+        int percentage = calculatePercentage(processedCount, totalCount, minPercent, maxPercent);
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
             .percentage(percentage)
             .processedCount(processedCount)
             .totalCount(totalCount)
-            .message(String.format("LDAP 저장 중 (%d/%d)", processedCount, totalCount))
-            .details(currentEntry)
+            .message(message)
             .build();
     }
 
@@ -286,7 +282,7 @@ public class ProcessingProgress {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
-            .percentage(100)
+            .percentage(100) // 100%로 변경
             .processedCount(totalCount)
             .totalCount(totalCount)
             .message(String.format("LDAP 저장 완료 (총 %d개)", totalCount))

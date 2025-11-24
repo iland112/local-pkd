@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * ProgressService - 파일 처리 진행 상황 관리 서비스
@@ -17,8 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *
  * <h3>주요 기능</h3>
  * <ul>
- *   <li>SSE 연결 관리 (등록/제거)</li>
- *   <li>진행 상황 브로드캐스트 (모든 연결된 클라이언트에 전송)</li>
+ *   <li>SSE 연결 관리 (등록/제거) - uploadId 기반</li>
  *   <li>특정 uploadId에 대한 진행 상황 전송</li>
  *   <li>최근 진행 상황 캐싱 (연결 시점 이전 상태 제공)</li>
  * </ul>
@@ -26,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <h3>사용 예시</h3>
  * <pre>{@code
  * // SSE 연결 등록
- * SseEmitter emitter = progressService.createEmitter();
+ * SseEmitter emitter = progressService.createEmitter(uploadId);
  *
  * // 진행 상황 전송
  * progressService.sendProgress(
@@ -48,9 +46,9 @@ public class ProgressService {
     private static final long SSE_TIMEOUT = 5 * 60 * 1000L;
 
     /**
-     * 활성 SSE 연결 목록
+     * 활성 SSE 연결 맵 (uploadId -> SseEmitter)
      */
-    private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final Map<UUID, SseEmitter> uploadIdToEmitters = new ConcurrentHashMap<>();
 
     /**
      * 최근 진행 상황 캐시 (uploadId → ProcessingProgress)
@@ -61,46 +59,71 @@ public class ProgressService {
     /**
      * SSE Emitter 생성 및 등록
      *
+     * @param uploadId 연결될 업로드 ID
      * @return 새로 생성된 SseEmitter
      */
-    public SseEmitter createEmitter() {
+    public SseEmitter createEmitter(UUID uploadId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+
+        // 이전 Emitter가 있으면 완료 처리
+        SseEmitter existingEmitter = uploadIdToEmitters.put(uploadId, emitter);
+        if (existingEmitter != null) {
+            existingEmitter.complete();
+            log.debug("Replaced existing SSE emitter for uploadId: {}", uploadId);
+        }
 
         // 연결 초기화
         emitter.onCompletion(() -> {
-            log.debug("SSE connection completed");
-            emitters.remove(emitter);
+            log.debug("SSE connection for uploadId {} completed", uploadId);
+            uploadIdToEmitters.remove(uploadId);
+            // 완료된 진행 상황은 캐시에 유지될 수 있음 (scheduleProgressCacheRemoval 에 의해 제거될 것)
         });
 
         emitter.onTimeout(() -> {
-            log.debug("SSE connection timed out");
-            emitters.remove(emitter);
+            log.debug("SSE connection for uploadId {} timed out", uploadId);
+            uploadIdToEmitters.remove(uploadId);
             emitter.complete();
         });
 
         emitter.onError((ex) -> {
-            log.warn("SSE connection error: {}", ex.getMessage());
-            emitters.remove(emitter);
+            log.warn("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
+            uploadIdToEmitters.remove(uploadId);
+            emitter.complete(); // 에러 발생 시 Emitter 완료 처리
         });
 
-        emitters.add(emitter);
-        log.info("New SSE connection established. Total connections: {}", emitters.size());
+        log.info("New SSE connection established for uploadId: {}. Total connections: {}", uploadId, uploadIdToEmitters.size());
 
         // 연결 확인 이벤트 전송
         try {
             emitter.send(SseEmitter.event()
                 .name("connected")
-                .data("{\"message\":\"SSE connection established\"}"));
+                .data("{\"message\":\"SSE connection established for " + uploadId + "\"}"));
         } catch (IOException e) {
-            log.error("Failed to send connection event", e);
-            emitters.remove(emitter);
+            log.error("Failed to send connection event for uploadId {}", uploadId, e);
+            uploadIdToEmitters.remove(uploadId);
+            emitter.complete();
+        }
+
+        // 연결 시점에 최신 진행 상황 전송 (만약 있다면)
+        ProcessingProgress cachedProgress = recentProgressCache.get(uploadId);
+        if (cachedProgress != null) {
+            try {
+                emitter.send(SseEmitter.event()
+                    .name("progress")
+                    .data(cachedProgress.toJson()));
+                log.debug("Sent cached progress to new emitter for uploadId: {}", uploadId);
+            } catch (IOException e) {
+                log.warn("Failed to send cached progress to new emitter for uploadId {}: {}", uploadId, e.getMessage());
+                uploadIdToEmitters.remove(uploadId);
+                emitter.complete();
+            }
         }
 
         return emitter;
     }
 
     /**
-     * 진행 상황 전송 (모든 연결된 클라이언트에 브로드캐스트)
+     * 진행 상황 전송 (특정 uploadId에 연결된 클라이언트에만 전송)
      *
      * @param progress 진행 상황
      */
@@ -118,19 +141,23 @@ public class ProgressService {
             scheduleProgressCacheRemoval(progress.getUploadId());
         }
 
-        log.debug("Sending progress: uploadId={}, stage={}, percentage={}%",
+        log.debug("Sending progress: uploadId={}, stage={}, percentage={}%%",
             progress.getUploadId(), progress.getStage(), progress.getPercentage());
 
-        // 모든 클라이언트에 전송
-        for (SseEmitter emitter : emitters) {
+        SseEmitter targetEmitter = uploadIdToEmitters.get(progress.getUploadId());
+        if (targetEmitter != null) {
             try {
-                emitter.send(SseEmitter.event()
+                targetEmitter.send(SseEmitter.event()
                     .name("progress")
                     .data(progress.toJson()));
             } catch (IOException e) {
-                log.warn("Failed to send progress to client: {}", e.getMessage());
-                emitters.remove(emitter);
+                log.warn("Failed to send progress to client for uploadId {}: {}", progress.getUploadId(), e.getMessage());
+                // 에러 발생 시 해당 emitter 제거 및 완료 처리
+                uploadIdToEmitters.remove(progress.getUploadId());
+                targetEmitter.complete();
             }
+        } else {
+            log.debug("No active SSE emitter found for uploadId: {}", progress.getUploadId());
         }
     }
 
@@ -159,7 +186,7 @@ public class ProgressService {
      * @return 활성 SSE 연결 수
      */
     public int getActiveConnectionCount() {
-        return emitters.size();
+        return uploadIdToEmitters.size();
     }
 
     /**
@@ -186,31 +213,33 @@ public class ProgressService {
      * Spring @Scheduled로 주기적으로 호출 가능
      */
     public void sendHeartbeat() {
-        for (SseEmitter emitter : emitters) {
+        // 모든 연결된 emitter에 하트비트 전송
+        uploadIdToEmitters.forEach((uploadId, emitter) -> {
             try {
                 emitter.send(SseEmitter.event()
                     .name("heartbeat")
                     .data("{\"timestamp\":" + System.currentTimeMillis() + "}"));
             } catch (IOException e) {
-                log.debug("Failed to send heartbeat, removing emitter");
-                emitters.remove(emitter);
+                log.debug("Failed to send heartbeat to uploadId {}, removing emitter", uploadId);
+                emitter.complete();
+                uploadIdToEmitters.remove(uploadId);
             }
-        }
+        });
     }
 
     /**
      * 모든 SSE 연결 종료
      */
     public void closeAllConnections() {
-        log.info("Closing all SSE connections. Total: {}", emitters.size());
-        for (SseEmitter emitter : emitters) {
+        log.info("Closing all SSE connections. Total: {}", uploadIdToEmitters.size());
+        uploadIdToEmitters.forEach((uploadId, emitter) -> {
             try {
                 emitter.complete();
             } catch (Exception e) {
-                log.warn("Error closing emitter: {}", e.getMessage());
+                log.warn("Error closing emitter for uploadId {}: {}", uploadId, e.getMessage());
             }
-        }
-        emitters.clear();
+        });
+        uploadIdToEmitters.clear();
         recentProgressCache.clear();
     }
 }

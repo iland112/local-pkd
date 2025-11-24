@@ -500,7 +500,7 @@
                     this.sseEventSource = null;
                 }
 
-                this.sseEventSource = new EventSource(`/sse/progress/${this.uploadId}`);
+                this.sseEventSource = new EventSource(`/progress/stream/${this.uploadId}`);
                 console.log('SSE connection initiated for uploadId:', this.uploadId);
 
                 this.sseEventSource.onmessage = (event) => {
@@ -525,6 +525,12 @@
             handleProgressEvent(event) {
                 try {
                     const progress = JSON.parse(event.data);
+                    // Filter events by current uploadId
+                    if (progress.uploadId !== this.uploadId) {
+                        console.debug(`Ignoring progress event for different uploadId: ${progress.uploadId} (current: ${this.uploadId})`);
+                        return;
+                    }
+
                     this.currentStepMessage = progress.message;
                     this.stepPercentage = progress.percentage;
                     this.stepError = progress.errorMessage || '';
