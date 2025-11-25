@@ -111,7 +111,7 @@ public class ProcessingProgress {
     public String toJson() {
         // String.format 대신 ObjectMapper를 사용하는 것이 더 견고하고 안전함 (향후 고려)
         return String.format(
-            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"percentage\":%d,\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\",\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\"}",
+            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"percentage\":%d,\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\",\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\",\"step\":\"%s\"}", // Added 'step' field
             uploadId,
             stage.name(),
             escapeJson(stage.getDisplayName()),
@@ -121,7 +121,8 @@ public class ProcessingProgress {
             escapeJson(message),
             escapeJson(errorMessage),
             escapeJson(details),
-            updatedAt
+            updatedAt,
+            determineStep(stage) // Call helper to determine step
         );
     }
 
@@ -137,6 +138,34 @@ public class ProcessingProgress {
                     .replace("\n", "\\n")
                     .replace("\r", "\\r")
                     .replace("\t", "\\t");
+    }
+
+    /**
+     * ProcessingStage에 따라 프론트엔드가 예상하는 'step' 문자열을 결정합니다.
+     */
+    private String determineStep(ProcessingStage stage) {
+        switch (stage) {
+            case UPLOAD_COMPLETED:
+                return "UPLOAD";
+            case PARSING_STARTED:
+            case PARSING_IN_PROGRESS:
+            case PARSING_COMPLETED:
+                return "PARSE";
+            case VALIDATION_STARTED:
+            case VALIDATION_IN_PROGRESS:
+            case VALIDATION_COMPLETED:
+                return "VALIDATE";
+            case LDAP_SAVING_STARTED:
+            case LDAP_SAVING_IN_PROGRESS:
+            case LDAP_SAVING_COMPLETED:
+                return "LDAP_UPLOAD";
+            case COMPLETED:
+                return "FINALIZED";
+            case FAILED:
+                return "FAILED"; // Frontend expects "FAILED" status, not necessarily a step
+            default:
+                return "UNKNOWN";
+        }
     }
 
     // ==================== Static Factory Methods ====================

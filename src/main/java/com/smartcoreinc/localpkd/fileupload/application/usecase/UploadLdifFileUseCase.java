@@ -9,6 +9,7 @@ import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
+import com.smartcoreinc.localpkd.shared.event.EventBus; // Keep EventBus import if needed elsewhere, but not for direct publishing here
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class UploadLdifFileUseCase {
     private final UploadedFileRepository repository;
     private final FileStoragePort fileStoragePort;
     private final ProgressService progressService;
+    // private final EventBus eventBus; // Removed direct EventBus injection
 
     @Transactional
     public UploadFileResponse execute(UploadLdifFileCommand command) {
@@ -33,7 +35,7 @@ public class UploadLdifFileUseCase {
 
         try {
             command.validate();
-            progressService.sendProgress(ProcessingProgress.uploadCompleted(uploadId.getId(), command.fileName()));
+            // progressService.sendProgress(ProcessingProgress.uploadCompleted(uploadId.getId(), command.fileName())); // Removed
 
             FileName fileName = FileName.of(command.fileName());
             FileHash fileHash = FileHash.of(command.fileHash());
@@ -52,7 +54,6 @@ public class UploadLdifFileUseCase {
             
             FilePath savedPath = fileStoragePort.saveFile(command.fileContent(), fileFormat, fileName);
             log.info("File saved to: {} for uploadId: {}", savedPath.getValue(), uploadId.getId());
-            progressService.sendProgress(ProcessingProgress.parsingStarted(uploadId.getId(), fileName.getValue()));
 
             CollectionNumber collectionNumber = CollectionNumber.extractFromFileName(fileName);
             FileVersion version = FileVersion.extractFromFileName(fileName, fileFormat);
@@ -76,11 +77,11 @@ public class UploadLdifFileUseCase {
             }
 
             UploadedFile saved = repository.save(uploadedFile);
-            log.info("File upload entity saved: uploadId={}, status={}, processingMode={}",
+            // eventBus.publishAll(saved.getDomainEvents()); // Removed direct event publishing
+            // saved.clearDomainEvents(); // Removed direct event clearing
+            log.info("File upload entity saved: uploadId={}, status={}, processingMode={}", // Changed log message
                      saved.getId().getId(), saved.getStatus(), saved.getProcessingMode());
             
-            progressService.sendProgress(ProcessingProgress.parsingCompleted(uploadId.getId(), 0));
-
             return UploadFileResponse.success(
                 saved.getId().getId(), saved.getFileName().getValue(), saved.getFileSize().getBytes(),
                 saved.getFileSizeDisplay(), saved.getFileFormatType(),
