@@ -5,12 +5,17 @@ import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.shared.domain.DomainEvent; // Import DomainEvent
 import com.smartcoreinc.localpkd.shared.event.EventBus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager; // Import TransactionSynchronizationManager
+import org.springframework.transaction.support.TransactionSynchronizationAdapter; // Import TransactionSynchronizationAdapter
 
+import java.util.ArrayList; // Import ArrayList
+import java.util.List; // Import List
 import java.util.Optional;
 
 /**
@@ -83,10 +88,9 @@ public class JpaUploadedFileRepository implements UploadedFileRepository {
     private final EventBus eventBus;
 
     /**
-     * 업로드된 파일 저장 및 Domain Events 발행
+     * 업로드된 파일 저장
      *
-     * <p>Aggregate Root를 저장한 후 Domain Events를 발행합니다.
-     * 트랜잭션 커밋 후 이벤트가 발행됩니다.</p>
+     * <p>Aggregate Root를 저장하고, 트랜잭션 커밋 후 Domain Events를 발행합니다.</p>
      *
      * @param aggregate 업로드된 파일 Aggregate Root
      * @return 저장된 Aggregate Root
@@ -96,18 +100,26 @@ public class JpaUploadedFileRepository implements UploadedFileRepository {
     public UploadedFile save(UploadedFile aggregate) {
         log.debug("Saving UploadedFile: id={}", aggregate.getId().getId());
 
-        // 1. Domain Events 발행 (JPA 저장 전에 발행 - transient 필드이므로 저장 후에는 사라짐)
-        if (!aggregate.getDomainEvents().isEmpty()) {
-            log.debug("Publishing {} domain event(s) BEFORE save", aggregate.getDomainEvents().size());
-            eventBus.publishAll(aggregate.getDomainEvents());
-            aggregate.clearDomainEvents();
-        }
+        // 1. Aggregate Root에서 도메인 이벤트 추출 및 클리어 (transient 필드 유실 방지)
+        List<DomainEvent> eventsToPublish = new ArrayList<>(aggregate.getDomainEvents());
+        aggregate.clearDomainEvents(); // Aggregate에서 이벤트 목록을 먼저 비움
 
         // 2. JPA 저장
         UploadedFile saved = jpaRepository.save(aggregate);
+        log.debug("UploadedFile saved to persistence: id={}", saved.getId().getId());
 
-        log.debug("UploadedFile saved successfully: id={}", saved.getId().getId());
-
+        // 3. 트랜잭션 커밋 후에 이벤트 발행을 위한 동기화 등록
+        if (!eventsToPublish.isEmpty()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+                @Override
+                public void afterCommit() {
+                    log.debug("Publishing {} domain event(s) after transaction commit for uploadId: {}",
+                              eventsToPublish.size(), saved.getId().getId());
+                    eventBus.publishAll(eventsToPublish);
+                }
+            });
+        }
+        
         return saved;
     }
 

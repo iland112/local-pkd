@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.shared.progress;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -8,6 +9,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor; // Import Executor
 
 /**
  * ProgressService - 파일 처리 진행 상황 관리 서비스
@@ -38,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor // Lombok for constructor injection of final fields
 public class ProgressService {
 
     /**
@@ -55,6 +58,9 @@ public class ProgressService {
      * 클라이언트가 나중에 연결하더라도 최근 상태를 확인할 수 있도록
      */
     private final Map<UUID, ProcessingProgress> recentProgressCache = new ConcurrentHashMap<>();
+    
+    // Inject the taskExecutor defined in FileUploadAsyncConfig
+    private final Executor taskExecutor;
 
     /**
      * SSE Emitter 생성 및 등록
@@ -141,7 +147,7 @@ public class ProgressService {
             scheduleProgressCacheRemoval(progress.getUploadId());
         }
 
-        log.debug("Sending progress: uploadId={}, stage={}, percentage={}%%",
+        log.debug("Sending progress: uploadId={}, stage={}, percentage={}%",
             progress.getUploadId(), progress.getStage(), progress.getPercentage());
 
         SseEmitter targetEmitter = uploadIdToEmitters.get(progress.getUploadId());
@@ -156,7 +162,8 @@ public class ProgressService {
                 uploadIdToEmitters.remove(progress.getUploadId());
                 targetEmitter.complete();
             }
-        } else {
+        }
+        else {
             log.debug("No active SSE emitter found for uploadId: {}", progress.getUploadId());
         }
     }
@@ -195,7 +202,7 @@ public class ProgressService {
      * @param uploadId 업로드 ID
      */
     private void scheduleProgressCacheRemoval(UUID uploadId) {
-        new Thread(() -> {
+        taskExecutor.execute(() -> { // Use the injected taskExecutor
             try {
                 Thread.sleep(10_000); // 10초 대기
                 recentProgressCache.remove(uploadId);
@@ -204,7 +211,7 @@ public class ProgressService {
                 Thread.currentThread().interrupt();
                 log.warn("Progress cache removal interrupted for uploadId: {}", uploadId);
             }
-        }).start();
+        });
     }
 
     /**

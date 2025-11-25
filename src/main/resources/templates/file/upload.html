@@ -127,8 +127,6 @@
                x-transition:enter-start="opacity-0 transform -translate-y-2"
                x-transition:enter-end="opacity-100 transform translate-y-0"
                th:with="uploadIdFromModel=${uploadId}"
-               :hx-sse="uploadId ? 'connect:/sse/progress/' + uploadId : ''"
-               hx-on::sse-message="handleProgressEvent($event)"
           >
             <div class="card bg-base-100 shadow-xl">
               <div class="card-body">
@@ -503,9 +501,9 @@
                 this.sseEventSource = new EventSource(`/progress/stream/${this.uploadId}`);
                 console.log('SSE connection initiated for uploadId:', this.uploadId);
 
-                this.sseEventSource.onmessage = (event) => {
+                this.sseEventSource.addEventListener('progress', (event) => {
                     this.handleProgressEvent(event);
-                };
+                });
 
                 this.sseEventSource.onerror = (error) => {
                     console.error('SSE error:', error);
@@ -535,18 +533,23 @@
                     this.stepPercentage = progress.percentage;
                     this.stepError = progress.errorMessage || '';
 
+                    // Update step flags and isProcessing based on the current processing step
                     if (progress.status === 'COMPLETED') {
                         if (progress.step === 'UPLOAD') {
-                            this.parsingStarted = false; // Reset for next steps
+                            this.parsingStarted = false; // Reset for next steps (already done in init, but good for clarity)
                             this.validationStarted = false;
                             this.ldapStarted = false;
+                            this.isProcessing = false; // Manual mode: Ready for next step after initial upload
                         } else if (progress.step === 'PARSE') {
-                            this.parsingStarted = true;
+                            this.parsingStarted = true; // Parsing step is completed
+                            this.isProcessing = false; // Manual mode: Ready for next step (validation)
                         } else if (progress.step === 'VALIDATE') {
-                            this.validationStarted = true;
+                            this.validationStarted = true; // Validation step is completed
+                            this.isProcessing = false; // Manual mode: Ready for next step (ldap)
                         } else if (progress.step === 'LDAP_UPLOAD') {
-                            this.ldapStarted = true;
-                        } else if (progress.step === 'FINALIZED') { // Final step of processing
+                            this.ldapStarted = true; // LDAP upload step is completed
+                            this.isProcessing = false; // Manual mode: All manual steps complete
+                        } else if (progress.step === 'FINALIZED') { // Overall final completion
                             this.isProcessing = false;
                             this.stepPercentage = 100;
                             this.currentStepMessage = '모든 처리 완료!';
@@ -555,7 +558,6 @@
                                 this.sseEventSource.close();
                                 this.sseEventSource = null;
                             }
-                            // Optionally redirect or update UI further
                         }
                     } else if (progress.status === 'FAILED') {
                         this.isProcessing = false;
@@ -566,7 +568,10 @@
                             this.sseEventSource.close();
                             this.sseEventSource = null;
                         }
+                    } else {
+                        this.isProcessing = true; // Keep processing active if not completed or failed
                     }
+
                 } catch (e) {
                     console.error('Failed to parse SSE progress data:', e, event.data);
                     this.stepError = 'SSE 데이터 파싱 오류: ' + e.message;
