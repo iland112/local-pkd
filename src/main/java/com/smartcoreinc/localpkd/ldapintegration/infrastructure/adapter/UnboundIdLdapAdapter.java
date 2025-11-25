@@ -56,16 +56,16 @@ import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
 @Component
 public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
-    @Value("${spring.ldap.urls}")
+    @Value("${app.ldap.urls}")
     private String ldapUrl;
 
-    @Value("${spring.ldap.base}")
+    @Value("${app.ldap.base}")
     private String targetBaseDn;  // dc=ldap,dc=smartcoreinc,dc=com
 
-    @Value("${spring.ldap.username}")
+    @Value("${app.ldap.username}")
     private String bindDn;
 
-    @Value("${spring.ldap.password}")
+    @Value("${app.ldap.password}")
     private String bindPassword;
 
     private LDAPConnectionPool connectionPool;
@@ -82,6 +82,10 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
         log.info("LDAP URL: {}", ldapUrl);
         log.info("Bind DN: {}", bindDn);
         log.info("Target Base DN: {}", targetBaseDn);
+
+        if (targetBaseDn == null || targetBaseDn.isBlank()) {
+            throw new IllegalStateException("LDAP Target Base DN ('spring.ldap.base') is not configured. Please check your application properties.");
+        }
 
         if (connectionPool != null && !connectionPool.isClosed()) {
             log.warn("LDAP Connection Pool is already active. Skipping initialization.");

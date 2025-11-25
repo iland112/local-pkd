@@ -12,11 +12,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>프로퍼티 예시:</p>
  * <pre>{@code
- * app.ldap.certificate-base=ou=certificates
- * app.ldap.csca-ou=ou=csca
- * app.ldap.dsc-ou=ou=dsc
- * app.ldap.ds-ou=ou=ds
- * app.ldap.crl-base=ou=crl
+ * app.ldap.csca-o=o=csca
+ * app.ldap.dsc-o=o=dsc
+ * app.ldap.ds-o=o=ds
+ * app.ldap.crl-o=o=crl
  * app.ldap.sync.enabled=true
  * app.ldap.sync.batch-size=100
  * app.ldap.sync.max-retries=3
@@ -84,34 +83,28 @@ public class LdapProperties {
     // ========== 애플리케이션 커스텀 설정 ==========
 
     /**
-     * LDAP에서 인증서를 저장할 기본 OU
-     * 기본값: ou=certificates
+     * CSCA 저장소 O (Organization)
+     * 기본값: o=csca
      */
-    private String certificateBase = "ou=certificates";
+    private String cscaO = "o=csca";
 
     /**
-     * CSCA 저장소 OU
-     * 기본값: ou=csca
+     * DSC 저장소 O (Organization)
+     * 기본값: o=dsc
      */
-    private String cscaOu = "ou=csca";
+    private String dscO = "o=dsc";
 
     /**
-     * DSC 저장소 OU
-     * 기본값: ou=dsc
+     * DS 저장소 O (Organization)
+     * 기본값: o=ds
      */
-    private String dscOu = "ou=dsc";
+    private String dsO = "o=ds";
 
     /**
-     * DS 저장소 OU
-     * 기본값: ou=ds
+     * CRL을 저장할 O (Organization)
+     * 기본값: o=crl
      */
-    private String dsOu = "ou=ds";
-
-    /**
-     * CRL을 저장할 기본 OU
-     * 기본값: ou=crl
-     */
-    private String crlBase = "ou=crl";
+    private String crlO = "o=crl";
 
     /**
      * LDAP 동기화 설정
@@ -291,38 +284,30 @@ public class LdapProperties {
      */
 
     /**
-     * 인증서 기본 DN 반환
-     * 형식: ou=certificates,dc=ldap,dc=smartcoreinc,dc=com
+     * CSCA 저장소 DN 반환 (o=csca)
      */
-    public String getCertificateBaseDn(String baseDn) {
-        return String.format("%s,%s", certificateBase, baseDn);
+    public String getCscaBaseDn() {
+        return cscaO;
     }
 
     /**
-     * CSCA 저장소 DN 반환
+     * DSC 저장소 DN 반환 (o=dsc)
      */
-    public String getCscaBaseDn(String baseDn) {
-        return String.format("%s,%s,%s", cscaOu, certificateBase, baseDn);
+    public String getDscBaseDn() {
+        return dscO;
     }
 
     /**
-     * DSC 저장소 DN 반환
+     * DS 저장소 DN 반환 (o=ds)
      */
-    public String getDscBaseDn(String baseDn) {
-        return String.format("%s,%s,%s", dscOu, certificateBase, baseDn);
+    public String getDsBaseDn() {
+        return dsO;
     }
 
     /**
-     * DS 저장소 DN 반환
+     * CRL 기본 DN 반환 (o=crl)
      */
-    public String getDsBaseDn(String baseDn) {
-        return String.format("%s,%s,%s", dsOu, certificateBase, baseDn);
-    }
-
-    /**
-     * CRL 기본 DN 반환
-     */
-    public String getCrlBaseDn(String baseDn) {
-        return String.format("%s,%s", crlBase, baseDn);
+    public String getCrlBaseDn() {
+        return crlO;
     }
 }
