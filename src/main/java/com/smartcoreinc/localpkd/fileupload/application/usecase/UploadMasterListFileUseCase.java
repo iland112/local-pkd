@@ -64,13 +64,8 @@ public class UploadMasterListFileUseCase {
                 uploadId, fileName, fileHash, fileSize, fileFormat,
                 collectionNumber, version, savedPath, processingMode);
 
-            if (command.expectedChecksum() != null && !command.expectedChecksum().isBlank()) {
-                Checksum expectedChecksum = Checksum.of(command.expectedChecksum());
-                uploadedFile.setExpectedChecksum(expectedChecksum);
-                Checksum calculatedChecksum = fileStoragePort.calculateChecksum(savedPath);
-                uploadedFile.validateChecksum(calculatedChecksum);
-                log.info("Checksum validation status for uploadId {}: {}", uploadId.getId(), uploadedFile.getStatus());
-            }
+            // Checksum logic is removed as it's now handled by the backend if needed,
+            // or the feature is removed as per user request.
 
             if (command.forceUpload()) {
                 Optional<UploadedFile> existingFile = repository.findByFileHash(fileHash);

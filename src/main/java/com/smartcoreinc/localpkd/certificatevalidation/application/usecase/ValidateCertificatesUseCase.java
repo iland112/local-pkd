@@ -142,10 +142,16 @@ public class ValidateCertificatesUseCase {
 
                         if (isValid) {
                             Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                            Certificate savedCert = certificateRepository.save(certificate);
-                            validCertificateIds.add(savedCert.getId().getId());
-                            log.info("CSCA certificate validated and saved: country={}, subject={}",
-                                certData.getCountryCode(), certData.getSubjectDN());
+                            if (!certificateRepository.existsByFingerprint(certificate.getX509Data().getFingerprintSha256())) {
+                                Certificate savedCert = certificateRepository.save(certificate);
+                                validCertificateIds.add(savedCert.getId().getId());
+                                log.info("CSCA certificate validated and saved: country={}, subject={}",
+                                    certData.getCountryCode(), certData.getSubjectDN());
+                            } else {
+                                log.debug("Duplicate CSCA certificate found, skipping save: {}", certData.getSubjectDN());
+                                // We still consider it "valid" for the processing flow, so we might need to find the existing one and add its ID.
+                                // For now, let's just skip.
+                            }
                         } else {
                             invalidCertificateIds.add(tempId); // Use temp ID for failed ones
                             log.warn("CSCA certificate validation failed: country={}, subject={}",
@@ -194,10 +200,14 @@ public class ValidateCertificatesUseCase {
 
                         if (isValid) {
                             Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                            Certificate savedCert = certificateRepository.save(certificate);
-                            validCertificateIds.add(savedCert.getId().getId());
-                            log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
-                                certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                            if (!certificateRepository.existsByFingerprint(certificate.getX509Data().getFingerprintSha256())) {
+                                Certificate savedCert = certificateRepository.save(certificate);
+                                validCertificateIds.add(savedCert.getId().getId());
+                                log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
+                                    certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
+                            } else {
+                                log.debug("Duplicate DSC/DSC_NC certificate found, skipping save: {}", certData.getSubjectDN());
+                            }
                         } else {
                             invalidCertificateIds.add(tempId);
                             log.warn("DSC/DSC_NC certificate validation failed: type={}, country={}, subject={}",

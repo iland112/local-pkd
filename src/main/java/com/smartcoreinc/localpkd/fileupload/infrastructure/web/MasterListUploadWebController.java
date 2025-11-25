@@ -60,7 +60,6 @@ public class MasterListUploadWebController {
     public String uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "forceUpload", defaultValue = "false") boolean forceUpload,
-            @RequestParam(value = "expectedChecksum", required = false) String expectedChecksum,
             @RequestParam("fileHash") String fileHash,
             @RequestParam(value = "processingMode", defaultValue = "AUTO") String processingModeStr,
             RedirectAttributes redirectAttributes
@@ -88,7 +87,6 @@ public class MasterListUploadWebController {
                     .fileContent(fileContent)
                     .fileSize(file.getSize())
                     .fileHash(fileHash)
-                    .expectedChecksum(expectedChecksum)
                     .forceUpload(forceUpload)
                     .processingMode(processingMode)
                     .build();
