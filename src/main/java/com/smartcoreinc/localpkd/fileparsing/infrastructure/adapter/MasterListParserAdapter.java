@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileparsing.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsingError;
@@ -46,6 +47,7 @@ import org.bouncycastle.asn1.ASN1Set;
 public class MasterListParserAdapter implements FileParserPort {
 
     private final ProgressService progressService;
+    private final CertificateExistenceService certificateExistenceService; // Inject CertificateExistenceService
 
     @Value("file:data/cert/UN_CSCA_2.pem")
     private Resource trustAnchorResource;
@@ -164,7 +166,15 @@ public class MasterListParserAdapter implements FileParserPort {
                     org.bouncycastle.asn1.x509.Certificate bcCert = org.bouncycastle.asn1.x509.Certificate.getInstance(encodable);
                     X509CertificateHolder holder = new X509CertificateHolder(bcCert);
                     X509Certificate x509Cert = converter.getCertificate(holder);
-                    parsedFile.addCertificate(createCertificateData(x509Cert));
+                    
+                    String fingerprint = calculateFingerprint(x509Cert); // Calculate fingerprint
+                    // Check for duplicate fingerprint before adding
+                    if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
+                        parsedFile.addCertificate(createCertificateData(x509Cert, fingerprint));
+                    } else {
+                        parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
+                        log.warn("Duplicate certificate skipped: fingerprint_sha256={}", fingerprint);
+                    }
                 } catch (Exception e) {
                     parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", "Certificate", e.getMessage()));
                 }
@@ -185,7 +195,7 @@ public class MasterListParserAdapter implements FileParserPort {
         }
     }
 
-    private CertificateData createCertificateData(X509Certificate x509Cert) throws Exception {
+    private CertificateData createCertificateData(X509Certificate x509Cert, String fingerprint) throws Exception {
         String subjectDn = x509Cert.getSubjectX500Principal().getName();
         String countryCode = extractCountryCode(subjectDn);
         return CertificateData.of(
@@ -197,7 +207,7 @@ public class MasterListParserAdapter implements FileParserPort {
             convertToLocalDateTime(x509Cert.getNotBefore()),
             convertToLocalDateTime(x509Cert.getNotAfter()),
             x509Cert.getEncoded(),
-            calculateFingerprint(x509Cert),
+            fingerprint, // Use the provided fingerprint
             true
         );
     }

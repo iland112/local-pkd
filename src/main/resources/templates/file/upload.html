@@ -391,12 +391,12 @@
 
             async handleUpload() {
               if (!this.selectedFile || !this.isValidFileType) {
-                showToast('업로드할 올바른 형식의 파일을 선택해주세요.', 'warning');
+                showNotification('업로드할 올바른 형식의 파일을 선택해주세요.', 'warning');
                 return;
               }
               const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
               if (this.selectedFile.size > MAX_FILE_SIZE) {
-                showToast('파일 크기는 100MB 이하여야 합니다.', 'error');
+                showNotification('파일 크기는 100MB 이하여야 합니다.', 'error');
                 return;
               }
 
@@ -434,7 +434,7 @@
 
               if (!response.ok) {
                  const error = await response.json();
-                 throw new Error(error.message || '서버에서 업로드를 처리하지 못했습니다.');
+                 throw new Error(error.message || '서버에서 업로드의 실패했습니다.');
               }
               const result = await response.json();
               this.uploadId = result.uploadId;
@@ -484,15 +484,31 @@
                 const progress = JSON.parse(event.data);
                 if (progress.uploadId !== this.uploadId) return;
 
+                // Explicitly activate the stage display when any progress event for it arrives
+                if (progress.step === 'UPLOAD') this.uploadStage.active = true;
+                if (progress.step === 'PARSE') this.parseStage.active = true;
+                if (progress.step === 'VALIDATE') this.validateStage.active = true;
+                if (progress.step === 'LDAP_UPLOAD') this.ldapStage.active = true;
+                
                 let targetStage;
                 switch (progress.step) {
+                    case 'UPLOAD': targetStage = this.uploadStage; break;
                     case 'PARSE': targetStage = this.parseStage; break;
                     case 'VALIDATE': targetStage = this.validateStage; break;
                     case 'LDAP_UPLOAD': targetStage = this.ldapStage; break;
+                    case 'PAUSE': // Handle PAUSE step for updating UI flags for manual buttons
+                        if (progress.stage === 'PARSING_COMPLETED') {
+                            this.parsingCompleted = true;
+                        } else if (progress.stage === 'VALIDATION_COMPLETED') {
+                            this.validationCompleted = true;
+                        } else if (progress.stage === 'LDAP_SAVING_COMPLETED') {
+                            this.ldapCompleted = true;
+                        }
+                        this.isProcessing = false; // Re-enable manual control buttons
+                        return; // PAUSE is a special state, not a continuous progress update
                 }
 
                 if (targetStage) {
-                    targetStage.active = true;
                     targetStage.message = progress.message;
                     targetStage.percentage = progress.percentage;
                     targetStage.status = progress.status;
@@ -502,11 +518,12 @@
                     this.errorMessages.push(`[${progress.step}] ${progress.errorMessage}`);
                 }
                 
-                if (progress.status === 'COMPLETED') {
-                    if (progress.step === 'PARSE') this.parsingCompleted = true;
-                    if (progress.step === 'VALIDATE') this.validationCompleted = true;
-                    if (progress.step === 'LDAP_UPLOAD') this.ldapCompleted = true;
-                }
+                // This logic needs to be careful not to reset flags when PAUSE event arrives
+                // if (progress.status === 'COMPLETED' || progress.step === 'PAUSE') { // Finalize parsingCompleted, validationCompleted etc.
+                //     if (progress.step === 'PARSE') this.parsingCompleted = true;
+                //     if (progress.step === 'VALIDATE') this.validationCompleted = true;
+                //     if (progress.step === 'LDAP_UPLOAD') this.ldapCompleted = true;
+                // }
 
                 if (progress.step === 'FINALIZED' || progress.status === 'FAILED') {
                     this.overallStatus = progress.step === 'FINALIZED' ? 'FINALIZED' : 'FAILED';
@@ -534,22 +551,22 @@
                         this.sseEventSource.close();
                         this.sseEventSource = null;
                     }
-                    showToast(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
+                    showNotification(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
                 }
             },
             
             async triggerManualStep(step) {
-                if (!this.uploadId) { showToast('업로드된 파일이 없습니다.', 'warning'); return; }
+                if (!this.uploadId) { showNotification('업로드된 파일이 없습니다.', 'warning'); return; }
                 this.isProcessing = true;
                 this.errorMessages = this.errorMessages.filter(e => !e.startsWith(`[${step}]`));
 
                 try {
-                    const response = await fetch(`/api/processing/${this.uploadId}/${step.toLowerCase()}`, { method: 'POST' });
+                    const response = await fetch(`/api/processing/${step.toLowerCase()}/${this.uploadId}`, { method: 'POST' });
                     if (!response.ok) {
                         const error = await response.json();
                         throw new Error(error.message || '수동 처리 시작에 실패했습니다.');
                     }
-                    showToast(`${step} 단계 시작됨`, 'info');
+                    showNotification(`${step} 단계 시작됨`, 'info');
                     this.startSseConnection();
                 } catch (error) {
                     this.errorMessages.push(`[${step}] ${error.message}`);

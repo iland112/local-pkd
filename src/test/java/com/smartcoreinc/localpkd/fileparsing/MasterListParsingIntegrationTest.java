@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileparsing;
 
+import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFileId;
@@ -35,7 +36,13 @@ class MasterListParsingIntegrationTest {
     @BeforeEach
     void setUp() throws IOException {
         // 1. Parser 인스턴스 생성 (ProgressService Mock 객체 주입)
-        masterListParser = new MasterListParserAdapter(Mockito.mock(ProgressService.class));
+        ProgressService progressServiceMock = Mockito.mock(ProgressService.class);
+        CertificateExistenceService certificateExistenceServiceMock = Mockito.mock(CertificateExistenceService.class);
+
+        // Configure mock to always return false for existence check in test
+        Mockito.when(certificateExistenceServiceMock.existsByFingerprintSha256(Mockito.anyString())).thenReturn(false);
+
+        masterListParser = new MasterListParserAdapter(progressServiceMock, certificateExistenceServiceMock);
 
         // 2. Trust Anchor 설정
         Path trustAnchorPath = Paths.get("data/cert/UN_CSCA_2.pem");

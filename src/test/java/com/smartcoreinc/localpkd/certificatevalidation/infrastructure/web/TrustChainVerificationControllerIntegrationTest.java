@@ -8,8 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc; // Keep this
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p><b>테스트 환경</b>:</p>
  * <ul>
- *   <li>@WebMvcTest: 컨트롤러 레이어만 테스트 (빠른 실행)</li>
+ *   <li>@SpringBootTest: 전체 애플리케이션 컨텍스트 로드</li>
  *   <li>@MockBean: 의존성 주입 (VerifyTrustChainUseCase)</li>
  *   <li>MockMvc: 서블릿 컨테이너 없이 HTTP 요청 테스트</li>
  * </ul>
@@ -46,7 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @version 1.0
  * @since 2025-10-25
  */
-@WebMvcTest(TrustChainVerificationController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
 @DisplayName("Trust Chain 검증 API 통합 테스트")
 public class TrustChainVerificationControllerIntegrationTest {
 

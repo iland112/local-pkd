@@ -4,6 +4,10 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.command.Uploa
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.UploadToLdapResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
+import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -22,6 +26,7 @@ public class CertificateValidationEventHandler {
 
     private final ProgressService progressService;
     private final UploadToLdapUseCase uploadToLdapUseCase;
+    private final UploadedFileRepository uploadedFileRepository; // Inject UploadedFileRepository
 
     @EventListener
     public void handleCertificatesValidated(CertificatesValidatedEvent event) {
@@ -36,35 +41,52 @@ public class CertificateValidationEventHandler {
     public void handleCertificatesValidatedAndTriggerLdapUpload(CertificatesValidatedEvent event) {
         log.info("=== [Event-Async] CertificatesValidated (Triggering LDAP upload) for uploadId: {} ===", event.getUploadId());
 
-        if (event.getValidCertificateIds() == null || event.getValidCertificateIds().isEmpty()) {
-            log.info("No valid certificates to upload to LDAP for uploadId: {}", event.getUploadId());
-            progressService.sendProgress(ProcessingProgress.completed(event.getUploadId(), 0));
-            return;
-        }
-
         try {
-            progressService.sendProgress(
-                ProcessingProgress.ldapSavingStarted(event.getUploadId(), event.getValidCertificateCount())
-            );
+            UploadedFile uploadedFile = uploadedFileRepository.findById(new UploadId(event.getUploadId())) // Corrected here
+                    .orElseThrow(() -> new DomainException("UPLOAD_NOT_FOUND", "UploadedFile not found for ID: " + event.getUploadId()));
 
-            UploadToLdapCommand command = UploadToLdapCommand.builder()
-                .uploadId(event.getUploadId())
-                .certificateIds(event.getValidCertificateIds())
-                .isBatch(true)
-                .build();
-            
-            UploadToLdapResponse response = uploadToLdapUseCase.execute(command);
+            if (uploadedFile.isManualMode()) {
+                log.info("MANUAL mode: Validation completed for uploadId={}, waiting for user to trigger LDAP upload.", event.getUploadId());
+                uploadedFile.markReadyForLdapUpload(); // Update the UploadedFile state
+                uploadedFileRepository.save(uploadedFile); // Save the updated state
 
-            if (response.isSuccess()) {
-                log.info("LDAP upload completed successfully for uploadId: {}", event.getUploadId());
+                // Send SSE update to indicate validation completed and awaiting manual trigger
                 progressService.sendProgress(
-                    ProcessingProgress.ldapSavingCompleted(event.getUploadId(), response.getSuccessCount())
+                    ProcessingProgress.validationCompleted(event.getUploadId(), event.getTotalValidated()) // Send COMPLETED progress
                 );
-            } else {
-                log.error("LDAP upload failed for uploadId: {}: {}", event.getUploadId(), response.getErrorMessage());
                 progressService.sendProgress(
-                    ProcessingProgress.failed(event.getUploadId(), ProcessingStage.LDAP_SAVING_COMPLETED, response.getErrorMessage())
+                    ProcessingProgress.manualPause(event.getUploadId(), ProcessingStage.VALIDATION_COMPLETED)
                 );
+            } else { // AUTO mode
+                if (event.getValidCertificateIds() == null || event.getValidCertificateIds().isEmpty()) {
+                    log.info("No valid certificates to upload to LDAP for uploadId: {}", event.getUploadId());
+                    progressService.sendProgress(ProcessingProgress.completed(event.getUploadId(), 0));
+                    return;
+                }
+
+                progressService.sendProgress(
+                    ProcessingProgress.ldapSavingStarted(event.getUploadId(), event.getValidCertificateCount())
+                );
+
+                UploadToLdapCommand command = UploadToLdapCommand.builder()
+                    .uploadId(event.getUploadId())
+                    .certificateIds(event.getValidCertificateIds())
+                    .isBatch(true)
+                    .build();
+                
+                UploadToLdapResponse response = uploadToLdapUseCase.execute(command);
+
+                if (response.isSuccess()) {
+                    log.info("LDAP upload completed successfully for uploadId: {}", event.getUploadId());
+                    progressService.sendProgress(
+                        ProcessingProgress.ldapSavingCompleted(event.getUploadId(), response.getSuccessCount())
+                    );
+                } else {
+                    log.error("LDAP upload failed for uploadId: {}: {}", event.getUploadId(), response.getErrorMessage());
+                    progressService.sendProgress(
+                        ProcessingProgress.failed(event.getUploadId(), ProcessingStage.LDAP_SAVING_COMPLETED, response.getErrorMessage())
+                    );
+                }
             }
         } catch (Exception e) {
             log.error("Failed to trigger or execute LDAP upload for uploadId: {}", event.getUploadId(), e);

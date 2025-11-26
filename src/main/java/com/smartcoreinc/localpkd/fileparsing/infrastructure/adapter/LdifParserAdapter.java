@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileparsing.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CrlData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
@@ -42,6 +43,7 @@ import java.util.regex.Pattern;
 public class LdifParserAdapter implements FileParserPort {
 
     private final ProgressService progressService;
+    private final CertificateExistenceService certificateExistenceService; // Inject CertificateExistenceService
 
     private static final String ATTR_USER_CERTIFICATE = "userCertificate;binary";
     private static final String ATTR_CRL = "certificateRevocationList;binary";
@@ -99,6 +101,7 @@ public class LdifParserAdapter implements FileParserPort {
             
             String countryCode = extractCountryCode(cert.getSubjectX500Principal().getName());
             String certType = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal()) ? "CSCA" : "DSC";
+            String fingerprint = calculateFingerprint(cert); // Calculate fingerprint once
 
             CertificateData certData = CertificateData.of(
                 certType,
@@ -109,10 +112,17 @@ public class LdifParserAdapter implements FileParserPort {
                 convertToLocalDateTime(cert.getNotBefore()),
                 convertToLocalDateTime(cert.getNotAfter()),
                 cert.getEncoded(),
-                calculateFingerprint(cert),
+                fingerprint, // Use the calculated fingerprint
                 true
             );
-            parsedFile.addCertificate(certData);
+            
+            // Check for duplicate fingerprint before adding
+            if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
+                parsedFile.addCertificate(certData);
+            } else {
+                parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
+                log.warn("Duplicate certificate skipped: fingerprint_sha256={}", fingerprint);
+            }
         } catch (Exception e) {
             parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", dn, e.getMessage()));
         }
