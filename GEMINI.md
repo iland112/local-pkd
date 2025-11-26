@@ -1,7 +1,7 @@
 # Gemini's Guide to the Local PKD Project
 
-**Version**: 2.0
-**Last Updated**: 2025-11-22
+**Version**: 2.1
+**Last Updated**: 2025-11-26
 **Purpose**: This document serves as my central knowledge base for understanding and working on the Local PKD project. It's based on the excellent `CLAUDE.md` guide and my own analysis of the source code.
 
 ---\n
@@ -25,7 +25,6 @@ This is a Spring Boot web application designed to process ICAO Public Key Direct
 - Certificate: Bouncy Castle 1.70, UnboundID LDAP SDK
 
 ---\n
-
 ## 🏗️ DDD Architecture (Current Structure)
 
 ### Bounded Contexts (4개)
@@ -202,18 +201,22 @@ mcp__sequential_thinking__sequentialthinking(
 
 ```python
 # Create Entity
-mcp__memory__create_entities(entities=[{
-    "name": "Phase18",
-    "entityType": "Development Phase",
-    "observations": ["File parsing performance optimized", "50% speed increase"]
-}])
+mcp__memory__create_entities(entities=[
+    {
+        "name": "Phase18",
+        "entityType": "Development Phase",
+        "observations": ["File parsing performance optimized", "50% speed increase"]
+    }
+])
 
 # Create Relation
-mcp__memory__create_relations(relations=[{
-    "from": "Phase18",
-    "to": "UploadedFile",
-    "relationType": "optimizes"
-}])
+mcp__memory__create_relations(relations=[
+    {
+        "from": "Phase18",
+        "to": "UploadedFile",
+        "relationType": "optimizes"
+    }
+])
 
 # Search
 mcp__memory__search_nodes(query="performance optimization")
@@ -229,7 +232,7 @@ mcp__memory__search_nodes(query="performance optimization")
 | **TODO_ANALYSIS** | Analysis of 105 TODOs (High/Medium/Low priority) | docs/TODO_ANALYSIS.md |
 | **CODE_CLEANUP_REPORT** | Recent code cleanup details (removed files, build results) | docs/CODE_CLEANUP_REPORT_2025-11-21.md |
 | **PHASE_17** | Completed Event-Driven LDAP Upload Report | docs/PHASE_17_COMPLETE.md |
-| **PHASE_DSC_NC** | Non-Conformant Certificate Implementation Completed | docs/PHASE_DSC_NC_IMPLEMENTATION_COMPLETE.md |
+| **PHASE_DSC_NC** | Non-Conformant Certificate Support | docs/PHASE_DSC_NC_IMPLEMENTATION_COMPLETE.md |
 | **MASTER_LIST_UPLOAD_REPORT** | Master List Upload Test Results | docs/MASTER_LIST_UPLOAD_REPORT_2025-11-21.md |
 
 **Archive**: `docs/archive/phases/` (Phase 1-16 documents 50개)
@@ -347,31 +350,43 @@ curl http://localhost:8081/actuator/health
 
 ---\n
 
-## 📊 Current Status (2025-11-22)
+## 📊 Current Status (2025-11-26)
 
-### Completed Phases ✅
+### ✅ Completed Tasks
 
-| Phase | Content | Status |
-|------|------|------|
-| Phase 1-4 | Project Setup, DDD Foundation | ✅ |
-| Phase 5-10 | File Upload, Parsing, Validation | ✅ |
-| Phase 11-13 | Certificate/CRL Aggregates, Trust Chain | ✅ |
-| Phase 14-16 | LDAP Integration, Event-Driven | ✅ |
-| Phase 17 | Event-Driven LDAP Upload Pipeline | ✅ |
-| Phase 18 | UI Improvements, Dashboard | ✅ |
-| Phase DSC_NC | Non-Conformant Certificate Support | ✅ |
+1.  **Resolved Certificate Validation Crashes & Database Issues**:
+    *   **Initial Problem:** Application crashed with `NullPointerException` during certificate validation and later `IllegalArgumentException` (Public Key Null) when processing Master List files. Database transactions were aborting due to `duplicate key` violations, leading to `UnexpectedRollbackException`.
+    *   **Root Causes**:
+        *   Incorrect helper method call in `ValidateCertificatesUseCase` catch blocks when creating dummy error certificates.
+        *   Lack of robust handling for concurrent duplicate certificate insertions within the same transaction, leading to database constraint violations that rolled back the entire transaction.
+        *   Compiler errors related to "local variables referenced from a lambda expression must be final or effectively final" due to complex variable scoping in nested `try-catch` blocks.
+    *   **Solutions Implemented**:
+        *   Corrected `createCertificateFromData` helper method call in `ValidateCertificatesUseCase`.
+        *   Introduced `X509Data.ofIncomplete()` to handle incomplete certificate data for error logging.
+        *   Implemented an in-batch duplicate certificate check using `processedFingerprints` `Set` in `ValidateCertificatesUseCase`.
+        *   Enhanced `ValidateCertificatesUseCase` to gracefully handle `DataIntegrityViolationException` (duplicate key errors) by converting failed `INSERT` attempts into `UPDATE` operations on existing records.
+        *   Refactored certificate saving/updating logic into a new helper method (`handleCertificateSaveOrUpdate`) to resolve "effectively final" compiler errors and improve code modularity.
 
-### High Priority TODOs (0개 - All Resolved)
+2.  **Major Codebase Cleanup & Refactoring**:
+    *   **Problem:** Discovered a significant amount of obsolete code (13 files) from a previous, incomplete refactoring phase, particularly related to LDAP integration within the `certificatevalidation` context. These files were still active and incorrectly wired, causing issues and preventing the proper execution of new LDAP logic.
+    *   **Solution Implemented**:
+        *   Identified and safely deleted 13 obsolete Java files (including old LDAP-related commands, responses, use cases, services, and event handlers from the `certificatevalidation` context, and duplicate enum definitions from `common.enums`).
+        *   Created a new, correct `CertificateValidatedEventHandler.java` in the `ldapintegration` context to properly listen for `CertificatesValidatedEvent` and trigger the correct `UploadToLdapUseCase` (from `ldapintegration`).
+        *   Fixed compilation errors resulting from file deletions (e.g., removing a dangling event reference in `Certificate.java`).
+        *   Updated the new event handler to correctly use the `record`-based API of `UploadToLdapCommand` and `UploadToLdapResponse`.
 
-Based on my analysis and previous actions, the 3 high-priority TODOs mentioned in CLAUDE.md are now considered resolved:
-1.  Publish `UploadToLdapCompletedEvent` in `UploadToLdapEventHandler.java`. (Already implemented)
-2.  Implement the status check endpoint in `CertificateValidationApiController.java`. (Already implemented)
-3.  Address the `TODO` in `LdifParsingEventHandler.java`. (No outstanding TODOs found, and trigger logic implemented)
+### ⚠️ Outstanding Issues & TODO List
 
-### Next Phases (Optional)
-
-- **Phase 19**: Advanced Search & Filtering (Full-Text Search, Elasticsearch)
-- **Phase 20**: Monitoring & Operations (Prometheus, Grafana, Alerts)
+1.  **LDAP Save Failure (Auto Mode):** Despite all previous fixes, the application UI indicates completion, but logs still show errors like `ERROR: current transaction is aborted, commands ignored until end of transaction block` (though the root duplicate key cause is now handled), and certificates are not being saved to LDAP in auto mode. **Investigation needed to pinpoint the new root cause of LDAP save failure and transaction abortion.**
+2.  **Persistent Lombok Annotation Processing Issues:**
+    *   **Problem:** Repeated `cannot find symbol variable log` and `cannot find symbol method builder()` errors appear across multiple files (`RecordValidationUseCase`, `ValidateCertificateUseCase`, `ValidateCertificatesUseCase`, `CheckRevocationUseCase`, `CertificateRevocationListEventHandler`, `GetCertificateStatisticsUseCase`). This indicates a persistent problem with Lombok's annotation processor being correctly invoked or processed by the Maven compiler plugin.
+    *   **Action:** Investigate Maven's verbose output (`mvnw clean install -X`) to confirm Lombok processor execution. If present, further debugging of Lombok's interaction with the compiler is required. If not, the `maven-compiler-plugin` configuration might need adjustment to ensure Lombok is always run.
+3.  **`CertificateRevocationList.java` Structural Error:**
+    *   **Problem:** `CertificateRevocationList is not abstract and does not override abstract method getId() in ...Entity`. This indicates a structural issue where the `CertificateRevocationList` class (or its parent `AggregateRoot` / `Entity`) is not correctly implementing the `getId()` method.
+    *   **Action:** Review the `getId()` implementation in `CertificateRevocationList.java` and its inheritance hierarchy (`AggregateRoot`, `Entity`) to ensure proper method overriding and return types.
+4.  **Domain Model API Mismatches:**
+    *   **Problem:** `invalid method reference cannot find symbol method isValid(T)` (in `ParsedFile.java`) and `cannot find symbol method getValue()` (in `FileFormat.java`). These suggest breaking API changes or Lombok processing failures for getter methods in `CertificateData`, `CrlData`, and `FileName` models.
+    *   **Action:** Investigate the specific `ParsedFile.java` and `FileFormat.java` files, along with `CertificateData`, `CrlData`, and `FileName` to understand why these methods are not found. This might be another symptom of Lombok failure or an API change during refactoring that was not fully propagated.
 
 ---\n
 
@@ -425,8 +440,8 @@ Error: Unable to instantiate value object
 
 ---\n
 
-**Document Version**: 2.0
-**Status**: PRODUCTION READY ✅
-**Last Review**: 2025-11-22
+**Document Version**: 2.1
+**Status**: IN PROGRESS ⚠️
+**Last Review**: 2025-11-26
 
 *This document contains only core project information. Refer to individual documents in the `docs/` directory for detailed implementation.*

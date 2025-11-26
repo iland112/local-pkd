@@ -143,6 +143,49 @@ public class X509Data implements ValueObject {
         return data;
     }
 
+    /**
+     * 불완전한 X509Data 생성 (주로 오류 기록용)
+     *
+     * <p>이 메서드는 {@code publicKey}가 null일 수 있는 예외적인 경우에 사용됩니다.
+     * (예: 인증서 파싱 자체가 실패하여 PublicKey를 추출할 수 없을 때)</p>
+     *
+     * @param certificateBinary X.509 인증서 바이너리
+     * @param publicKey 공개 키 객체 (null 허용)
+     * @param serialNumber 일련 번호
+     * @param fingerprintSha256 SHA-256 지문
+     * @return X509Data
+     */
+    public static X509Data ofIncomplete(
+            byte[] certificateBinary,
+            PublicKey publicKey,
+            String serialNumber,
+            String fingerprintSha256
+    ) {
+        if (certificateBinary == null || certificateBinary.length == 0) {
+            throw new IllegalArgumentException("Certificate binary cannot be null or empty");
+        }
+        // publicKey는 null일 수 있음
+        if (serialNumber == null || serialNumber.trim().isEmpty()) {
+            throw new IllegalArgumentException("Serial number cannot be null or blank");
+        }
+        if (fingerprintSha256 == null || fingerprintSha256.trim().isEmpty()) {
+            throw new IllegalArgumentException("Fingerprint cannot be null or blank");
+        }
+        if (!fingerprintSha256.matches("^[a-fA-F0-9]{64}$")) {
+            throw new IllegalArgumentException(
+                String.format("Fingerprint must be 64-character hex string, but got: %s", fingerprintSha256)
+            );
+        }
+
+        X509Data data = new X509Data();
+        data.certificateBinary = certificateBinary.clone();
+        data.publicKey = publicKey;
+        data.serialNumber = serialNumber;
+        data.fingerprintSha256 = fingerprintSha256.toLowerCase();
+
+        return data;
+    }
+
     // ========== Getters ==========
 
     public byte[] getCertificateBinary() {
