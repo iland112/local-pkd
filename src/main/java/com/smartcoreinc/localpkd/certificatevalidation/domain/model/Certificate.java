@@ -1,7 +1,6 @@
 package com.smartcoreinc.localpkd.certificatevalidation.domain.model;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateCreatedEvent;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateUploadedToLdapEvent;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateValidatedEvent;
 import com.smartcoreinc.localpkd.shared.domain.AggregateRoot;
 import jakarta.persistence.*;
@@ -537,8 +536,6 @@ public class Certificate extends AggregateRoot<CertificateId> {
         this.uploadedToLdapAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
 
-        // Domain Event 발행: LDAP에 업로드됨
-        this.addDomainEvent(new CertificateUploadedToLdapEvent(id));
     }
 
     /**

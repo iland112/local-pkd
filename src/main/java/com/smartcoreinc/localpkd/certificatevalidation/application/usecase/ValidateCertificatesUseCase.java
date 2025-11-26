@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,7 +31,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -122,45 +125,71 @@ public class ValidateCertificatesUseCase {
             List<CertificateData> certificateDataList = parsedFile.getCertificates();
             List<UUID> validCertificateIds = new ArrayList<>();
             List<UUID> invalidCertificateIds = new ArrayList<>();
+            Set<String> processedFingerprints = new HashSet<>(); // 동일 트랜잭션 내 중복 처리 방지
+
+            int totalCertificates = certificateDataList.size();
 
             // === Pass 1: CSCA 인증서만 먼저 검증/저장 ===
             log.info("=== Pass 1: CSCA certificate validation started ===");
             int cscaProcessed = 0;
-            int totalCertificates = certificateDataList.size();
             for (int i = 0; i < totalCertificates; i++) { // Loop over all certificates
                 CertificateData certData = certificateDataList.get(i);
 
                 if (certData.isCsca()) {
                     cscaProcessed++;
-                    UUID tempId = UUID.randomUUID(); // Temporary ID for tracking
+                    
+                    if (processedFingerprints.contains(certData.getFingerprintSha256())) {
+                        log.warn("Skipping duplicate certificate within the same batch: fingerprint={}", certData.getFingerprintSha256());
+                        // 이 경우, invalidCertificateIds에 추가하지 않고 단순히 건너뜁니다.
+                        continue;
+                    }
+
+                    Certificate certificate = null;
+                    List<ValidationError> errors = new ArrayList<>();
+                    ValidationResult validationResult = null; // Initialize to null
+
                     try {
                         log.debug("Validating CSCA {}: country={}, subject={}",
                             cscaProcessed, certData.getCountryCode(), certData.getSubjectDN());
 
                         X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
-                        boolean isValid = validateCscaCertificate(x509Cert, certData);
+                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
+                        
+                        // Perform validation and get result and errors
+                        validationResult = validateCscaCertificate(x509Cert, certData, errors);
+                        certificate.recordValidation(validationResult);
+                        certificate.addValidationErrors(errors);
 
-                        if (isValid) {
-                            Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                            if (!certificateRepository.existsByFingerprint(certificate.getX509Data().getFingerprintSha256())) {
-                                Certificate savedCert = certificateRepository.save(certificate);
-                                validCertificateIds.add(savedCert.getId().getId());
-                                log.info("CSCA certificate validated and saved: country={}, subject={}",
-                                    certData.getCountryCode(), certData.getSubjectDN());
-                            } else {
-                                log.debug("Duplicate CSCA certificate found, skipping save: {}", certData.getSubjectDN());
-                                // We still consider it "valid" for the processing flow, so we might need to find the existing one and add its ID.
-                                // For now, let's just skip.
-                            }
-                        } else {
-                            invalidCertificateIds.add(tempId); // Use temp ID for failed ones
-                            log.warn("CSCA certificate validation failed: country={}, subject={}",
-                                certData.getCountryCode(), certData.getSubjectDN());
-                        }
+                        // Extract method call for saving/updating certificate
+                        handleCertificateSaveOrUpdate(
+                            certificate, validationResult, errors,
+                            validCertificateIds, invalidCertificateIds, processedFingerprints,
+                            true, // isCsca = true
+                            command.uploadId()
+                        );
 
                     } catch (Exception e) {
-                        invalidCertificateIds.add(tempId);
-                        log.error("CSCA certificate validation failed: subject={}", certData.getSubjectDN(), e);
+                        // Handle unexpected errors during processing a single certificate
+                        errors.add(ValidationError.critical("UNEXPECTED_PROCESSING_ERROR", "Unexpected error processing CSCA: " + e.getMessage()));
+                        validationResult = ValidationResult.of(CertificateStatus.INVALID, false, false, false, false, false, 0); // Default failed result
+                        
+                        try {
+                            if (certificate == null) {
+                                certificate = createCertificateFromData(certData, command.uploadId());
+                            }
+                            certificate.addValidationErrors(errors);
+                            
+                            // Extract method call for saving/updating certificate after error
+                            handleCertificateSaveOrUpdate(
+                                certificate, validationResult, errors,
+                                validCertificateIds, invalidCertificateIds, processedFingerprints,
+                                true, // isCsca = true
+                                command.uploadId()
+                            );
+                            log.error("CSCA certificate processing failed: subject={}. Error: {}", certData.getSubjectDN(), e.getMessage());
+                        } catch (Exception creationEx) {
+                            log.error("Failed to create or save dummy error certificate for subject={}. Error: {}", certData.getSubjectDN(), creationEx.getMessage());
+                        }
                     }
 
                     // SSE 진행 상황 업데이트 (55-70% 범위 - Pass 1)
@@ -177,7 +206,7 @@ public class ValidateCertificatesUseCase {
                 }
             }
 
-            log.info("Pass 1 completed: {} CSCA certificates validated ({} valid, {} invalid)",
+            log.info("Pass 1 completed: {} CSCA certificates processed ({} valid, {} invalid)",
                 cscaProcessed, validCertificateIds.size(), invalidCertificateIds.size());
 
             // === Pass 2: DSC/DSC_NC 인증서 검증/저장 ===
@@ -188,35 +217,59 @@ public class ValidateCertificatesUseCase {
 
                 if (!certData.isCsca()) { // CSCA가 아니면 DSC/DSC_NC
                     dscProcessed++;
-                    UUID tempId = UUID.randomUUID();
+
+                    if (processedFingerprints.contains(certData.getFingerprintSha256())) {
+                        log.warn("Skipping duplicate certificate within the same batch: fingerprint={}", certData.getFingerprintSha256());
+                        // 이 경우, invalidCertificateIds에 추가하지 않고 단순히 건너뜁니다.
+                        continue;
+                    }
+
+                    Certificate certificate = null;
+                    List<ValidationError> errors = new ArrayList<>();
+                    ValidationResult validationResult = null; // Initialize to null
+
                     try {
                         log.debug("Validating DSC/DSC_NC {}: type={}, country={}, subject={}",
                             dscProcessed, certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
 
                         X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
+                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
 
-                        // DSC/DSC_NC 검증 (CSCA로 서명 검증)
-                        boolean isValid = validateDscCertificate(x509Cert, certData, command.uploadId());
+                        // Perform validation and get result and errors
+                        validationResult = validateDscCertificate(x509Cert, certData, command.uploadId(), errors);
+                        certificate.recordValidation(validationResult);
+                        certificate.addValidationErrors(errors);
 
-                        if (isValid) {
-                            Certificate certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                            if (!certificateRepository.existsByFingerprint(certificate.getX509Data().getFingerprintSha256())) {
-                                Certificate savedCert = certificateRepository.save(certificate);
-                                validCertificateIds.add(savedCert.getId().getId());
-                                log.info("DSC/DSC_NC certificate validated and saved: type={}, country={}, subject={}",
-                                    certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
-                            } else {
-                                log.debug("Duplicate DSC/DSC_NC certificate found, skipping save: {}", certData.getSubjectDN());
-                            }
-                        } else {
-                            invalidCertificateIds.add(tempId);
-                            log.warn("DSC/DSC_NC certificate validation failed: type={}, country={}, subject={}",
-                                certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
-                        }
+                        // Extract method call for saving/updating certificate
+                        handleCertificateSaveOrUpdate(
+                            certificate, validationResult, errors,
+                            validCertificateIds, invalidCertificateIds, processedFingerprints,
+                            false, // isCsca = false
+                            command.uploadId()
+                        );
 
                     } catch (Exception e) {
-                        invalidCertificateIds.add(tempId);
-                        log.error("DSC/DSC_NC certificate validation failed: subject={}", certData.getSubjectDN(), e);
+                        // Handle unexpected errors during processing a single certificate
+                        errors.add(ValidationError.critical("UNEXPECTED_PROCESSING_ERROR", "Unexpected error processing DSC/DSC_NC: " + e.getMessage()));
+                        validationResult = ValidationResult.of(CertificateStatus.INVALID, false, false, false, false, false, 0);
+                        
+                        try {
+                            if (certificate == null) {
+                                certificate = createCertificateFromData(certData, command.uploadId());
+                            }
+                            certificate.addValidationErrors(errors);
+
+                            // Extract method call for saving/updating certificate after error
+                            handleCertificateSaveOrUpdate(
+                                certificate, validationResult, errors,
+                                validCertificateIds, invalidCertificateIds, processedFingerprints,
+                                false, // isCsca = false
+                                command.uploadId()
+                            );
+                            log.error("DSC/DSC_NC certificate processing failed: subject={}. Error: {}", certData.getSubjectDN(), e.getMessage());
+                        } catch (Exception creationEx) {
+                            log.error("Failed to create or save dummy error certificate for subject={}. Error: {}", certData.getSubjectDN(), creationEx.getMessage());
+                        }
                     }
 
                     // SSE 진행 상황 업데이트 (70-85% 범위 - Pass 2)
@@ -224,10 +277,9 @@ public class ValidateCertificatesUseCase {
                         ProcessingProgress.validationInProgress(
                             command.uploadId(),
                             dscProcessed,
-                            totalCertificates - cscaProcessed, // Only count non-CSCA for this pass's total
+                            totalCertificates - cscaProcessed,
                             String.format("DSC/DSC_NC 인증서 검증 중 (%d/%d)", dscProcessed, totalCertificates - cscaProcessed),
-                            70, // minPercent for Pass 2
-                            85  // maxPercent for Pass 2
+                            70, 85
                         )
                     );
                 }
@@ -302,6 +354,93 @@ public class ValidateCertificatesUseCase {
         }
     }
 
+    /**
+     * Helper method to handle saving or updating a certificate to the repository,
+     * including robust handling for DataIntegrityViolationException (duplicate key errors).
+     *
+     * @param certificate The certificate entity to save or update.
+     * @param validationResult The validation result associated with the certificate.
+     * @param errors The list of validation errors associated with the certificate.
+     * @param validCertificateIds List to add the certificate ID if valid.
+     * @param invalidCertificateIds List to add the certificate ID if invalid.
+     * @param processedFingerprints Set of fingerprints already processed in this batch to prevent in-batch duplicates.
+     * @param isCsca True if the certificate is a CSCA, for specific logging.
+     * @param uploadId The UUID of the current upload, for logging.
+     */
+    private void handleCertificateSaveOrUpdate(
+        Certificate certificate,
+        ValidationResult validationResult,
+        List<ValidationError> errors,
+        List<UUID> validCertificateIds,
+        List<UUID> invalidCertificateIds,
+        Set<String> processedFingerprints,
+        boolean isCsca,
+        UUID uploadId
+    ) {
+        try {
+            Certificate existingCert = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256()).orElse(null);
+            if (existingCert != null) {
+                // If a duplicate exists, update its validation result and errors
+                existingCert.recordValidation(validationResult);
+                existingCert.clearValidationErrors(); // Clear old errors
+                existingCert.addValidationErrors(errors);
+                certificateRepository.save(existingCert); // Save updated existing cert
+                log.warn("Duplicate {} certificate found and updated with new validation results: {}",
+                    isCsca ? "CSCA" : "DSC/DSC_NC", certificate.getSubjectInfo().getDistinguishedName());
+                if (existingCert.isValid()) {
+                    validCertificateIds.add(existingCert.getId().getId());
+                } else {
+                    invalidCertificateIds.add(existingCert.getId().getId());
+                }
+            } else {
+                // Save new certificate
+                try {
+                    Certificate savedCert = certificateRepository.save(certificate);
+                    if (savedCert.isValid()) {
+                        validCertificateIds.add(savedCert.getId().getId());
+                    } else {
+                        invalidCertificateIds.add(savedCert.getId().getId());
+                    }
+                    log.info("{} certificate validated and saved: country={}, subject={}, status={}",
+                        isCsca ? "CSCA" : "DSC/DSC_NC",
+                        certificate.getSubjectInfo().getCountryCode(),
+                        certificate.getSubjectInfo().getDistinguishedName(), savedCert.getStatus());
+                } catch (DataIntegrityViolationException dive) {
+                    // This happens if findByFingerprint was stale and a duplicate insert was attempted.
+                    // Retrieve the truly existing certificate and update it.
+                    log.warn("Duplicate key found during {} insert attempt (fingerprint={}), attempting to update existing record. Error: {}", 
+                             isCsca ? "CSCA" : "DSC/DSC_NC",
+                             certificate.getX509Data().getFingerprintSha256(), dive.getMessage());
+                    
+                    Certificate existingCertAfterFailure = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256())
+                                                            .orElseThrow(() -> new IllegalStateException("Duplicate key error but no existing cert found after retry lookup for fingerprint: " + certificate.getX509Data().getFingerprintSha256()));
+                    
+                    existingCertAfterFailure.recordValidation(validationResult);
+                    existingCertAfterFailure.clearValidationErrors();
+                    existingCertAfterFailure.addValidationErrors(errors);
+                    certificateRepository.save(existingCertAfterFailure); // Now it's an UPDATE
+            
+                    if (existingCertAfterFailure.isValid()) {
+                        validCertificateIds.add(existingCertAfterFailure.getId().getId());
+                    } else {
+                        invalidCertificateIds.add(existingCertAfterFailure.getId().getId());
+                    }
+                    log.info("{} certificate validated and updated due to duplicate key attempt: country={}, subject={}, status={}",
+                        isCsca ? "CSCA" : "DSC/DSC_NC",
+                        certificate.getSubjectInfo().getCountryCode(),
+                        certificate.getSubjectInfo().getDistinguishedName(), existingCertAfterFailure.getStatus());
+                }
+            }
+            // 현재 처리된 지문을 추가하여 배치 내 중복 검사
+            processedFingerprints.add(certificate.getX509Data().getFingerprintSha256());
+        } catch (Exception ex) {
+            log.error("Error in handleCertificateSaveOrUpdate for certificate subject={}. Error: {}", 
+                      certificate.getSubjectInfo().getDistinguishedName(), ex.getMessage(), ex);
+            // Propagate as a runtime exception to ensure transaction rollback for unrecoverable errors
+            throw new RuntimeException("Failed to save or update certificate: " + ex.getMessage(), ex);
+        }
+    }
+
     // ========== Helper Methods ==========
 
     /**
@@ -321,16 +460,22 @@ public class ValidateCertificatesUseCase {
      * 2. Validity period 검증
      * 3. Basic Constraints 검증 (CA=true)
      */
-    private boolean validateCscaCertificate(X509Certificate x509Cert, CertificateData certData) {
+    private ValidationResult validateCscaCertificate(X509Certificate x509Cert, CertificateData certData, List<ValidationError> errors) {
+        boolean signatureValid = true;
+        boolean validityValid = true;
+        boolean constraintsValid = true;
+
+        long validationStartTime = System.currentTimeMillis();
+
         try {
             // 1. Self-signed 서명 검증
-            // CSCA는 자체 서명(self-signed) 인증서이므로 자기 자신의 공개 키로 검증
             try {
                 x509Cert.verify(x509Cert.getPublicKey());
                 log.debug("Self-signed signature verified for CSCA: {}", certData.getSubjectDN());
             } catch (Exception e) {
-                log.error("Self-signed signature verification failed for CSCA: {}", certData.getSubjectDN(), e);
-                return false;
+                signatureValid = false;
+                errors.add(ValidationError.critical("SIGNATURE_INVALID", "Self-signed signature verification failed: " + e.getMessage()));
+                log.error("Self-signed signature verification failed for CSCA: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
             }
 
             // 2. Validity period 검증
@@ -338,26 +483,54 @@ public class ValidateCertificatesUseCase {
                 x509Cert.checkValidity();
                 log.debug("Validity period checked for CSCA: {}", certData.getSubjectDN());
             } catch (Exception e) {
-                log.warn("Validity period check failed for CSCA: {}", certData.getSubjectDN(), e);
-                // Validity period 오류는 경고만 하고 진행 (만료된 CSCA도 저장)
+                validityValid = false;
+                errors.add(ValidationError.warning("VALIDITY_INVALID", "Validity period check failed: " + e.getMessage()));
+                log.warn("Validity period check failed for CSCA: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
             }
 
             // 3. Basic Constraints 검증 (CA=true)
             int basicConstraints = x509Cert.getBasicConstraints();
             if (basicConstraints < 0) {
-                log.error("CSCA must be a CA certificate (basicConstraints >= 0), but got: {}. Subject: {}",
-                    basicConstraints, certData.getSubjectDN());
-                return false;
+                constraintsValid = false;
+                errors.add(ValidationError.critical("CONSTRAINT_VIOLATION", "CSCA must be a CA certificate (basicConstraints >= 0)"));
+                log.error("CSCA must be a CA certificate (basicConstraints >= 0), but got: {}. Subject: {}", basicConstraints, certData.getSubjectDN());
+            } else {
+                log.debug("Basic constraints verified for CSCA: CA=true, pathLength={}. Subject: {}", basicConstraints, certData.getSubjectDN());
             }
 
-            log.debug("Basic constraints verified for CSCA: CA=true, pathLength={}. Subject: {}",
-                basicConstraints, certData.getSubjectDN());
-
-            return true;
+            CertificateStatus overallStatus = CertificateStatus.VALID;
+            if (!signatureValid || !constraintsValid) {
+                overallStatus = CertificateStatus.INVALID;
+            } else if (!validityValid) {
+                // If only validity is an issue, it might be expired or not yet valid
+                try {
+                    x509Cert.checkValidity(new Date()); // Check against current date
+                } catch (java.security.cert.CertificateExpiredException e) {
+                    overallStatus = CertificateStatus.EXPIRED;
+                } catch (java.security.cert.CertificateNotYetValidException e) {
+                    overallStatus = CertificateStatus.NOT_YET_VALID;
+                }
+            }
+            
+            long duration = System.currentTimeMillis() - validationStartTime;
+            return ValidationResult.of(
+                overallStatus,
+                signatureValid,
+                true, // Chain validation for CSCA is self-signed, always true if signature valid
+                true, // Not revoked for CSCA is assumed true for base validation, CRL check is separate
+                validityValid,
+                constraintsValid,
+                duration
+            );
 
         } catch (Exception e) {
-            log.error("Unexpected error during CSCA validation: {}", certData.getSubjectDN(), e);
-            return false;
+            errors.add(ValidationError.critical("UNEXPECTED_VALIDATION_ERROR", "Unexpected error during CSCA validation: " + e.getMessage()));
+            log.error("Unexpected error during CSCA validation: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
+            long duration = System.currentTimeMillis() - validationStartTime;
+            return ValidationResult.of(
+                CertificateStatus.INVALID,
+                false, false, false, false, false, duration
+            );
         }
     }
 
@@ -369,66 +542,195 @@ public class ValidateCertificatesUseCase {
      * 2. Validity period 검증
      * 3. Basic Constraints 검증 (CA=false 또는 없음)
      */
-    private boolean validateDscCertificate(
+    private ValidationResult validateDscCertificate(
         X509Certificate x509Cert,
         CertificateData certData,
-        java.util.UUID uploadId
+        java.util.UUID uploadId,
+        List<ValidationError> errors
     ) {
+        boolean signatureValid = true;
+        boolean validityValid = true;
+        boolean constraintsValid = true;
+
+        long validationStartTime = System.currentTimeMillis();
+
         try {
-            // 1. Issuer DN으로 CSCA 조회
+            // 1. Issuer DN으로 CSCA 조회 (현재는 스킵)
             String issuerDN = certData.getIssuerDN();
             log.debug("Finding CSCA for DSC validation: issuerDN={}", issuerDN);
 
-            // TODO: CertificateRepository에 findBySubjectDN() 메서드 추가 필요
+            // TODO: CertificateRepository에 findBySubjectDN() 메서드 추가 및 CSCA로 서명 검증 구현 필요
             // 현재는 CSCA를 찾을 수 없으므로 서명 검증을 스킵하고 경고만 출력
+            signatureValid = false; // Mark as false since verification is skipped
+            errors.add(ValidationError.warning("SIGNATURE_VERIFICATION_SKIPPED", "CSCA lookup not implemented yet. Skipping signature verification for DSC."));
             log.warn("CSCA lookup not implemented yet. Skipping signature verification for DSC: {}",
                 certData.getSubjectDN());
 
             // 향후 구현 예정:
             // List<Certificate> cscaCerts = certificateRepository.findBySubjectDN(issuerDN);
             // if (cscaCerts.isEmpty()) {
+            //     signatureValid = false;
+            //     errors.add(ValidationError.critical("CHAIN_INCOMPLETE", "CSCA not found for DSC. IssuerDN: " + issuerDN));
             //     log.error("CSCA not found for DSC. IssuerDN: {}", issuerDN);
-            //     return false;
+            // } else {
+            //     // CSCA 인증서로 DSC 서명 검증
+            //     Certificate cscaCert = cscaCerts.get(0);
+            //     X509Certificate cscaX509 = convertToX509Certificate(
+            //         cscaCert.getX509Data().getCertificateBinary()
+            //     );
+            //     try {
+            //         x509Cert.verify(cscaX509.getPublicKey());
+            //         log.debug("Signature verified for DSC by CSCA: {}", certData.getSubjectDN());
+            //     } catch (Exception e) {
+            //         signatureValid = false;
+            //         errors.add(ValidationError.critical("SIGNATURE_INVALID", "Signature verification failed by CSCA: " + e.getMessage()));
+            //         log.error("Signature verification failed for DSC by CSCA: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
+            //     }
             // }
-            //
-            // // CSCA 인증서로 DSC 서명 검증
-            // Certificate cscaCert = cscaCerts.get(0);
-            // X509Certificate cscaX509 = convertToX509Certificate(
-            //     cscaCert.getX509Data().getCertificateBinary()
-            // );
-            // x509Cert.verify(cscaX509.getPublicKey());
 
             // 2. Validity period 검증
             try {
                 x509Cert.checkValidity();
                 log.debug("Validity period checked for DSC: {}", certData.getSubjectDN());
             } catch (Exception e) {
-                log.warn("Validity period check failed for DSC: {}", certData.getSubjectDN(), e);
-                // Validity period 오류는 경고만 하고 진행 (만료된 DSC도 저장)
+                validityValid = false;
+                errors.add(ValidationError.warning("VALIDITY_INVALID", "Validity period check failed: " + e.getMessage()));
+                log.warn("Validity period check failed for DSC: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
             }
 
             // 3. Basic Constraints 검증 (DSC는 CA가 아니어야 함)
             int basicConstraints = x509Cert.getBasicConstraints();
-            if (basicConstraints >= 0) {
+            if (basicConstraints >= 0) { // If basicConstraints >= 0, it means it's a CA certificate
+                constraintsValid = false;
+                errors.add(ValidationError.warning("CONSTRAINT_VIOLATION", "DSC should not be a CA certificate (basicConstraints >= 0)."));
                 log.warn("DSC should not be a CA certificate, but basicConstraints={}. Subject: {}",
                     basicConstraints, certData.getSubjectDN());
                 // Non-Conformant의 경우 일부 제약 조건 완화 - 경고만 하고 진행
+            } else {
+                log.debug("Basic constraints verified for DSC: CA=false. Subject: {}", certData.getSubjectDN());
             }
 
-            log.debug("DSC/DSC_NC validation completed (signature verification skipped): {}",
-                certData.getSubjectDN());
+            CertificateStatus overallStatus = CertificateStatus.VALID;
+            if (!signatureValid || !constraintsValid) {
+                overallStatus = CertificateStatus.INVALID;
+            } else if (!validityValid) {
+                try {
+                    x509Cert.checkValidity(new Date()); // Check against current date
+                } catch (java.security.cert.CertificateExpiredException e) {
+                    overallStatus = CertificateStatus.EXPIRED;
+                } catch (java.security.cert.CertificateNotYetValidException e) {
+                    overallStatus = CertificateStatus.NOT_YET_VALID;
+                }
+            }
 
-            return true;
+            long duration = System.currentTimeMillis() - validationStartTime;
+            return ValidationResult.of(
+                overallStatus,
+                signatureValid,
+                true, // Chain valid is assumed true for base validation (CSCAs are trusted), actual chain building is separate
+                true, // Not revoked for CSCA is assumed true for base validation, CRL check is separate
+                validityValid,
+                constraintsValid,
+                duration
+            );
 
         } catch (Exception e) {
-            log.error("Unexpected error during DSC validation: {}", certData.getSubjectDN(), e);
-            return false;
+            errors.add(ValidationError.critical("UNEXPECTED_VALIDATION_ERROR", "Unexpected error during DSC validation: " + e.getMessage()));
+            log.error("Unexpected error during DSC validation: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
+            long duration = System.currentTimeMillis() - validationStartTime;
+            return ValidationResult.of(
+                CertificateStatus.INVALID,
+                false, false, false, false, false, duration
+            );
         }
     }
 
     /**
      * CertificateData로부터 Certificate 엔티티 생성
      */
+    /**
+     * CertificateData로부터 Certificate 엔티티 생성 (오류 발생 시 더미 X509Certificate용)
+     */
+    private Certificate createCertificateFromData(
+        CertificateData certData,
+        java.util.UUID uploadId
+    ) throws Exception {
+        // Fallback or default values for x509Cert dependent fields
+        PublicKey dummyPublicKey = null; // Or generate a dummy if strictly needed
+        String signatureAlgorithm = "UNKNOWN";
+
+        // If certData.getCertificateBinary() is null, some fields will be missing or default
+        if (certData.getCertificateBinary() == null) {
+             throw new IllegalArgumentException("Certificate binary data is required even for dummy creation.");
+        }
+
+
+        // X509Data 생성
+        X509Data x509Data = X509Data.ofIncomplete(
+            certData.getCertificateBinary(),
+            dummyPublicKey,
+            certData.getSerialNumber(),
+            certData.getFingerprintSha256()
+        );
+
+        // SubjectInfo 생성 (DN에서 CN, Country Code 추출)
+        String subjectCN = extractCNFromDN(certData.getSubjectDN());
+        String subjectCountryCode = extractCountryCodeFromDN(certData.getSubjectDN());
+        if (subjectCountryCode != null && subjectCountryCode.length() > 3) {
+            log.warn("Country code '{}' from subject is longer than 3 characters, truncating.", subjectCountryCode);
+            subjectCountryCode = subjectCountryCode.substring(0, 3);
+        }
+        // Fallback to certData country code if DN doesn't contain it
+        if (subjectCountryCode == null) {
+            subjectCountryCode = certData.getCountryCode();
+        }
+        SubjectInfo subjectInfo = SubjectInfo.of(
+            certData.getSubjectDN(),
+            subjectCountryCode,
+            null,  // organization - 향후 DN 파싱으로 추출 가능
+            null,  // organizationalUnit
+            subjectCN
+        );
+
+        // IssuerInfo 생성 (DN에서 CN, Country Code 추출)
+        String issuerCN = extractCNFromDN(certData.getIssuerDN());
+        String issuerCountryCode = extractCountryCodeFromDN(certData.getIssuerDN());
+        if (issuerCountryCode != null && issuerCountryCode.length() > 3) {
+            log.warn("Country code '{}' from issuer is longer than 3 characters, truncating.", issuerCountryCode);
+            issuerCountryCode = issuerCountryCode.substring(0, 3);
+        }
+        // Fallback to certData country code if DN doesn't contain it
+        if (issuerCountryCode == null) {
+            issuerCountryCode = certData.getCountryCode();
+        }
+        IssuerInfo issuerInfo = IssuerInfo.of(
+            certData.getIssuerDN(),
+            issuerCountryCode,
+            null,  // organization
+            null,  // organizationalUnit
+            issuerCN,
+            true   // CSCA는 CA이므로 true
+        );
+
+        // ValidityPeriod 생성 (default to current time if x509Cert is null)
+        LocalDateTime now = LocalDateTime.now();
+        ValidityPeriod validity = ValidityPeriod.of(now, now.plusYears(1)); // Default for dummy
+
+        // CertificateType 결정
+        CertificateType certificateType = CertificateType.valueOf(certData.getCertificateType());
+
+        // Certificate 생성
+        return Certificate.create(
+            uploadId,
+            x509Data,
+            subjectInfo,
+            issuerInfo,
+            validity,
+            certificateType,
+            signatureAlgorithm
+        );
+    }
+    
     private Certificate createCertificateFromData(
         CertificateData certData,
         X509Certificate x509Cert,
@@ -503,6 +805,93 @@ public class ValidateCertificatesUseCase {
             certificateType,
             signatureAlgorithm
         );
+    }
+
+    /**
+     * Helper method to handle saving or updating a certificate to the repository,
+     * including robust handling for DataIntegrityViolationException (duplicate key errors).
+     *
+     * @param certificate The certificate entity to save or update.
+     * @param validationResult The validation result associated with the certificate.
+     * @param errors The list of validation errors associated with the certificate.
+     * @param validCertificateIds List to add the certificate ID if valid.
+     * @param invalidCertificateIds List to add the certificate ID if invalid.
+     * @param processedFingerprints Set of fingerprints already processed in this batch to prevent in-batch duplicates.
+     * @param isCsca True if the certificate is a CSCA, for specific logging.
+     * @param uploadId The UUID of the current upload, for logging.
+     */
+    private void handleCertificateSaveOrUpdate(
+        Certificate certificate,
+        ValidationResult validationResult,
+        List<ValidationError> errors,
+        List<UUID> validCertificateIds,
+        List<UUID> invalidCertificateIds,
+        Set<String> processedFingerprints,
+        boolean isCsca,
+        UUID uploadId
+    ) {
+        try {
+            Certificate existingCert = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256()).orElse(null);
+            if (existingCert != null) {
+                // If a duplicate exists, update its validation result and errors
+                existingCert.recordValidation(validationResult);
+                existingCert.clearValidationErrors(); // Clear old errors
+                existingCert.addValidationErrors(errors);
+                certificateRepository.save(existingCert); // Save updated existing cert
+                log.warn("Duplicate {} certificate found and updated with new validation results: {}",
+                    isCsca ? "CSCA" : "DSC/DSC_NC", certificate.getSubjectInfo().getDistinguishedName());
+                if (existingCert.isValid()) {
+                    validCertificateIds.add(existingCert.getId().getId());
+                } else {
+                    invalidCertificateIds.add(existingCert.getId().getId());
+                }
+            } else {
+                // Save new certificate
+                try {
+                    Certificate savedCert = certificateRepository.save(certificate);
+                    if (savedCert.isValid()) {
+                        validCertificateIds.add(savedCert.getId().getId());
+                    } else {
+                        invalidCertificateIds.add(savedCert.getId().getId());
+                    }
+                    log.info("{} certificate validated and saved: country={}, subject={}, status={}",
+                        isCsca ? "CSCA" : "DSC/DSC_NC",
+                        certificate.getSubjectInfo().getCountryCode(),
+                        certificate.getSubjectInfo().getDistinguishedName(), savedCert.getStatus());
+                } catch (DataIntegrityViolationException dive) {
+                    // This happens if findByFingerprint was stale and a duplicate insert was attempted.
+                    // Retrieve the truly existing certificate and update it.
+                    log.warn("Duplicate key found during {} insert attempt (fingerprint={}), attempting to update existing record. Error: {}", 
+                             isCsca ? "CSCA" : "DSC/DSC_NC",
+                             certificate.getX509Data().getFingerprintSha256(), dive.getMessage());
+                    
+                    Certificate existingCertAfterFailure = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256())
+                                                            .orElseThrow(() -> new IllegalStateException("Duplicate key error but no existing cert found after retry lookup for fingerprint: " + certificate.getX509Data().getFingerprintSha256()));
+                    
+                    existingCertAfterFailure.recordValidation(validationResult);
+                    existingCertAfterFailure.clearValidationErrors();
+                    existingCertAfterFailure.addValidationErrors(errors);
+                    certificateRepository.save(existingCertAfterFailure); // Now it's an UPDATE
+            
+                    if (existingCertAfterFailure.isValid()) {
+                        validCertificateIds.add(existingCertAfterFailure.getId().getId());
+                    } else {
+                        invalidCertificateIds.add(existingCertAfterFailure.getId().getId());
+                    }
+                    log.info("{} certificate validated and updated due to duplicate key attempt: country={}, subject={}, status={}",
+                        isCsca ? "CSCA" : "DSC/DSC_NC",
+                        certificate.getSubjectInfo().getCountryCode(),
+                        certificate.getSubjectInfo().getDistinguishedName(), existingCertAfterFailure.getStatus());
+                }
+            }
+            // 현재 처리된 지문을 추가하여 배치 내 중복 검사
+            processedFingerprints.add(certificate.getX509Data().getFingerprintSha256());
+        } catch (Exception ex) {
+            log.error("Error in handleCertificateSaveOrUpdate for certificate subject={}. Error: {}", 
+                      certificate.getSubjectInfo().getDistinguishedName(), ex.getMessage(), ex);
+            // Propagate as a runtime exception to ensure transaction rollback for unrecoverable errors
+            throw new RuntimeException("Failed to save or update certificate: " + ex.getMessage(), ex);
+        }
     }
 
     /**
