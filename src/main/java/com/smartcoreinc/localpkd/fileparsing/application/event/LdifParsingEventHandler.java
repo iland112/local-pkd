@@ -3,6 +3,10 @@ package com.smartcoreinc.localpkd.fileparsing.application.event;
 import com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificatesUseCase;
 import com.smartcoreinc.localpkd.fileparsing.domain.event.FileParsingCompletedEvent;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
+import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -61,6 +65,7 @@ public class LdifParsingEventHandler {
 
     private final ProgressService progressService;
     private final ValidateCertificatesUseCase validateCertificatesUseCase;
+    private final UploadedFileRepository uploadedFileRepository; // Inject UploadedFileRepository
 
     /**
      * 파일 파싱 완료 이벤트 처리 (비동기, 트랜잭션 커밋 후)
@@ -89,32 +94,50 @@ public class LdifParsingEventHandler {
         );
 
         try {
-            int totalCertAndCrlCount = event.getCertificateCount() + event.getCrlCount();
+            UploadedFile uploadedFile = uploadedFileRepository.findById(new UploadId(event.getUploadId())) // Corrected here
+                    .orElseThrow(() -> new DomainException("UPLOAD_NOT_FOUND", "UploadedFile not found for ID: " + event.getUploadId()));
 
-            // 1. SSE 진행 상황 전송: VALIDATION_STARTED (55%)
-            progressService.sendProgress(
-                ProcessingProgress.validationStarted(event.getUploadId(), totalCertAndCrlCount)
-            );
+            if (uploadedFile.isManualMode()) {
+                log.info("MANUAL mode: Parsing completed for uploadId={}, waiting for user to trigger validation.", event.getUploadId());
+                uploadedFile.markReadyForValidation(); // Update the UploadedFile state
+                uploadedFileRepository.save(uploadedFile); // Save the updated state
 
-            // 2. Certificate Validation Context로 검증 트리거
-            ValidateCertificatesCommand command = ValidateCertificatesCommand.builder()
-                .uploadId(event.getUploadId())
-                .parsedFileId(event.getParsedFileId())
-                .certificateCount(event.getCertificateCount())
-                .crlCount(event.getCrlCount())
-                .build();
+                // Send SSE update to indicate parsing completed and awaiting manual trigger
+                progressService.sendProgress(
+                    ProcessingProgress.parsingCompleted(event.getUploadId(), event.getCertificateCount() + event.getCrlCount()) // Send COMPLETED progress
+                );
+                // We need a specific manual pause progress event type
+                progressService.sendProgress(
+                    ProcessingProgress.manualPause(event.getUploadId(), ProcessingStage.PARSING_COMPLETED)
+                );
+            } else { // AUTO mode
+                int totalCertAndCrlCount = event.getCertificateCount() + event.getCrlCount();
 
-            log.info("Triggering certificate validation: uploadId={}, certificates={}, crls={}",
-                event.getUploadId(), event.getCertificateCount(), event.getCrlCount());
+                // 1. SSE 진행 상황 전송: VALIDATION_STARTED (55%)
+                progressService.sendProgress(
+                    ProcessingProgress.validationStarted(event.getUploadId(), totalCertAndCrlCount)
+                );
 
-            var validationResponse = validateCertificatesUseCase.execute(command);
+                // 2. Certificate Validation Context로 검증 트리거
+                ValidateCertificatesCommand command = ValidateCertificatesCommand.builder()
+                    .uploadId(event.getUploadId())
+                    .parsedFileId(event.getParsedFileId())
+                    .certificateCount(event.getCertificateCount())
+                    .crlCount(event.getCrlCount())
+                    .build();
 
-            if (validationResponse.success()) {
-                log.info("Certificate validation completed successfully: uploadId={}, valid={}, invalid={}",
-                    event.getUploadId(), validationResponse.getTotalValid(), validationResponse.getTotalValidated() - validationResponse.getTotalValid());
-            } else {
-                log.error("Certificate validation failed: uploadId={}, error={}",
-                    event.getUploadId(), validationResponse.errorMessage());
+                log.info("Triggering certificate validation: uploadId={}, certificates={}, crls={}",
+                    event.getUploadId(), event.getCertificateCount(), event.getCrlCount());
+
+                var validationResponse = validateCertificatesUseCase.execute(command);
+
+                if (validationResponse.success()) {
+                    log.info("Certificate validation completed successfully: uploadId={}, valid={}, invalid={}",
+                        event.getUploadId(), validationResponse.getTotalValid(), validationResponse.getTotalValidated() - validationResponse.getTotalValid());
+                } else {
+                    log.error("Certificate validation failed: uploadId={}, error={}",
+                        event.getUploadId(), validationResponse.errorMessage());
+                }
             }
 
         } catch (Exception e) {

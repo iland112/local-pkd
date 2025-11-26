@@ -111,10 +111,11 @@ public class ProcessingProgress {
     public String toJson() {
         // String.format 대신 ObjectMapper를 사용하는 것이 더 견고하고 안전함 (향후 고려)
         return String.format(
-            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"percentage\":%d,\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\",\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\",\"step\":\"%s\"}", // Added 'step' field
+            "{\"uploadId\":\"%s\",\"stage\":\"%s\",\"stageName\":\"%s\",\"status\":\"%s\",\"percentage\":%d,\"processedCount\":%d,\"totalCount\":%d,\"message\":\"%s\",\"errorMessage\":\"%s\",\"details\":\"%s\",\"updatedAt\":\"%s\",\"step\":\"%s\"}", // Added 'status' field
             uploadId,
             stage.name(),
             escapeJson(stage.getDisplayName()),
+            stage.name(), // <-- Added this for 'status'
             percentage,
             processedCount,
             totalCount,
@@ -159,6 +160,8 @@ public class ProcessingProgress {
             case LDAP_SAVING_IN_PROGRESS:
             case LDAP_SAVING_COMPLETED:
                 return "LDAP_UPLOAD";
+            case MANUAL_PAUSE: // New case
+                return "PAUSE";
             case COMPLETED:
                 return "FINALIZED";
             case FAILED:
@@ -344,6 +347,21 @@ public class ProcessingProgress {
             .totalCount(0)
             .message(failedStage.getDisplayName() + " 실패")
             .errorMessage(errorMessage)
+            .build();
+    }
+
+    /**
+     * 수동 모드에서 특정 단계 후 대기
+     */
+    public static ProcessingProgress manualPause(UUID uploadId, ProcessingStage previousStage) {
+        return ProcessingProgress.builder()
+            .uploadId(uploadId)
+            .stage(ProcessingStage.MANUAL_PAUSE)
+            .percentage(previousStage.getBasePercentage()) // Use previous stage's percentage
+            .processedCount(0)
+            .totalCount(0)
+            .message(previousStage.getDisplayName() + " 완료, 수동 트리거 대기 중")
+            .details("다음 단계는 수동 사용자 작업이 필요합니다.")
             .build();
     }
 

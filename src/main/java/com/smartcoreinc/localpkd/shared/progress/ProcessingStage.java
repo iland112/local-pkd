@@ -57,6 +57,9 @@ public enum ProcessingStage {
     LDAP_SAVING_IN_PROGRESS("LDAP 저장 중", 95, StageCategory.LDAP_SAVE),
     LDAP_SAVING_COMPLETED("LDAP 저장 완료", 100, StageCategory.LDAP_SAVE),
 
+    // 수동 일시 중지
+    MANUAL_PAUSE("수동 처리 대기 중", 0, StageCategory.PAUSE), // New entry
+
     // 완료/실패
     COMPLETED("처리 완료", 100, StageCategory.COMPLETE),
     FAILED("처리 실패", 0, StageCategory.FAILED);
@@ -80,7 +83,8 @@ public enum ProcessingStage {
         VALIDATION,
         LDAP_SAVE,
         COMPLETE,
-        FAILED
+        FAILED,
+        PAUSE // New entry
     }
 
     /**
@@ -122,6 +126,6 @@ public enum ProcessingStage {
      * 진행 중인 단계인지 확인 (완료/실패 제외)
      */
     public boolean isInProgress() {
-        return !isCompleted() && !isFailed();
+        return !isCompleted() && !isFailed() && this != MANUAL_PAUSE;
     }
 }

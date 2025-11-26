@@ -1,8 +1,15 @@
 package com.smartcoreinc.localpkd.fileupload.infrastructure.web;
 
+import com.smartcoreinc.localpkd.fileparsing.application.command.ParseLdifFileCommand;
+import com.smartcoreinc.localpkd.fileparsing.application.command.ParseMasterListFileCommand;
+import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUseCase;
+import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseMasterListFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingResponse;
 import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingStatusResponse;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FilePath;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.port.FileStoragePort;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -127,8 +134,11 @@ import java.util.UUID;
 public class ProcessingController {
 
     private final UploadedFileRepository uploadedFileRepository;
+    private final ParseLdifFileUseCase parseLdifFileUseCase;
+    private final ParseMasterListFileUseCase parseMasterListFileUseCase;
+    private final FileStoragePort fileStoragePort;
+
     // TODO: 다음 Use Cases는 Phase 19에서 구현 예정
-    // private final ParseFileUseCase parseFileUseCase;
     // private final ValidateCertificatesUseCase validateCertificatesUseCase;
     // private final UploadToLdapUseCase uploadToLdapUseCase;
 
@@ -167,8 +177,28 @@ public class ProcessingController {
                         .body(ProcessingResponse.notManualMode(uploadUUID));
             }
 
-            // TODO: ParseFileUseCase 호출 (Phase 19)
-            // parseFileUseCase.execute(new ParseFileCommand(uploadId));
+            // Read file bytes from storage
+            byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
+            String fileFormatName = uploadedFile.getFileFormat().getType().name();
+
+            if (uploadedFile.getFileFormat().isLdif()) {
+                parseLdifFileUseCase.execute(ParseLdifFileCommand.builder()
+                        .uploadId(uploadIdVO.toUUID()) // Corrected here
+                        .fileBytes(fileBytes)
+                        .fileFormat(fileFormatName)
+                        .build());
+            } else if (uploadedFile.getFileFormat().isMasterList()) {
+                parseMasterListFileUseCase.execute(ParseMasterListFileCommand.builder()
+                        .uploadId(uploadIdVO.toUUID()) // Corrected here
+                        .fileBytes(fileBytes)
+                        .fileFormat(fileFormatName)
+                        .build());
+            } else {
+                log.error("Unsupported file format for parsing: uploadId={}, format={}",
+                        uploadId, uploadedFile.getFileFormat());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ProcessingResponse.error(uploadUUID, "PARSING", "Unsupported file format"));
+            }
 
             log.info("File parsing started: uploadId={}", uploadId);
             uploadedFile.markReadyForParsing();
