@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.1
-**Last Updated**: 2025-11-27
-**Status**: Production Ready (Phase 1-18 Complete + Major Refactoring + LDAP Upload)
+**Version**: 3.2
+**Last Updated**: 2025-11-28
+**Status**: Production Ready (Phase 1-19 Complete + LDAP Validation Status)
 
 ---
 
@@ -15,11 +15,12 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 - ✅ 비동기 파일 처리 (즉시 uploadId 반환)
 - ✅ 파일 파싱 (LDIF, Master List CMS)
 - ✅ 인증서 검증 (Trust Chain, CRL, 유효기간)
-- ✅ OpenLDAP 자동 등록
+- ✅ OpenLDAP 자동 등록 (검증 상태 포함)
 - ✅ 실시간 진행 상황 (uploadId별 SSE 스트림)
 - ✅ 수동/자동 처리 모드 (Manual/Auto Mode)
 - ✅ 업로드 이력 관리
 - ✅ 단계별 진행 상태 UI (Upload → Parse → Validate → LDAP)
+- ✅ LDAP 검증 상태 기록 (VALID/INVALID/EXPIRED + 오류 메시지)
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -418,7 +419,9 @@ mcp__playwright__browser_snapshot()  # UI 상태 캡처
 | **CODE_CLEANUP_REPORT** | 최근 코드 정리 내역 (제거 파일, 빌드 결과) | docs/CODE_CLEANUP_REPORT_2025-11-21.md |
 | **PHASE_17** | Event-Driven LDAP Upload 완료 보고서 | docs/PHASE_17_COMPLETE.md |
 | **PHASE_DSC_NC** | Non-Conformant Certificate 구현 완료 | docs/PHASE_DSC_NC_IMPLEMENTATION_COMPLETE.md |
+| **PHASE_19** | LDAP 검증 상태 기록 구현 완료 (NEW) | docs/MASTER_LIST_LDAP_VALIDATION_STATUS.md |
 | **MASTER_LIST_UPLOAD_REPORT** | Master List 업로드 테스트 결과 | docs/MASTER_LIST_UPLOAD_REPORT_2025-11-21.md |
+| **MASTER_LIST_STORAGE_ANALYSIS** | Master List 구조 및 저장 전략 분석 | docs/MASTER_LIST_LDAP_STORAGE_ANALYSIS.md |
 
 **아카이브**: `docs/archive/phases/` (Phase 1-16 문서 50개)
 
@@ -534,7 +537,7 @@ http://172.24.1.6:8081
 
 ---
 
-## 📊 Current Status (2025-11-26)
+## 📊 Current Status (2025-11-28)
 
 ### Completed Phases ✅
 
@@ -547,9 +550,10 @@ http://172.24.1.6:8081
 | Phase 17 | Event-Driven LDAP Upload Pipeline | ✅ |
 | Phase 18 | UI Improvements, Dashboard | ✅ |
 | Phase DSC_NC | Non-Conformant Certificate Support | ✅ |
-| **Async Refactoring** | **비동기 업로드, SSE 개선, Manual Mode** | ✅ **NEW** |
+| **Async Refactoring** | **비동기 업로드, SSE 개선, Manual Mode** | ✅ |
+| **Phase 19** | **LDAP 검증 상태 기록 (description attribute)** | ✅ **NEW** |
 
-### Recent Refactoring (2025-11-26 ~ 2025-11-27) ✅
+### Recent Refactoring (2025-11-26 ~ 2025-11-28) ✅
 
 1. ✅ **AsyncUploadProcessor 도입** - 즉시 uploadId 반환, 백그라운드 처리
 2. ✅ **uploadId별 SSE 스트림** - 개별 진행 상황 추적
@@ -558,21 +562,24 @@ http://172.24.1.6:8081
 5. ✅ **UI 대폭 개선** - 4단계 진행 상황 시각화
 6. ✅ **서버 측 체크섬** - 클라이언트 부담 제거
 7. ✅ **WSL2 네트워크 지원** - Windows Chrome 접근 가능
-8. ✅ **실제 LDAP 업로드 구현** (2025-11-27 NEW) - ICAO PKD LDIF 형식 준수, 시뮬레이션 제거
+8. ✅ **실제 LDAP 업로드 구현** (2025-11-27) - ICAO PKD LDIF 형식 준수, 시뮬레이션 제거
+9. ✅ **LDAP 검증 상태 기록** (2025-11-28 NEW) - description attribute에 VALID/INVALID/EXPIRED + 오류 메시지 포함
 
 ### Remaining TODOs
 
 1. ✅ ~~**FileUploadEventHandler.java:92** - LDAP 업로드 체인 연결~~ **COMPLETED (2025-11-27)**
-2. **ProcessingController.java:141-143** - Manual Mode Use Cases 구현 (Phase 19 예정)
-3. **ProcessingController.java:358-369** - 처리 상태 DB 조회 구현
-4. **LdifConverter** - 단위 테스트 작성 (Optional)
-5. **UploadToLdapUseCase** - 통합 테스트 작성 (Optional)
+2. ✅ ~~**LdifConverter - LDAP 검증 상태 기록**~~ **COMPLETED (2025-11-28)**
+3. **ProcessingController.java:141-143** - Manual Mode Use Cases 구현 (Phase 20 예정)
+4. **ProcessingController.java:358-369** - 처리 상태 DB 조회 구현
+5. **LdifConverter** - 단위 테스트 작성 (Optional)
+6. **UploadToLdapUseCase** - 통합 테스트 작성 (Optional)
 
 ### Next Steps (Optional)
 
-- **Phase 19**: Manual Mode 완성 (ValidateCertificatesUseCase, UploadToLdapUseCase 호출)
-- **Phase 20**: 고급 검색 & 필터링 (Full-Text Search, Elasticsearch)
-- **Phase 21**: 모니터링 & 운영 (Prometheus, Grafana, Alerts)
+- **Phase 20**: Manual Mode 완성 (ValidateCertificatesUseCase, UploadToLdapUseCase 호출)
+- **Phase 21**: 고급 검색 & 필터링 (Full-Text Search, Elasticsearch)
+- **Phase 22**: 모니터링 & 운영 (Prometheus, Grafana, Alerts)
+- **Phase 23**: LDAP 검증 상태 모니터링 Dashboard (Validation Statistics)
 
 ---
 
@@ -672,8 +679,8 @@ Windows Chrome: "사이트에 연결할 수 없음"
 
 ---
 
-**Document Version**: 3.0
+**Document Version**: 3.2
 **Status**: PRODUCTION READY ✅
-**Last Review**: 2025-11-26
+**Last Review**: 2025-11-28
 
 *이 문서는 프로젝트의 핵심 정보와 최신 아키텍처 변경사항을 포함합니다. 상세한 구현 내용은 `docs/` 디렉토리의 개별 문서를 참조하세요.*

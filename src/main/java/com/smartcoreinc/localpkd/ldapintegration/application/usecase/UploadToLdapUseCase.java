@@ -105,62 +105,26 @@ public class UploadToLdapUseCase {
                     .build()
             );
 
-            // 3. Upload Master List first (if exists)
-            java.util.Optional<com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList> masterListOpt =
-                    masterListRepository.findByUploadId(new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId()));
-
-            int uploadedMasterListCount = 0;
-            int failedMasterListCount = 0;
-
-            if (masterListOpt.isPresent()) {
-                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList ml = masterListOpt.get();
-                log.info("Uploading 1 Master List to LDAP...");
-
-                try {
-                    // Convert to LDIF format
-                    String ldifEntry = ldifConverter.masterListToLdif(ml);
-
-                    // Upload to LDAP
-                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
-
-                    if (success) {
-                        uploadedMasterListCount = 1;
-                        log.debug("Master List uploaded to LDAP: id={}, country={}, cscaCount={}",
-                                ml.getId().getId(), ml.getCountryCode().getValue(), ml.getCscaCount());
-                    } else {
-                        failedMasterListCount = 1;
-                        log.warn("Master List upload skipped (duplicate): id={}", ml.getId().getId());
-                    }
-
-                } catch (Exception e) {
-                    failedMasterListCount = 1;
-                    log.error("Failed to upload Master List to LDAP: id={}", ml.getId().getId(), e);
-                }
-
-                log.info("Master List upload completed: {} uploaded, {} failed",
-                        uploadedMasterListCount, failedMasterListCount);
-            }
-
-            // 4. 모든 인증서 조회 (valid + invalid)
+            // 3. Upload all certificates (including CSCAs from Master List)
             java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certificates =
                     certificateRepository.findByUploadId(command.uploadId());
 
-            // Filter out certificates extracted from Master List (only upload certificates from LDIF)
-            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certificatesToUpload =
-                    certificates.stream()
-                            .filter(cert -> !cert.isFromMasterList())  // Exclude Master List-extracted CSCAs
-                            .toList();
+            // Count CSCAs from Master List for logging
+            long masterListCscaCount = certificates.stream()
+                    .filter(cert -> cert.isFromMasterList())
+                    .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.CSCA)
+                    .count();
 
-            log.info("Uploading {} certificates to LDAP (excluding {} Master List-extracted CSCAs)...",
-                    certificatesToUpload.size(), certificates.size() - certificatesToUpload.size());
+            log.info("Uploading {} certificates to LDAP ({} CSCAs from Master List, {} from LDIF)...",
+                    certificates.size(), masterListCscaCount, certificates.size() - masterListCscaCount);
             int uploadedCertificateCount = 0;
             int failedCertificateCount = 0;
 
-            // 인증서 LDAP 업로드
-            for (int i = 0; i < certificatesToUpload.size(); i++) {
-                com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificatesToUpload.get(i);
+            // 인증서 LDAP 업로드 (including CSCAs from Master List)
+            for (int i = 0; i < certificates.size(); i++) {
+                com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificates.get(i);
                 try {
-                    // Convert to LDIF format
+                    // Convert to LDIF format (CSCAs will use o=csca)
                     String ldifEntry = ldifConverter.certificateToLdif(cert);
 
                     // Upload to LDAP
@@ -168,24 +132,26 @@ public class UploadToLdapUseCase {
 
                     if (success) {
                         uploadedCertificateCount++;
-                        log.debug("Certificate uploaded to LDAP: id={}, type={}, status={}",
-                                cert.getId().getId(), cert.getCertificateType(), cert.getStatus());
+                        log.debug("Certificate uploaded to LDAP: id={}, type={}, source={}, country={}",
+                                cert.getId().getId(), cert.getCertificateType(),
+                                cert.isFromMasterList() ? "MasterList" : "LDIF",
+                                cert.getSubjectInfo().getCountryCode());
                     } else {
                         failedCertificateCount++;
                         log.warn("Certificate upload skipped (duplicate): id={}", cert.getId().getId());
                     }
 
                     // Send progress every 10 items or at the end
-                    if ((i + 1) % 10 == 0 || (i + 1) == certificatesToUpload.size()) {
-                        int percentage = 90 + ((i + 1) * 5 / certificatesToUpload.size());  // 90-95%
+                    if ((i + 1) % 10 == 0 || (i + 1) == certificates.size()) {
+                        int percentage = 90 + ((i + 1) * 5 / certificates.size());  // 90-95%
                         progressService.sendProgress(
                                 ProcessingProgress.builder()
                                         .uploadId(command.uploadId())
                                         .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
                                         .percentage(Math.min(95, percentage))
-                                        .message(String.format("인증서 LDAP 저장 중 (%d/%d)", i + 1, certificatesToUpload.size()))
+                                        .message(String.format("인증서 LDAP 저장 중 (%d/%d)", i + 1, certificates.size()))
                                         .processedCount(i + 1)
-                                        .totalCount(certificatesToUpload.size())
+                                        .totalCount(certificates.size())
                                         .build()
                         );
                     }
@@ -244,9 +210,9 @@ public class UploadToLdapUseCase {
                 }
             }
 
-            // 6. LdapUploadCompletedEvent 생성 및 발행
-            int totalUploaded = uploadedMasterListCount + uploadedCertificateCount + uploadedCrlCount;
-            int totalFailed = failedMasterListCount + failedCertificateCount + failedCrlCount;
+            // 5. LdapUploadCompletedEvent 생성 및 발행
+            int totalUploaded = uploadedCertificateCount + uploadedCrlCount;
+            int totalFailed = failedCertificateCount + failedCrlCount;
 
             LdapUploadCompletedEvent event = new LdapUploadCompletedEvent(
                 command.uploadId(),
@@ -259,15 +225,15 @@ public class UploadToLdapUseCase {
             eventPublisher.publishEvent(event);
             log.info("LdapUploadCompletedEvent published: uploadId={}", command.uploadId());
 
-            // 7. SSE 진행 상황 전송: LDAP_SAVING_COMPLETED (100%)
+            // 6. SSE 진행 상황 전송: LDAP_SAVING_COMPLETED (100%)
             progressService.sendProgress(
                 ProcessingProgress.builder()
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
                     .percentage(100)
-                    .message(String.format("LDAP 저장 완료: %d Master Lists, %d 인증서, %d CRLs (%d 성공, %d 실패)",
-                        uploadedMasterListCount,
+                    .message(String.format("LDAP 저장 완료: %d 인증서 (%d CSCAs from MasterList), %d CRLs (%d 성공, %d 실패)",
                         uploadedCertificateCount,
+                        masterListCscaCount,
                         uploadedCrlCount,
                         totalUploaded,
                         totalFailed))
