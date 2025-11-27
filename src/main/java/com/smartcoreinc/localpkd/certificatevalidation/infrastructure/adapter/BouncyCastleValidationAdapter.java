@@ -188,11 +188,12 @@ public class BouncyCastleValidationAdapter implements CertificateValidationPort 
 
     /**
      * X509Certificate로 변환
+     * Uses Bouncy Castle provider to support explicit EC parameters
      */
     private java.security.cert.X509Certificate convertToX509Certificate(byte[] certificateBytes)
             throws Exception {
         java.security.cert.CertificateFactory cf =
-            java.security.cert.CertificateFactory.getInstance("X.509");
+            java.security.cert.CertificateFactory.getInstance("X.509", "BC");
         return (java.security.cert.X509Certificate) cf.generateCertificate(
             new java.io.ByteArrayInputStream(certificateBytes)
         );

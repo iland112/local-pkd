@@ -21,6 +21,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * LDIF Parsing Event Handler - 파일 파싱 도메인 이벤트 핸들러
  *
+ * <p><b>DEPRECATED (2025-11-27)</b>: FileUploadEventHandler가 이미 전체 체인을 관리하므로 이 핸들러는 비활성화되었습니다.</p>
+ * <p>중복 검증 호출 문제로 인해 @Component를 제거하여 비활성화했습니다.</p>
+ *
  * <p>File Parsing Context에서 발행되는 Domain Event를 처리합니다.
  * 파일 파싱 완료 후 인증서 검증 트리거 등의 후속 작업을 수행합니다.</p>
  *
@@ -42,7 +45,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   → FileUploadEventHandler
  *     → ParseLdifFileUseCase
  *       → FileParsingCompletedEvent
- *         → LdifParsingEventHandler (이 클래스)
+ *         → LdifParsingEventHandler (이 클래스) - DEPRECATED, 비활성화됨
  *           → Certificate Validation 트리거 (향후 구현)
  * </pre>
  *
@@ -56,10 +59,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * @author SmartCore Inc.
  * @version 1.0
  * @since 2025-10-29
+ * @deprecated FileUploadEventHandler가 전체 체인을 관리하므로 이 핸들러는 더 이상 사용되지 않습니다.
  * @see FileParsingCompletedEvent
  */
 @Slf4j
-@Component
+// @Component  // DISABLED (2025-11-27): 중복 검증 호출 문제로 비활성화. FileUploadEventHandler가 전체 체인을 관리합니다.
 @RequiredArgsConstructor
 public class LdifParsingEventHandler {
 

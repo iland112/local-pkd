@@ -16,12 +16,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.time.LocalDateTime;
 
 /**
- * UploadToLdapUseCase - LDAP 서버 업로드 Use Case (LEGACY - DO NOT USE)
+ * UploadToLdapUseCase - LDAP 서버 업로드 Use Case
  *
- * <p><b>⚠️ DEPRECATED</b>: This is a legacy simulation implementation from earlier phases.</p>
- * <p><b>Use instead</b>: {@code com.smartcoreinc.localpkd.certificatevalidation.application.usecase.UploadToLdapUseCase}</p>
- *
- * <p><b>Application Service</b>: 검증된 인증서들을 LDAP 서버에 업로드합니다.</p>
+ * <p><b>Application Service</b>: 검증된 인증서 및 CRL을 LDAP 서버에 업로드합니다.</p>
+ * <p><b>Note</b>: ALL certificates (valid AND invalid) are uploaded to LDAP with their validation status.</p>
  *
  * <p><b>업로드 프로세스</b>:</p>
  * <ol>
@@ -65,16 +63,19 @@ import java.time.LocalDateTime;
  * }
  * </pre>
  *
- * @deprecated Use {@code certificatevalidation.application.usecase.UploadToLdapUseCase} instead
  */
 @Slf4j
-@Service("ldapintegrationUploadToLdapUseCase")  // Renamed bean to avoid conflict with Phase 17 version
+@Service("ldapintegrationUploadToLdapUseCase")
 @RequiredArgsConstructor
-@Deprecated(since = "Phase 17", forRemoval = true)
 public class UploadToLdapUseCase {
 
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository crlRepository;
+    private final com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository;
+    private final com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter.UnboundIdLdapAdapter ldapAdapter;
+    private final com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter.LdifConverter ldifConverter;
 
     /**
      * LDAP 서버 업로드 실행
@@ -104,64 +105,154 @@ public class UploadToLdapUseCase {
                     .build()
             );
 
-            // 3. 검증된 인증서 배치 업로드
-            log.info("Uploading {} certificates to LDAP...", command.validCertificateCount());
+            // 3. Upload Master List first (if exists)
+            java.util.Optional<com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList> masterListOpt =
+                    masterListRepository.findByUploadId(new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId()));
+
+            int uploadedMasterListCount = 0;
+            int failedMasterListCount = 0;
+
+            if (masterListOpt.isPresent()) {
+                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList ml = masterListOpt.get();
+                log.info("Uploading 1 Master List to LDAP...");
+
+                try {
+                    // Convert to LDIF format
+                    String ldifEntry = ldifConverter.masterListToLdif(ml);
+
+                    // Upload to LDAP
+                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
+
+                    if (success) {
+                        uploadedMasterListCount = 1;
+                        log.debug("Master List uploaded to LDAP: id={}, country={}, cscaCount={}",
+                                ml.getId().getId(), ml.getCountryCode().getValue(), ml.getCscaCount());
+                    } else {
+                        failedMasterListCount = 1;
+                        log.warn("Master List upload skipped (duplicate): id={}", ml.getId().getId());
+                    }
+
+                } catch (Exception e) {
+                    failedMasterListCount = 1;
+                    log.error("Failed to upload Master List to LDAP: id={}", ml.getId().getId(), e);
+                }
+
+                log.info("Master List upload completed: {} uploaded, {} failed",
+                        uploadedMasterListCount, failedMasterListCount);
+            }
+
+            // 4. 모든 인증서 조회 (valid + invalid)
+            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certificates =
+                    certificateRepository.findByUploadId(command.uploadId());
+
+            // Filter out certificates extracted from Master List (only upload certificates from LDIF)
+            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certificatesToUpload =
+                    certificates.stream()
+                            .filter(cert -> !cert.isFromMasterList())  // Exclude Master List-extracted CSCAs
+                            .toList();
+
+            log.info("Uploading {} certificates to LDAP (excluding {} Master List-extracted CSCAs)...",
+                    certificatesToUpload.size(), certificates.size() - certificatesToUpload.size());
             int uploadedCertificateCount = 0;
             int failedCertificateCount = 0;
 
-            // TODO: Phase 4에서 CertificateRepository 조회 및 실제 LDAP 업로드 구현
-            // List<Certificate> validCertificates = certificateRepository.findByStatus(VALID);
-            // for (int i = 0; i < validCertificates.size(); i += command.batchSize()) {
-            //     List<Certificate> batch = validCertificates.subList(
-            //         i, Math.min(i + command.batchSize(), validCertificates.size())
-            //     );
-            //     BatchUploadResult result = ldapUploadService.uploadCertificatesBatch(batch);
-            //     uploadedCertificateCount += result.getSuccessCount();
-            //     failedCertificateCount += result.getFailedCount();
-            // }
+            // 인증서 LDAP 업로드
+            for (int i = 0; i < certificatesToUpload.size(); i++) {
+                com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificatesToUpload.get(i);
+                try {
+                    // Convert to LDIF format
+                    String ldifEntry = ldifConverter.certificateToLdif(cert);
 
-            // 현재는 simulation (Phase 4에서 실제 구현)
-            simulateCertificateUpload(
-                command.uploadId(),
-                command.validCertificateCount(),
-                90  // Start percentage
-            );
+                    // Upload to LDAP
+                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
 
-            // 4. 검증된 CRL 배치 업로드
-            log.info("Uploading {} CRLs to LDAP...", command.validCrlCount());
+                    if (success) {
+                        uploadedCertificateCount++;
+                        log.debug("Certificate uploaded to LDAP: id={}, type={}, status={}",
+                                cert.getId().getId(), cert.getCertificateType(), cert.getStatus());
+                    } else {
+                        failedCertificateCount++;
+                        log.warn("Certificate upload skipped (duplicate): id={}", cert.getId().getId());
+                    }
+
+                    // Send progress every 10 items or at the end
+                    if ((i + 1) % 10 == 0 || (i + 1) == certificatesToUpload.size()) {
+                        int percentage = 90 + ((i + 1) * 5 / certificatesToUpload.size());  // 90-95%
+                        progressService.sendProgress(
+                                ProcessingProgress.builder()
+                                        .uploadId(command.uploadId())
+                                        .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
+                                        .percentage(Math.min(95, percentage))
+                                        .message(String.format("인증서 LDAP 저장 중 (%d/%d)", i + 1, certificatesToUpload.size()))
+                                        .processedCount(i + 1)
+                                        .totalCount(certificatesToUpload.size())
+                                        .build()
+                        );
+                    }
+
+                } catch (Exception e) {
+                    failedCertificateCount++;
+                    log.error("Failed to upload certificate to LDAP: id={}", cert.getId().getId(), e);
+                }
+            }
+
+            // 4. 모든 CRL 조회
+            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList> crls =
+                    crlRepository.findByUploadId(command.uploadId());
+
+            log.info("Uploading {} CRLs to LDAP...", crls.size());
             int uploadedCrlCount = 0;
             int failedCrlCount = 0;
 
-            // TODO: Phase 4에서 CrlRepository 조회 및 실제 LDAP 업로드 구현
-            // List<CertificateRevocationList> validCrls = crlRepository.findByStatus(VALID);
-            // for (int i = 0; i < validCrls.size(); i += command.batchSize()) {
-            //     List<CertificateRevocationList> batch = validCrls.subList(
-            //         i, Math.min(i + command.batchSize(), validCrls.size())
-            //     );
-            //     BatchUploadResult result = ldapUploadService.uploadCrlsBatch(batch);
-            //     uploadedCrlCount += result.getSuccessCount();
-            //     failedCrlCount += result.getFailedCount();
-            // }
+            // CRL LDAP 업로드
+            for (int i = 0; i < crls.size(); i++) {
+                com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList crl = crls.get(i);
+                try {
+                    // Convert to LDIF format
+                    String ldifEntry = ldifConverter.crlToLdif(crl);
 
-            // 현재는 simulation (Phase 4에서 실제 구현)
-            simulateCrlUpload(
-                command.uploadId(),
-                command.validCrlCount(),
-                95  // Start percentage
-            );
+                    // Upload to LDAP
+                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
 
-            // 5. Simulate results (will be replaced with real LDAP results in Phase 4)
-            uploadedCertificateCount = (int) (command.validCertificateCount() * 0.99);  // 99% success rate
-            failedCertificateCount = command.validCertificateCount() - uploadedCertificateCount;
-            uploadedCrlCount = (int) (command.validCrlCount() * 0.98);  // 98% success rate
-            failedCrlCount = command.validCrlCount() - uploadedCrlCount;
+                    if (success) {
+                        uploadedCrlCount++;
+                        log.debug("CRL uploaded to LDAP: id={}, issuer={}, country={}",
+                                crl.getId().getId(), crl.getIssuerName().getValue(), crl.getCountryCode().getValue());
+                    } else {
+                        failedCrlCount++;
+                        log.warn("CRL upload skipped (duplicate): id={}", crl.getId().getId());
+                    }
+
+                    // Send progress every 10 items or at the end
+                    if ((i + 1) % 10 == 0 || (i + 1) == crls.size()) {
+                        int percentage = 95 + ((i + 1) * 4 / Math.max(crls.size(), 1));  // 95-99%
+                        progressService.sendProgress(
+                                ProcessingProgress.builder()
+                                        .uploadId(command.uploadId())
+                                        .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
+                                        .percentage(Math.min(99, percentage))
+                                        .message(String.format("CRL LDAP 저장 중 (%d/%d)", i + 1, crls.size()))
+                                        .processedCount(i + 1)
+                                        .totalCount(crls.size())
+                                        .build()
+                        );
+                    }
+
+                } catch (Exception e) {
+                    failedCrlCount++;
+                    log.error("Failed to upload CRL to LDAP: id={}", crl.getId().getId(), e);
+                }
+            }
 
             // 6. LdapUploadCompletedEvent 생성 및 발행
+            int totalUploaded = uploadedMasterListCount + uploadedCertificateCount + uploadedCrlCount;
+            int totalFailed = failedMasterListCount + failedCertificateCount + failedCrlCount;
+
             LdapUploadCompletedEvent event = new LdapUploadCompletedEvent(
                 command.uploadId(),
                 uploadedCertificateCount,
                 uploadedCrlCount,
-                failedCertificateCount + failedCrlCount,
+                totalFailed,
                 LocalDateTime.now()
             );
 
@@ -174,10 +265,13 @@ public class UploadToLdapUseCase {
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
                     .percentage(100)
-                    .message(String.format("LDAP 저장 완료: %d 성공, %d 실패",
-                        uploadedCertificateCount + uploadedCrlCount,
-                        failedCertificateCount + failedCrlCount))
-                    .processedCount(uploadedCertificateCount + uploadedCrlCount + failedCertificateCount + failedCrlCount)
+                    .message(String.format("LDAP 저장 완료: %d Master Lists, %d 인증서, %d CRLs (%d 성공, %d 실패)",
+                        uploadedMasterListCount,
+                        uploadedCertificateCount,
+                        uploadedCrlCount,
+                        totalUploaded,
+                        totalFailed))
+                    .processedCount(totalUploaded + totalFailed)
                     .totalCount(command.getTotalCount())
                     .build()
             );
@@ -221,45 +315,4 @@ public class UploadToLdapUseCase {
         }
     }
 
-    /**
-     * 인증서 LDAP 업로드 시뮬레이션 (Phase 4에서 실제 구현으로 대체)
-     * TODO: Phase 4에서 실제 LDAP 업로드 로직으로 대체
-     */
-    private void simulateCertificateUpload(java.util.UUID uploadId, int count, int startPercentage) {
-        log.info("Simulating certificate upload: {} items, startPercentage: {}", count, startPercentage);
-        for (int i = 0; i < Math.min(count, 5); i++) {
-            int percentage = startPercentage + (i * 1);
-            progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(uploadId)
-                    .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
-                    .percentage(Math.min(95, percentage))
-                    .message(String.format("인증서 LDAP 저장 중 (%d/%d)", i + 1, count))
-                    .processedCount(i + 1)
-                    .totalCount(count)
-                    .build()
-            );
-        }
-    }
-
-    /**
-     * CRL LDAP 업로드 시뮬레이션 (Phase 4에서 실제 구현으로 대체)
-     * TODO: Phase 4에서 실제 LDAP 업로드 로직으로 대체
-     */
-    private void simulateCrlUpload(java.util.UUID uploadId, int count, int startPercentage) {
-        log.info("Simulating CRL upload: {} items, startPercentage: {}", count, startPercentage);
-        for (int i = 0; i < Math.min(count, 3); i++) {
-            int percentage = startPercentage + (i * 1);
-            progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(uploadId)
-                    .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
-                    .percentage(Math.min(99, percentage))
-                    .message(String.format("CRL LDAP 저장 중 (%d/%d)", i + 1, count))
-                    .processedCount(i + 1)
-                    .totalCount(count)
-                    .build()
-            );
-        }
-    }
 }

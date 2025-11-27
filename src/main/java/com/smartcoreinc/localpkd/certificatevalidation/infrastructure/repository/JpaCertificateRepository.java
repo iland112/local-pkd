@@ -41,6 +41,33 @@ public class JpaCertificateRepository implements CertificateRepository {
     }
 
     @Override
+    @Transactional
+    public List<Certificate> saveAll(List<Certificate> certificates) {
+        if (certificates == null || certificates.isEmpty()) {
+            throw new IllegalArgumentException("certificates cannot be null or empty");
+        }
+
+        log.debug("Saving {} certificates in batch", certificates.size());
+
+        // Publish domain events for all certificates
+        for (Certificate certificate : certificates) {
+            if (!certificate.getDomainEvents().isEmpty()) {
+                log.debug("Publishing {} domain event(s) for Certificate id={}",
+                        certificate.getDomainEvents().size(),
+                        certificate.getId().getId());
+                eventBus.publishAll(certificate.getDomainEvents());
+                certificate.clearDomainEvents();
+            }
+        }
+
+        // Batch save using JPA
+        List<Certificate> savedCertificates = jpaRepository.saveAll(certificates);
+        log.debug("Successfully saved {} certificates in batch", savedCertificates.size());
+
+        return savedCertificates;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<Certificate> findById(CertificateId id) {
         log.debug("Finding Certificate by id: {}", id.getId());
@@ -172,5 +199,57 @@ public class JpaCertificateRepository implements CertificateRepository {
     public List<CountryCount> countCertificatesByCountry() {
         log.debug("Counting Certificates by country");
         return jpaRepository.countCertificatesByCountry();
+    }
+
+    // ========== Phase 2 - Master List & Source Tracking Query Methods ==========
+
+    /**
+     * 출처 타입별 Certificate 목록 조회
+     *
+     * @param sourceType 출처 타입 (MASTER_LIST, LDIF_DSC, LDIF_CSCA)
+     * @return Certificate 목록
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findBySourceType(CertificateSourceType sourceType) {
+        log.debug("Finding Certificates by sourceType: {}", sourceType);
+        return jpaRepository.findBySourceType(sourceType);
+    }
+
+    /**
+     * Master List ID로 Certificate 목록 조회
+     *
+     * @param masterListId Master List ID
+     * @return Certificate 목록 (해당 Master List에서 추출된 CSCA)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findByMasterListId(UUID masterListId) {
+        log.debug("Finding Certificates by masterListId: {}", masterListId);
+        return jpaRepository.findByMasterListId(masterListId);
+    }
+
+    /**
+     * Master List에서 추출된 모든 CSCA 인증서 조회
+     *
+     * @return Certificate 목록 (sourceType = MASTER_LIST)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findMasterListCertificates() {
+        log.debug("Finding all Master List Certificates");
+        return jpaRepository.findMasterListCertificates();
+    }
+
+    /**
+     * LDIF 파일에서 로드된 모든 인증서 조회
+     *
+     * @return Certificate 목록 (sourceType = LDIF_DSC or LDIF_CSCA)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findLdifCertificates() {
+        log.debug("Finding all LDIF Certificates");
+        return jpaRepository.findLdifCertificates();
     }
 }

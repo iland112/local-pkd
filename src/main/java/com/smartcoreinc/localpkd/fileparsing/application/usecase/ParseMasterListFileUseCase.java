@@ -1,9 +1,13 @@
 package com.smartcoreinc.localpkd.fileparsing.application.usecase;
 
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.*;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.fileparsing.application.command.ParseMasterListFileCommand;
 import com.smartcoreinc.localpkd.fileparsing.application.response.ParseFileResponse;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.*;
 import com.smartcoreinc.localpkd.fileparsing.domain.port.FileParserPort;
+import com.smartcoreinc.localpkd.fileparsing.domain.port.MasterListParser;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository;
 import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
@@ -15,6 +19,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import javax.security.auth.x500.X500Principal;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * ParseMasterListFileUseCase - Master List 파일 파싱 Use Case
@@ -63,18 +76,29 @@ public class ParseMasterListFileUseCase {
     private final ParsedFileRepository repository;
     private final FileParserPort fileParserPort;
     private final ProgressService progressService;
+    private final MasterListRepository masterListRepository;
+    private final CertificateRepository certificateRepository;
+    private final MasterListParser masterListParser;
 
     /**
      * Constructor with @Qualifier to specify which FileParserPort bean to inject
+     *
+     * <p>Phase 3 Refactoring: Added MasterListRepository, CertificateRepository, MasterListParser</p>
      */
     public ParseMasterListFileUseCase(
             ParsedFileRepository repository,
             @Qualifier("masterListParserAdapter") FileParserPort fileParserPort,
-            ProgressService progressService
+            ProgressService progressService,
+            MasterListRepository masterListRepository,
+            CertificateRepository certificateRepository,
+            MasterListParser masterListParser
     ) {
         this.repository = repository;
         this.fileParserPort = fileParserPort;
         this.progressService = progressService;
+        this.masterListRepository = masterListRepository;
+        this.certificateRepository = certificateRepository;
+        this.masterListParser = masterListParser;
     }
 
     /**
@@ -121,6 +145,52 @@ public class ParseMasterListFileUseCase {
             // 7. FileParserPort를 통해 파일 파싱
             try {
                 fileParserPort.parse(command.fileBytes(), fileFormat, parsedFile);
+
+                // ===========================
+                // Phase 3: Master List Aggregate 생성 및 저장
+                // ===========================
+
+                // 7-1. MasterListParser를 사용하여 구조화된 데이터 추출
+                MasterListParseResult parseResult = masterListParser.parse(command.fileBytes());
+                log.info("MasterListParser extracted {} CSCAs", parseResult.getCscaCount());
+
+                // 7-2. MasterList Aggregate 생성 및 저장
+                MasterList masterList = MasterList.create(
+                        MasterListId.newId(),
+                        uploadId,
+                        parseResult.getCountryCode(),
+                        parseResult.getVersion(),
+                        parseResult.getCmsBinary(),
+                        parseResult.getSignerInfo(),
+                        parseResult.getCscaCount()
+                );
+                MasterList savedMasterList = masterListRepository.save(masterList);
+                log.info("MasterList saved: masterListId={}, cscaCount={}",
+                        savedMasterList.getId().getId(), savedMasterList.getCscaCount());
+
+                // 7-3. 개별 CSCA Certificate 엔티티 생성 및 저장
+                List<Certificate> cscaCertificates = new ArrayList<>();
+                for (MasterListParseResult.ParsedCsca parsedCsca : parseResult.getCscaCertificates()) {
+                    try {
+                        Certificate cert = createCertificateFromParsedCsca(
+                                uploadId.getId(),
+                                savedMasterList.getId().getId(),
+                                parsedCsca
+                        );
+                        cscaCertificates.add(cert);
+                    } catch (Exception e) {
+                        log.warn("Failed to create Certificate from ParsedCsca: {}", e.getMessage());
+                        // Continue with other certificates
+                    }
+                }
+
+                // 7-4. Certificate 엔티티 일괄 저장
+                List<Certificate> savedCertificates = certificateRepository.saveAll(cscaCertificates);
+                log.info("Saved {} CSCA certificates from Master List", savedCertificates.size());
+
+                // ===========================
+                // End of Phase 3 Logic
+                // ===========================
 
                 // 8. 파싱 완료 (통계 계산, CertificatesExtractedEvent, FileParsingCompletedEvent 발행)
                 int totalEntries = parsedFile.getCertificates().size()
@@ -187,5 +257,109 @@ public class ParseMasterListFileUseCase {
                 "파일 파싱 중 오류가 발생했습니다: " + e.getMessage()
             );
         }
+    }
+
+    // ===========================
+    // Phase 3: Helper Methods
+    // ===========================
+
+    /**
+     * ParsedCsca로부터 Certificate 엔티티 생성
+     *
+     * <p>X509Certificate에서 필요한 value objects를 추출하여 Certificate aggregate를 생성합니다.</p>
+     *
+     * @param uploadId 업로드 ID
+     * @param masterListId Master List ID
+     * @param parsedCsca 파싱된 CSCA 데이터
+     * @return Certificate 엔티티
+     * @throws CertificateException 인증서 처리 오류
+     */
+    private Certificate createCertificateFromParsedCsca(
+            java.util.UUID uploadId,
+            java.util.UUID masterListId,
+            MasterListParseResult.ParsedCsca parsedCsca
+    ) throws CertificateException {
+        X509Certificate x509Cert = parsedCsca.getX509Certificate();
+
+        // 1. X509Data 생성
+        X509Data x509Data = X509Data.of(
+                x509Cert.getEncoded(),
+                x509Cert.getPublicKey(),
+                x509Cert.getSerialNumber().toString(16).toUpperCase(),
+                parsedCsca.getFingerprintSha256()
+        );
+
+        // 2. SubjectInfo 생성
+        X500Principal subjectPrincipal = x509Cert.getSubjectX500Principal();
+        String subjectDn = subjectPrincipal.getName();
+        SubjectInfo subjectInfo = SubjectInfo.of(
+                subjectDn,
+                extractDnComponent(subjectDn, "C"),
+                extractDnComponent(subjectDn, "O"),
+                extractDnComponent(subjectDn, "OU"),
+                extractDnComponent(subjectDn, "CN")
+        );
+
+        // 3. IssuerInfo 생성
+        X500Principal issuerPrincipal = x509Cert.getIssuerX500Principal();
+        String issuerDn = issuerPrincipal.getName();
+        boolean isCA = x509Cert.getBasicConstraints() != -1; // -1 means not a CA
+        IssuerInfo issuerInfo = IssuerInfo.of(
+                issuerDn,
+                extractDnComponent(issuerDn, "C"),
+                extractDnComponent(issuerDn, "O"),
+                extractDnComponent(issuerDn, "OU"),
+                extractDnComponent(issuerDn, "CN"),
+                isCA
+        );
+
+        // 4. ValidityPeriod 생성
+        ValidityPeriod validity = ValidityPeriod.of(
+                x509Cert.getNotBefore().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime(),
+                x509Cert.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+        );
+
+        // 5. Signature Algorithm
+        String signatureAlgorithm = x509Cert.getSigAlgName();
+
+        // 6. Certificate 생성 (createFromMasterList factory method)
+        return Certificate.createFromMasterList(
+                uploadId,
+                masterListId,
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validity,
+                signatureAlgorithm
+        );
+    }
+
+    /**
+     * DN에서 특정 컴포넌트 추출
+     *
+     * <p>예시: "CN=CSCA KR, O=Korea, C=KR"에서 "C" 추출 → "KR"</p>
+     *
+     * @param dn Distinguished Name
+     * @param component 추출할 컴포넌트 (C, O, OU, CN 등)
+     * @return 추출된 값 (없으면 null)
+     */
+    private String extractDnComponent(String dn, String component) {
+        if (dn == null || dn.isEmpty()) {
+            return null;
+        }
+
+        // RFC 2253 형식: "CN=..., O=..., C=..."
+        // 정규식: (?:^|,)\s*COMPONENT\s*=\s*([^,]+)
+        Pattern pattern = Pattern.compile(
+                "(?:^|,)\\s*" + Pattern.quote(component) + "\\s*=\\s*([^,]+)",
+                Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher = pattern.matcher(dn);
+
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+
+        return null;
     }
 }
