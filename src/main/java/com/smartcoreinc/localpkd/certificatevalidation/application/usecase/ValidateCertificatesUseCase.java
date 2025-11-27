@@ -87,6 +87,7 @@ public class ValidateCertificatesUseCase {
     private final ParsedFileRepository parsedFileRepository;
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.smartcoreinc.localpkd.certificatevalidation.application.service.CertificateSaveService certificateSaveService;
 
     /**
      * 인증서 검증 실행
@@ -160,8 +161,8 @@ public class ValidateCertificatesUseCase {
                         certificate.recordValidation(validationResult);
                         certificate.addValidationErrors(errors);
 
-                        // Extract method call for saving/updating certificate
-                        handleCertificateSaveOrUpdate(
+                        // Save/update certificate in separate transaction (REQUIRES_NEW)
+                        certificateSaveService.saveOrUpdate(
                             certificate, validationResult, errors,
                             validCertificateIds, invalidCertificateIds, processedFingerprints,
                             true, // isCsca = true
@@ -178,9 +179,9 @@ public class ValidateCertificatesUseCase {
                                 certificate = createCertificateFromData(certData, command.uploadId());
                             }
                             certificate.addValidationErrors(errors);
-                            
-                            // Extract method call for saving/updating certificate after error
-                            handleCertificateSaveOrUpdate(
+
+                            // Save/update certificate in separate transaction (REQUIRES_NEW) after error
+                            certificateSaveService.saveOrUpdate(
                                 certificate, validationResult, errors,
                                 validCertificateIds, invalidCertificateIds, processedFingerprints,
                                 true, // isCsca = true
@@ -240,8 +241,8 @@ public class ValidateCertificatesUseCase {
                         certificate.recordValidation(validationResult);
                         certificate.addValidationErrors(errors);
 
-                        // Extract method call for saving/updating certificate
-                        handleCertificateSaveOrUpdate(
+                        // Save/update certificate in separate transaction (REQUIRES_NEW)
+                        certificateSaveService.saveOrUpdate(
                             certificate, validationResult, errors,
                             validCertificateIds, invalidCertificateIds, processedFingerprints,
                             false, // isCsca = false
@@ -259,8 +260,8 @@ public class ValidateCertificatesUseCase {
                             }
                             certificate.addValidationErrors(errors);
 
-                            // Extract method call for saving/updating certificate after error
-                            handleCertificateSaveOrUpdate(
+                            // Save/update certificate in separate transaction (REQUIRES_NEW) after error
+                            certificateSaveService.saveOrUpdate(
                                 certificate, validationResult, errors,
                                 validCertificateIds, invalidCertificateIds, processedFingerprints,
                                 false, // isCsca = false
@@ -354,100 +355,14 @@ public class ValidateCertificatesUseCase {
         }
     }
 
-    /**
-     * Helper method to handle saving or updating a certificate to the repository,
-     * including robust handling for DataIntegrityViolationException (duplicate key errors).
-     *
-     * @param certificate The certificate entity to save or update.
-     * @param validationResult The validation result associated with the certificate.
-     * @param errors The list of validation errors associated with the certificate.
-     * @param validCertificateIds List to add the certificate ID if valid.
-     * @param invalidCertificateIds List to add the certificate ID if invalid.
-     * @param processedFingerprints Set of fingerprints already processed in this batch to prevent in-batch duplicates.
-     * @param isCsca True if the certificate is a CSCA, for specific logging.
-     * @param uploadId The UUID of the current upload, for logging.
-     */
-    private void handleCertificateSaveOrUpdate(
-        Certificate certificate,
-        ValidationResult validationResult,
-        List<ValidationError> errors,
-        List<UUID> validCertificateIds,
-        List<UUID> invalidCertificateIds,
-        Set<String> processedFingerprints,
-        boolean isCsca,
-        UUID uploadId
-    ) {
-        try {
-            Certificate existingCert = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256()).orElse(null);
-            if (existingCert != null) {
-                // If a duplicate exists, update its validation result and errors
-                existingCert.recordValidation(validationResult);
-                existingCert.clearValidationErrors(); // Clear old errors
-                existingCert.addValidationErrors(errors);
-                certificateRepository.save(existingCert); // Save updated existing cert
-                log.warn("Duplicate {} certificate found and updated with new validation results: {}",
-                    isCsca ? "CSCA" : "DSC/DSC_NC", certificate.getSubjectInfo().getDistinguishedName());
-                if (existingCert.isValid()) {
-                    validCertificateIds.add(existingCert.getId().getId());
-                } else {
-                    invalidCertificateIds.add(existingCert.getId().getId());
-                }
-            } else {
-                // Save new certificate
-                try {
-                    Certificate savedCert = certificateRepository.save(certificate);
-                    if (savedCert.isValid()) {
-                        validCertificateIds.add(savedCert.getId().getId());
-                    } else {
-                        invalidCertificateIds.add(savedCert.getId().getId());
-                    }
-                    log.info("{} certificate validated and saved: country={}, subject={}, status={}",
-                        isCsca ? "CSCA" : "DSC/DSC_NC",
-                        certificate.getSubjectInfo().getCountryCode(),
-                        certificate.getSubjectInfo().getDistinguishedName(), savedCert.getStatus());
-                } catch (DataIntegrityViolationException dive) {
-                    // This happens if findByFingerprint was stale and a duplicate insert was attempted.
-                    // Retrieve the truly existing certificate and update it.
-                    log.warn("Duplicate key found during {} insert attempt (fingerprint={}), attempting to update existing record. Error: {}", 
-                             isCsca ? "CSCA" : "DSC/DSC_NC",
-                             certificate.getX509Data().getFingerprintSha256(), dive.getMessage());
-                    
-                    Certificate existingCertAfterFailure = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256())
-                                                            .orElseThrow(() -> new IllegalStateException("Duplicate key error but no existing cert found after retry lookup for fingerprint: " + certificate.getX509Data().getFingerprintSha256()));
-                    
-                    existingCertAfterFailure.recordValidation(validationResult);
-                    existingCertAfterFailure.clearValidationErrors();
-                    existingCertAfterFailure.addValidationErrors(errors);
-                    certificateRepository.save(existingCertAfterFailure); // Now it's an UPDATE
-            
-                    if (existingCertAfterFailure.isValid()) {
-                        validCertificateIds.add(existingCertAfterFailure.getId().getId());
-                    } else {
-                        invalidCertificateIds.add(existingCertAfterFailure.getId().getId());
-                    }
-                    log.info("{} certificate validated and updated due to duplicate key attempt: country={}, subject={}, status={}",
-                        isCsca ? "CSCA" : "DSC/DSC_NC",
-                        certificate.getSubjectInfo().getCountryCode(),
-                        certificate.getSubjectInfo().getDistinguishedName(), existingCertAfterFailure.getStatus());
-                }
-            }
-            // 현재 처리된 지문을 추가하여 배치 내 중복 검사
-            processedFingerprints.add(certificate.getX509Data().getFingerprintSha256());
-        } catch (Exception ex) {
-            log.error("Error in handleCertificateSaveOrUpdate for certificate subject={}. Error: {}", 
-                      certificate.getSubjectInfo().getDistinguishedName(), ex.getMessage(), ex);
-            // Propagate as a runtime exception to ensure transaction rollback for unrecoverable errors
-            throw new RuntimeException("Failed to save or update certificate: " + ex.getMessage(), ex);
-        }
-    }
-
     // ========== Helper Methods ==========
 
     /**
      * byte[] 인증서 데이터를 X509Certificate로 변환
+     * Uses Bouncy Castle provider to support explicit EC parameters
      */
     private X509Certificate convertToX509Certificate(byte[] certBytes) throws Exception {
-        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+        CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
         ByteArrayInputStream bais = new ByteArrayInputStream(certBytes);
         return (X509Certificate) certFactory.generateCertificate(bais);
     }
@@ -805,93 +720,6 @@ public class ValidateCertificatesUseCase {
             certificateType,
             signatureAlgorithm
         );
-    }
-
-    /**
-     * Helper method to handle saving or updating a certificate to the repository,
-     * including robust handling for DataIntegrityViolationException (duplicate key errors).
-     *
-     * @param certificate The certificate entity to save or update.
-     * @param validationResult The validation result associated with the certificate.
-     * @param errors The list of validation errors associated with the certificate.
-     * @param validCertificateIds List to add the certificate ID if valid.
-     * @param invalidCertificateIds List to add the certificate ID if invalid.
-     * @param processedFingerprints Set of fingerprints already processed in this batch to prevent in-batch duplicates.
-     * @param isCsca True if the certificate is a CSCA, for specific logging.
-     * @param uploadId The UUID of the current upload, for logging.
-     */
-    private void handleCertificateSaveOrUpdate(
-        Certificate certificate,
-        ValidationResult validationResult,
-        List<ValidationError> errors,
-        List<UUID> validCertificateIds,
-        List<UUID> invalidCertificateIds,
-        Set<String> processedFingerprints,
-        boolean isCsca,
-        UUID uploadId
-    ) {
-        try {
-            Certificate existingCert = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256()).orElse(null);
-            if (existingCert != null) {
-                // If a duplicate exists, update its validation result and errors
-                existingCert.recordValidation(validationResult);
-                existingCert.clearValidationErrors(); // Clear old errors
-                existingCert.addValidationErrors(errors);
-                certificateRepository.save(existingCert); // Save updated existing cert
-                log.warn("Duplicate {} certificate found and updated with new validation results: {}",
-                    isCsca ? "CSCA" : "DSC/DSC_NC", certificate.getSubjectInfo().getDistinguishedName());
-                if (existingCert.isValid()) {
-                    validCertificateIds.add(existingCert.getId().getId());
-                } else {
-                    invalidCertificateIds.add(existingCert.getId().getId());
-                }
-            } else {
-                // Save new certificate
-                try {
-                    Certificate savedCert = certificateRepository.save(certificate);
-                    if (savedCert.isValid()) {
-                        validCertificateIds.add(savedCert.getId().getId());
-                    } else {
-                        invalidCertificateIds.add(savedCert.getId().getId());
-                    }
-                    log.info("{} certificate validated and saved: country={}, subject={}, status={}",
-                        isCsca ? "CSCA" : "DSC/DSC_NC",
-                        certificate.getSubjectInfo().getCountryCode(),
-                        certificate.getSubjectInfo().getDistinguishedName(), savedCert.getStatus());
-                } catch (DataIntegrityViolationException dive) {
-                    // This happens if findByFingerprint was stale and a duplicate insert was attempted.
-                    // Retrieve the truly existing certificate and update it.
-                    log.warn("Duplicate key found during {} insert attempt (fingerprint={}), attempting to update existing record. Error: {}", 
-                             isCsca ? "CSCA" : "DSC/DSC_NC",
-                             certificate.getX509Data().getFingerprintSha256(), dive.getMessage());
-                    
-                    Certificate existingCertAfterFailure = certificateRepository.findByFingerprint(certificate.getX509Data().getFingerprintSha256())
-                                                            .orElseThrow(() -> new IllegalStateException("Duplicate key error but no existing cert found after retry lookup for fingerprint: " + certificate.getX509Data().getFingerprintSha256()));
-                    
-                    existingCertAfterFailure.recordValidation(validationResult);
-                    existingCertAfterFailure.clearValidationErrors();
-                    existingCertAfterFailure.addValidationErrors(errors);
-                    certificateRepository.save(existingCertAfterFailure); // Now it's an UPDATE
-            
-                    if (existingCertAfterFailure.isValid()) {
-                        validCertificateIds.add(existingCertAfterFailure.getId().getId());
-                    } else {
-                        invalidCertificateIds.add(existingCertAfterFailure.getId().getId());
-                    }
-                    log.info("{} certificate validated and updated due to duplicate key attempt: country={}, subject={}, status={}",
-                        isCsca ? "CSCA" : "DSC/DSC_NC",
-                        certificate.getSubjectInfo().getCountryCode(),
-                        certificate.getSubjectInfo().getDistinguishedName(), existingCertAfterFailure.getStatus());
-                }
-            }
-            // 현재 처리된 지문을 추가하여 배치 내 중복 검사
-            processedFingerprints.add(certificate.getX509Data().getFingerprintSha256());
-        } catch (Exception ex) {
-            log.error("Error in handleCertificateSaveOrUpdate for certificate subject={}. Error: {}", 
-                      certificate.getSubjectInfo().getDistinguishedName(), ex.getMessage(), ex);
-            // Propagate as a runtime exception to ensure transaction rollback for unrecoverable errors
-            throw new RuntimeException("Failed to save or update certificate: " + ex.getMessage(), ex);
-        }
     }
 
     /**

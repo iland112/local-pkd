@@ -367,11 +367,11 @@ public class TrustChainValidatorImpl implements TrustChainValidator {
      */
     private boolean verifySignature(Certificate subject, Certificate issuer) {
         try {
-            // 1. Parse X.509 certificates
+            // 1. Parse X.509 certificates using Bouncy Castle provider (supports explicit EC parameters)
             byte[] subjectBytes = subject.getX509Data().getCertificateBinary();
             byte[] issuerBytes = issuer.getX509Data().getCertificateBinary();
 
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
 
             X509Certificate subjectCert = (X509Certificate) cf.generateCertificate(
                     new ByteArrayInputStream(subjectBytes)

@@ -62,22 +62,29 @@ public class CertificateValidatedEventHandler {
             }
 
             // In AUTO mode, proceed with LDAP upload automatically.
-            if (event.getValidCertificateCount() == 0 && event.getValidCrlCount() == 0) {
-                log.info("No valid certificates or CRLs to upload to LDAP for uploadId: {}. Completing process.", event.getUploadId());
+            // Upload ALL certificates (valid + invalid) to LDAP with their validation status
+            int totalCertificates = event.getValidCertificateCount() + event.getInvalidCertificateCount();
+            int totalCrls = event.getValidCrlCount() + event.getInvalidCrlCount();
+
+            if (totalCertificates == 0 && totalCrls == 0) {
+                log.info("No certificates or CRLs to upload to LDAP for uploadId: {}. Completing process.", event.getUploadId());
                 progressService.sendProgress(ProcessingProgress.completed(event.getUploadId(), 0));
                 return;
             }
 
-            log.info("AUTO mode: Starting LDAP upload for {} valid certificates and {} valid CRLs.", event.getValidCertificateCount(), event.getValidCrlCount());
+            log.info("AUTO mode: Starting LDAP upload for {} total certificates ({} valid, {} invalid) and {} total CRLs ({} valid, {} invalid).",
+                totalCertificates, event.getValidCertificateCount(), event.getInvalidCertificateCount(),
+                totalCrls, event.getValidCrlCount(), event.getInvalidCrlCount());
             progressService.sendProgress(
-                ProcessingProgress.ldapSavingStarted(event.getUploadId(), event.getValidCertificateCount() + event.getValidCrlCount())
+                ProcessingProgress.ldapSavingStarted(event.getUploadId(), totalCertificates + totalCrls)
             );
 
             // Use the correct Command, UseCase, and Response from the ldapintegration context
+            // Note: Command takes "validCertificateCount" but UseCase should upload ALL certificates
             UploadToLdapCommand command = UploadToLdapCommand.create(
                 event.getUploadId(),
-                event.getValidCertificateCount(),
-                event.getValidCrlCount()
+                totalCertificates,  // Total (valid + invalid) - UseCase will query DB for all
+                totalCrls           // Total (valid + invalid)
             );
 
             UploadToLdapResponse response = uploadToLdapUseCase.execute(command);

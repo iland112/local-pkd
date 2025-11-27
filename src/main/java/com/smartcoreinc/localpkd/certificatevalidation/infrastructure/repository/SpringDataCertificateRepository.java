@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.repositor
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateSourceType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCount;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.TypeCount;
@@ -40,4 +41,40 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
     List<Certificate> findExpiringSoon(LocalDateTime expiryThreshold, LocalDateTime now);
     Optional<Certificate> findBySubjectInfo_DistinguishedName(String subjectDn);
     Optional<Certificate> findByIssuerInfo_DistinguishedName(String issuerDn);
+
+    // ===========================
+    // Phase 1 - Master List & Source Tracking Queries
+    // ===========================
+
+    /**
+     * Find certificates by source type
+     *
+     * @param sourceType CertificateSourceType (MASTER_LIST, LDIF_DSC, LDIF_CSCA)
+     * @return List of certificates from the specified source
+     */
+    List<Certificate> findBySourceType(CertificateSourceType sourceType);
+
+    /**
+     * Find certificates extracted from a specific Master List
+     *
+     * @param masterListId Master List ID
+     * @return List of CSCA certificates from the Master List
+     */
+    List<Certificate> findByMasterListId(java.util.UUID masterListId);
+
+    /**
+     * Find all certificates from Master List sources
+     *
+     * @return List of all Master List certificates
+     */
+    @Query("SELECT c FROM Certificate c WHERE c.sourceType = 'MASTER_LIST'")
+    List<Certificate> findMasterListCertificates();
+
+    /**
+     * Find all certificates from LDIF sources
+     *
+     * @return List of all LDIF certificates (DSC and CSCA)
+     */
+    @Query("SELECT c FROM Certificate c WHERE c.sourceType IN ('LDIF_DSC', 'LDIF_CSCA')")
+    List<Certificate> findLdifCertificates();
 }

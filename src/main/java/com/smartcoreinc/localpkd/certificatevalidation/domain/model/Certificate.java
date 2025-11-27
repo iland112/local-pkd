@@ -210,6 +210,29 @@ public class Certificate extends AggregateRoot<CertificateId> {
     private java.util.UUID uploadId;
 
     /**
+     * 인증서 출처 유형
+     *
+     * <p>인증서가 어디서 추출되었는지 추적:</p>
+     * <ul>
+     *   <li>MASTER_LIST: Master List (.ml) 파일에서 추출된 CSCA</li>
+     *   <li>LDIF_DSC: LDIF 파일에서 추출된 DSC</li>
+     *   <li>LDIF_CSCA: LDIF 파일에서 추출된 CSCA (드문 경우)</li>
+     * </ul>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", length = 20, nullable = false)
+    private CertificateSourceType sourceType;
+
+    /**
+     * Master List ID (nullable)
+     *
+     * <p>이 인증서가 Master List에서 추출된 경우, 원본 Master List의 ID를 참조합니다.</p>
+     * <p>sourceType이 MASTER_LIST인 경우에만 값이 설정됩니다.</p>
+     */
+    @Column(name = "master_list_id")
+    private java.util.UUID masterListId;
+
+    /**
      * 인증서가 LDAP 디렉토리에 저장되었는지 여부
      */
     @Column(name = "uploaded_to_ldap", nullable = false)
@@ -240,7 +263,9 @@ public class Certificate extends AggregateRoot<CertificateId> {
             IssuerInfo issuerInfo,
             ValidityPeriod validity,
             CertificateType certificateType,
-            String signatureAlgorithm
+            String signatureAlgorithm,
+            CertificateSourceType sourceType,
+            java.util.UUID masterListId
     ) {
         this.id = id;
         this.uploadId = uploadId;
@@ -250,6 +275,8 @@ public class Certificate extends AggregateRoot<CertificateId> {
         this.validity = validity;
         this.certificateType = certificateType;
         this.signatureAlgorithm = signatureAlgorithm;
+        this.sourceType = sourceType;
+        this.masterListId = masterListId;
         this.status = CertificateStatus.VALID; // 초기 상태는 VALID (검증 전)
         this.createdAt = LocalDateTime.now();
         this.uploadedToLdap = false;
@@ -302,8 +329,75 @@ public class Certificate extends AggregateRoot<CertificateId> {
         }
 
         CertificateId id = CertificateId.newId();
+
+        // Auto-determine sourceType from certificateType for LDIF files
+        CertificateSourceType sourceType = (certificateType == CertificateType.CSCA)
+            ? CertificateSourceType.LDIF_CSCA
+            : CertificateSourceType.LDIF_DSC;
+
         Certificate cert = new Certificate(
-            id, uploadId, x509Data, subjectInfo, issuerInfo, validity, certificateType, signatureAlgorithm
+            id, uploadId, x509Data, subjectInfo, issuerInfo, validity, certificateType,
+            signatureAlgorithm, sourceType, null
+        );
+
+        // Domain Event 발행: 인증서 생성됨
+        cert.addDomainEvent(new CertificateCreatedEvent(id));
+
+        return cert;
+    }
+
+    /**
+     * Master List에서 추출된 CSCA 인증서 생성 (Static Factory Method)
+     *
+     * @param uploadId 원본 업로드 파일 ID
+     * @param masterListId Master List ID
+     * @param x509Data X.509 인증서 데이터
+     * @param subjectInfo 주체 정보
+     * @param issuerInfo 발급자 정보
+     * @param validity 유효기간
+     * @param signatureAlgorithm 서명 알고리즘
+     * @return Certificate
+     * @throws IllegalArgumentException 필수 필드가 null인 경우
+     */
+    public static Certificate createFromMasterList(
+            java.util.UUID uploadId,
+            java.util.UUID masterListId,
+            X509Data x509Data,
+            SubjectInfo subjectInfo,
+            IssuerInfo issuerInfo,
+            ValidityPeriod validity,
+            String signatureAlgorithm
+    ) {
+        if (uploadId == null) {
+            throw new IllegalArgumentException("uploadId cannot be null");
+        }
+        if (masterListId == null) {
+            throw new IllegalArgumentException("masterListId cannot be null for Master List certificates");
+        }
+        if (x509Data == null) {
+            throw new IllegalArgumentException("x509Data cannot be null");
+        }
+        if (subjectInfo == null) {
+            throw new IllegalArgumentException("subjectInfo cannot be null");
+        }
+        if (issuerInfo == null) {
+            throw new IllegalArgumentException("issuerInfo cannot be null");
+        }
+        if (validity == null) {
+            throw new IllegalArgumentException("validity cannot be null");
+        }
+        if (signatureAlgorithm == null || signatureAlgorithm.trim().isEmpty()) {
+            throw new IllegalArgumentException("signatureAlgorithm cannot be null or blank");
+        }
+
+        CertificateId id = CertificateId.newId();
+
+        Certificate cert = new Certificate(
+            id, uploadId, x509Data, subjectInfo, issuerInfo, validity,
+            CertificateType.CSCA,  // Always CSCA for Master List
+            signatureAlgorithm,
+            CertificateSourceType.MASTER_LIST,  // From Master List
+            masterListId
         );
 
         // Domain Event 발행: 인증서 생성됨
@@ -373,6 +467,50 @@ public class Certificate extends AggregateRoot<CertificateId> {
 
     public LocalDateTime getUploadedToLdapAt() {
         return uploadedToLdapAt;
+    }
+
+    public CertificateSourceType getSourceType() {
+        return sourceType;
+    }
+
+    public java.util.UUID getMasterListId() {
+        return masterListId;
+    }
+
+    /**
+     * 이 인증서가 Master List에서 추출되었는지 확인
+     *
+     * @return Master List 출처이면 true
+     */
+    public boolean isFromMasterList() {
+        return sourceType == CertificateSourceType.MASTER_LIST;
+    }
+
+    /**
+     * 이 인증서가 LDIF 파일에서 로드되었는지 확인
+     *
+     * @return LDIF 출처이면 true
+     */
+    public boolean isFromLdif() {
+        return sourceType != null && sourceType.isFromLdif();
+    }
+
+    /**
+     * 이 인증서가 CSCA인지 확인
+     *
+     * @return CSCA 타입이면 true
+     */
+    public boolean isCsca() {
+        return certificateType == CertificateType.CSCA;
+    }
+
+    /**
+     * 이 인증서가 DSC인지 확인
+     *
+     * @return DSC 타입이면 true
+     */
+    public boolean isDsc() {
+        return certificateType == CertificateType.DSC;
     }
 
     // ========== Business Logic Methods ==========

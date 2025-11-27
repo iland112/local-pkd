@@ -38,6 +38,7 @@
         <!-- DDD Libraries -->
         <jpearl.version>2.0.1</jpearl.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <lombok.version>1.18.38</lombok.version>
     </properties>
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -111,7 +112,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <scope>provided</scope>
+            <version>${lombok.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -135,7 +136,6 @@
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct-processor</artifactId>
             <version>${mapstruct.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <!-- OpenAPI / Swagger Documentation -->

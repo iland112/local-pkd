@@ -1,10 +1,10 @@
 package com.smartcoreinc.localpkd.fileparsing.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCode;
 import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
-import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
-import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
-import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsingError;
+import com.smartcoreinc.localpkd.fileparsing.domain.model.*;
 import com.smartcoreinc.localpkd.fileparsing.domain.port.FileParserPort;
+import com.smartcoreinc.localpkd.fileparsing.domain.port.MasterListParser;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
@@ -44,7 +44,7 @@ import org.bouncycastle.asn1.ASN1Set;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MasterListParserAdapter implements FileParserPort {
+public class MasterListParserAdapter implements FileParserPort, MasterListParser {
 
     private final ProgressService progressService;
     private final CertificateExistenceService certificateExistenceService; // Inject CertificateExistenceService
@@ -64,12 +64,12 @@ public class MasterListParserAdapter implements FileParserPort {
     }
 
     @Override
-    public void parse(byte[] fileBytes, FileFormat fileFormat, ParsedFile parsedFile) throws ParsingException {
+    public void parse(byte[] fileBytes, FileFormat fileFormat, ParsedFile parsedFile) throws FileParserPort.ParsingException {
         log.info("=== Master List Parsing started for upload {} ===", parsedFile.getUploadId().getId());
 
         try {
             if (!supports(fileFormat)) {
-                throw new ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
+                throw new FileParserPort.ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
             }
             
             progressService.sendProgress(ProcessingProgress.parsingStarted(parsedFile.getUploadId().getId(), "Master List"));
@@ -86,12 +86,12 @@ public class MasterListParserAdapter implements FileParserPort {
             log.info("Master List parsing completed: {} CSCA certificates, {} errors",
                 parsedFile.getCertificates().size(), parsedFile.getErrors().size());
 
-        } catch (ParsingException e) {
+        } catch (FileParserPort.ParsingException e) {
             log.error("Master List parsing failed", e);
             throw e;
         } catch (Exception e) {
             log.error("Master List parsing failed", e);
-            throw new ParsingException("Master List parsing error: " + e.getMessage(), e);
+            throw new FileParserPort.ParsingException("Master List parsing error: " + e.getMessage(), e);
         }
     }
 
@@ -100,12 +100,12 @@ public class MasterListParserAdapter implements FileParserPort {
         return fileFormat != null && fileFormat.isMasterList();
     }
 
-    private void validateCmsFormat(byte[] fileBytes) throws ParsingException {
+    private void validateCmsFormat(byte[] fileBytes) throws FileParserPort.ParsingException {
         if (fileBytes == null || fileBytes.length < 4) {
-            throw new ParsingException("Invalid Master List: file too small");
+            throw new FileParserPort.ParsingException("Invalid Master List: file too small");
         }
         if (fileBytes[0] != 0x30) {
-            throw new ParsingException("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
+            throw new FileParserPort.ParsingException("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
         }
         log.debug("CMS format validation passed");
     }
@@ -116,7 +116,7 @@ public class MasterListParserAdapter implements FileParserPort {
         X509Certificate trustAnchor = loadTrustAnchor();
         boolean signatureValid = verifySignature(signedData, trustAnchor);
         if (!signatureValid) {
-            throw new ParsingException("CMS signature verification failed");
+            throw new FileParserPort.ParsingException("CMS signature verification failed");
         }
         log.info("✅ CMS signature verified successfully");
         return signedData;
@@ -153,7 +153,7 @@ public class MasterListParserAdapter implements FileParserPort {
         try (ASN1InputStream asn1In = new ASN1InputStream(contentBytes)) {
             ASN1Primitive root = asn1In.readObject();
             if (!(root instanceof ASN1Sequence)) {
-                throw new ParsingException("Unexpected ASN.1 structure: not a SEQUENCE");
+                throw new FileParserPort.ParsingException("Unexpected ASN.1 structure: not a SEQUENCE");
             }
 
             ASN1Sequence seq = (ASN1Sequence) root;
@@ -182,15 +182,15 @@ public class MasterListParserAdapter implements FileParserPort {
         }
     }
 
-    private int validateMasterListStructure(ASN1Sequence seq) throws ParsingException {
+    private int validateMasterListStructure(ASN1Sequence seq) throws FileParserPort.ParsingException {
         if (seq.size() < 1 || seq.size() > 2) {
-            throw new ParsingException("Invalid Master List structure: SEQUENCE size must be 1 or 2, but got " + seq.size());
+            throw new FileParserPort.ParsingException("Invalid Master List structure: SEQUENCE size must be 1 or 2, but got " + seq.size());
         }
         if (seq.size() == 1) {
-            if (!(seq.getObjectAt(0) instanceof ASN1Set)) throw new ParsingException("Invalid Master List: expected SET OF Certificate at index 0");
+            if (!(seq.getObjectAt(0) instanceof ASN1Set)) throw new FileParserPort.ParsingException("Invalid Master List: expected SET OF Certificate at index 0");
             return 0;
         } else {
-            if (!(seq.getObjectAt(1) instanceof ASN1Set)) throw new ParsingException("Invalid Master List: expected SET OF Certificate at index 1");
+            if (!(seq.getObjectAt(1) instanceof ASN1Set)) throw new FileParserPort.ParsingException("Invalid Master List: expected SET OF Certificate at index 1");
             return 1;
         }
     }
@@ -232,5 +232,145 @@ public class MasterListParserAdapter implements FileParserPort {
     
     private LocalDateTime convertToLocalDateTime(Date date) {
         return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    // ===========================
+    // MasterListParser Implementation
+    // ===========================
+
+    /**
+     * Master List 파싱 (MasterListParser 인터페이스 구현)
+     *
+     * <p>Phase 3에서 추가된 새로운 파싱 메서드입니다.</p>
+     * <p>ParseMasterListFileUseCase에서 MasterList aggregate와 Certificate 엔티티를 생성하기 위해 사용됩니다.</p>
+     *
+     * @param masterListBytes Master List CMS 바이너리
+     * @return MasterListParseResult (MasterList 생성에 필요한 모든 데이터)
+     * @throws MasterListParser.ParsingException 파싱 실패 시
+     */
+    @Override
+    public MasterListParseResult parse(byte[] masterListBytes) throws MasterListParser.ParsingException {
+        try {
+            log.info("=== MasterListParser.parse() started ===");
+
+            // 1. Validate CMS format
+            validateCmsFormat(masterListBytes);
+
+            // 2. Parse CMS and verify signature
+            CMSSignedData signedData = parseCmsAndVerifySignature(masterListBytes);
+
+            // 3. Extract signer information
+            SignerInfo signerInfo = extractSignerInfo(signedData);
+
+            // 4. Extract CSCA certificates
+            java.util.List<MasterListParseResult.ParsedCsca> parsedCscas = extractCscaCertificatesForMasterList(signedData);
+
+            // 5. Determine country code (from first CSCA or default to unknown)
+            CountryCode countryCode = parsedCscas.isEmpty() ? null :
+                    (parsedCscas.get(0).getCountryCode() != null ? parsedCscas.get(0).getCountryCode() : null);
+
+            // 6. Create MasterListParseResult
+            MasterListParseResult result = MasterListParseResult.of(
+                    countryCode,
+                    MasterListVersion.unknown(), // TODO: Extract version if available in CMS
+                    CmsBinaryData.of(masterListBytes),
+                    signerInfo,
+                    parsedCscas
+            );
+
+            log.info("✅ MasterListParser.parse() completed successfully: {} CSCAs extracted", result.getCscaCount());
+            return result;
+
+        } catch (Exception e) {
+            log.error("❌ MasterListParser.parse() failed: {}", e.getMessage(), e);
+            throw new MasterListParser.ParsingException("Failed to parse Master List: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 서명자 정보 추출
+     *
+     * @param signedData CMS SignedData
+     * @return SignerInfo (DN, 알고리즘 등)
+     */
+    private SignerInfo extractSignerInfo(CMSSignedData signedData) {
+        try {
+            Store<X509CertificateHolder> certStore = signedData.getCertificates();
+            SignerInformationStore signerInfos = signedData.getSignerInfos();
+
+            for (SignerInformation signer : signerInfos.getSigners()) {
+                Collection<X509CertificateHolder> certCollection = certStore.getMatches(signer.getSID());
+                if (certCollection.isEmpty()) continue;
+
+                X509CertificateHolder holder = certCollection.iterator().next();
+                String signerDn = holder.getSubject().toString();
+                String algorithm = signer.getDigestAlgOID();
+
+                java.util.Map<String, Object> signerData = new java.util.HashMap<>();
+                signerData.put("signerDN", signerDn);
+                signerData.put("signatureAlgorithm", algorithm);
+
+                return SignerInfo.of(signerData);
+            }
+
+            return SignerInfo.empty();
+        } catch (Exception e) {
+            log.warn("Failed to extract signer info: {}", e.getMessage());
+            return SignerInfo.empty();
+        }
+    }
+
+    /**
+     * CSCA 인증서 추출 (MasterListParseResult용)
+     *
+     * <p>기존 extractCscaCertificates()는 ParsedFile을 직접 수정하므로,
+     * 새로운 메서드를 추가하여 List<ParsedCsca>를 반환합니다.</p>
+     *
+     * @param signedData CMS SignedData
+     * @return List of ParsedCsca
+     * @throws Exception 파싱 실패 시
+     */
+    private java.util.List<MasterListParseResult.ParsedCsca> extractCscaCertificatesForMasterList(CMSSignedData signedData) throws Exception {
+        java.util.List<MasterListParseResult.ParsedCsca> parsedCscas = new java.util.ArrayList<>();
+
+        CMSProcessable signedContent = signedData.getSignedContent();
+        byte[] contentBytes = (byte[]) signedContent.getContent();
+
+        try (ASN1InputStream asn1In = new ASN1InputStream(contentBytes)) {
+            ASN1Primitive root = asn1In.readObject();
+            if (!(root instanceof ASN1Sequence)) {
+                throw new FileParserPort.ParsingException("Unexpected ASN.1 structure: not a SEQUENCE");
+            }
+
+            ASN1Sequence seq = (ASN1Sequence) root;
+            int certSetIndex = validateMasterListStructure(seq);
+            ASN1Set certSet = (ASN1Set) seq.getObjectAt(certSetIndex);
+
+            JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider("BC");
+            for (ASN1Encodable encodable : certSet) {
+                try {
+                    org.bouncycastle.asn1.x509.Certificate bcCert = org.bouncycastle.asn1.x509.Certificate.getInstance(encodable);
+                    X509CertificateHolder holder = new X509CertificateHolder(bcCert);
+                    X509Certificate x509Cert = converter.getCertificate(holder);
+
+                    String fingerprint = calculateFingerprint(x509Cert);
+                    String subjectDn = x509Cert.getSubjectX500Principal().getName();
+                    String countryCodeStr = extractCountryCode(subjectDn);
+                    CountryCode countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
+
+                    parsedCscas.add(MasterListParseResult.ParsedCsca.of(
+                            x509Cert,
+                            fingerprint,
+                            countryCode
+                    ));
+
+                } catch (Exception e) {
+                    log.warn("Failed to extract CSCA certificate: {}", e.getMessage());
+                    // Continue with other certificates
+                }
+            }
+        }
+
+        return parsedCscas;
     }
 }

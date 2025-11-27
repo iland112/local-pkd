@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.certificatevalidation.domain.repository;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateSourceType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCount;
@@ -73,6 +74,18 @@ public interface CertificateRepository {
      * @throws IllegalArgumentException certificate가 null인 경우
      */
     Certificate save(Certificate certificate);
+
+    /**
+     * Certificate 일괄 저장 (Phase 3에서 추가)
+     *
+     * <p>Master List에서 추출한 여러 CSCA 인증서를 한 번에 저장합니다.</p>
+     * <p>저장 후 Domain Events를 자동으로 발행합니다.</p>
+     *
+     * @param certificates 저장할 Certificate 목록
+     * @return 저장된 Certificate 목록
+     * @throws IllegalArgumentException certificates가 null이거나 빈 리스트인 경우
+     */
+    List<Certificate> saveAll(List<Certificate> certificates);
 
     /**
      * ID로 Certificate 조회
@@ -225,6 +238,70 @@ public interface CertificateRepository {
      * @return Certificate 목록 (빈 리스트 가능)
      */
     List<Certificate> findExpiringSoon(int daysThreshold);
+
+    /**
+     * 출처 타입별 Certificate 목록 조회
+     *
+     * <p>특정 출처 타입의 인증서들을 조회합니다.</p>
+     * <p>Master List에서 추출한 CSCA, LDIF DSC, LDIF CSCA 구분 가능</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * // Master List에서 추출한 CSCA만 조회
+     * List<Certificate> masterListCerts =
+     *     certificateRepository.findBySourceType(CertificateSourceType.MASTER_LIST);
+     *
+     * // LDIF 파일의 DSC만 조회
+     * List<Certificate> ldifDscCerts =
+     *     certificateRepository.findBySourceType(CertificateSourceType.LDIF_DSC);
+     * }</pre>
+     *
+     * @param sourceType 출처 타입 (MASTER_LIST, LDIF_DSC, LDIF_CSCA)
+     * @return Certificate 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException sourceType이 null인 경우
+     */
+    List<Certificate> findBySourceType(CertificateSourceType sourceType);
+
+    /**
+     * Master List ID로 Certificate 목록 조회
+     *
+     * <p>특정 Master List에서 추출된 모든 CSCA 인증서를 조회합니다.</p>
+     * <p>Master List와 개별 인증서 간의 추적성(traceability)을 보장합니다.</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * UUID masterListId = masterList.getId().getValue();
+     * List<Certificate> extractedCscas = certificateRepository.findByMasterListId(masterListId);
+     *
+     * // Master List binary와 추출된 개별 CSCA의 매핑 확인
+     * System.out.println("Master List contains " + extractedCscas.size() + " CSCA certificates");
+     * }</pre>
+     *
+     * @param masterListId Master List ID (master_list 테이블의 PK)
+     * @return Certificate 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException masterListId가 null인 경우
+     */
+    List<Certificate> findByMasterListId(java.util.UUID masterListId);
+
+    /**
+     * Master List에서 추출된 모든 CSCA 인증서 조회
+     *
+     * <p>sourceType이 MASTER_LIST인 모든 인증서를 조회합니다.</p>
+     * <p>{@code findBySourceType(CertificateSourceType.MASTER_LIST)}와 동일합니다.</p>
+     *
+     * @return Certificate 목록 (빈 리스트 가능)
+     */
+    List<Certificate> findMasterListCertificates();
+
+    /**
+     * LDIF 파일에서 로드된 모든 인증서 조회
+     *
+     * <p>sourceType이 LDIF_DSC 또는 LDIF_CSCA인 모든 인증서를 조회합니다.</p>
+     * <p>LDIF 파일에서 직접 로드한 개별 인증서들입니다.</p>
+     *
+     * @return Certificate 목록 (빈 리스트 가능)
+     */
+    List<Certificate> findLdifCertificates();
 
     /**
      * 전체 Certificate 개수 조회 (GetCertificateStatisticsUseCase에서 사용)
