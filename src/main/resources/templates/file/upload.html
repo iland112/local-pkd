@@ -306,13 +306,19 @@
             uploadId: null,
             sseEventSource: null,
             processingMode: 'AUTO',
-            
+
+            // SSE reconnection state
+            sseReconnectAttempts: 0,
+            maxSseReconnectAttempts: 5,
+            sseReconnectDelay: 2000, // Start with 2 seconds
+            sseReconnectTimer: null,
+
             // Stage-specific progress
             uploadStage: { active: false, message: '', percentage: 0, status: '' },
             parseStage: { active: false, message: '', percentage: 0, status: '' },
             validateStage: { active: false, message: '', percentage: 0, status: '' },
             ldapStage: { active: false, message: '', percentage: 0, status: '' },
-            
+
             // Overall status
             overallStatus: 'IDLE', // IDLE, IN_PROGRESS, FINALIZED, FAILED
             overallMessage: '',
@@ -329,11 +335,32 @@
               this.$el.addEventListener('processing-mode-changed', (event) => {
                   this.processingMode = event.detail.mode;
               });
+
+              // Check if there's an ongoing upload from sessionStorage
+              const savedUploadId = sessionStorage.getItem('currentUploadId');
+              if (savedUploadId) {
+                  console.log('Resuming upload from sessionStorage:', savedUploadId);
+                  this.uploadId = savedUploadId;
+                  this.startSseConnection();
+              }
             },
 
             resetProgressState() {
                 this.isProcessing = true;
                 this.uploadId = null;
+
+                // Clear sessionStorage
+                sessionStorage.removeItem('currentUploadId');
+
+                // Clear reconnection state
+                this.sseReconnectAttempts = 0;
+                this.sseReconnectDelay = 2000;
+                if (this.sseReconnectTimer) {
+                    clearTimeout(this.sseReconnectTimer);
+                    this.sseReconnectTimer = null;
+                }
+
+                // Close SSE connection
                 if (this.sseEventSource) {
                     this.sseEventSource.close();
                     this.sseEventSource = null;
@@ -467,22 +494,86 @@
 
             startSseConnection() {
                 if (!this.uploadId) return;
+
+                // Cancel any pending reconnection timer
+                if (this.sseReconnectTimer) {
+                    clearTimeout(this.sseReconnectTimer);
+                    this.sseReconnectTimer = null;
+                }
+
+                // Close existing connection if any
+                if (this.sseEventSource) {
+                    this.sseEventSource.close();
+                    this.sseEventSource = null;
+                }
+
                 this.isProcessing = true;
+
+                // Save uploadId to sessionStorage for persistence
+                sessionStorage.setItem('currentUploadId', this.uploadId);
+
+                console.log(`Starting SSE connection for uploadId: ${this.uploadId} (attempt ${this.sseReconnectAttempts + 1}/${this.maxSseReconnectAttempts})`);
+
                 this.sseEventSource = new EventSource(`/progress/stream/${this.uploadId}`);
-                
+
+                // Handle successful connection
+                this.sseEventSource.addEventListener('connected', (event) => {
+                    console.log('SSE connected:', event.data);
+                    this.sseReconnectAttempts = 0; // Reset retry count on successful connection
+                    this.sseReconnectDelay = 2000; // Reset delay
+                });
+
+                // Handle heartbeat
+                this.sseEventSource.addEventListener('heartbeat', (event) => {
+                    console.log('SSE heartbeat received');
+                    this.sseReconnectAttempts = 0; // Reset retry count on heartbeat
+                });
+
+                // Handle progress events
                 this.sseEventSource.addEventListener('progress', (event) => this.handleProgressEvent(event));
+
+                // Handle connection error with auto-reconnection
                 this.sseEventSource.onerror = (error) => {
                     console.error('SSE error:', error);
-                    this.errorMessages.push('SSE 연결 오류가 발생했습니다.');
-                    this.overallStatus = 'FAILED';
-                    this.isProcessing = false;
-                    if (this.sseEventSource) this.sseEventSource.close();
+
+                    // Close the failed connection
+                    if (this.sseEventSource) {
+                        this.sseEventSource.close();
+                        this.sseEventSource = null;
+                    }
+
+                    // Attempt reconnection if under max retries
+                    if (this.sseReconnectAttempts < this.maxSseReconnectAttempts) {
+                        this.sseReconnectAttempts++;
+                        const delay = this.sseReconnectDelay * Math.pow(2, this.sseReconnectAttempts - 1); // Exponential backoff
+
+                        console.log(`SSE connection lost. Reconnecting in ${delay/1000} seconds... (attempt ${this.sseReconnectAttempts}/${this.maxSseReconnectAttempts})`);
+
+                        // Show reconnection message to user
+                        this.errorMessages = this.errorMessages.filter(m => !m.includes('재연결 시도 중'));
+                        this.errorMessages.push(`SSE 연결이 끊어졌습니다. ${delay/1000}초 후 재연결 시도 중... (${this.sseReconnectAttempts}/${this.maxSseReconnectAttempts})`);
+
+                        // Schedule reconnection
+                        this.sseReconnectTimer = setTimeout(() => {
+                            this.startSseConnection();
+                        }, delay);
+
+                    } else {
+                        // Max retries reached
+                        console.error('SSE max reconnection attempts reached');
+                        this.errorMessages.push('SSE 연결을 복구할 수 없습니다. 페이지를 새로고침해주세요.');
+                        this.overallStatus = 'FAILED';
+                        this.isProcessing = false;
+                    }
                 };
             },
 
             handleProgressEvent(event) {
                 const progress = JSON.parse(event.data);
                 if (progress.uploadId !== this.uploadId) return;
+
+                // Reset reconnection attempts on successful progress event
+                this.sseReconnectAttempts = 0;
 
                 // Explicitly activate the stage display when any progress event for it arrives
                 if (progress.step === 'UPLOAD') this.uploadStage.active = true;
@@ -529,6 +620,16 @@
                     this.overallStatus = progress.step === 'FINALIZED' ? 'FINALIZED' : 'FAILED';
                     this.overallMessage = progress.message;
                     this.isProcessing = false;
+
+                    // Clear sessionStorage since processing is complete
+                    sessionStorage.removeItem('currentUploadId');
+
+                    // Clear reconnection state
+                    this.sseReconnectAttempts = 0;
+                    if (this.sseReconnectTimer) {
+                        clearTimeout(this.sseReconnectTimer);
+                        this.sseReconnectTimer = null;
+                    }
 
                     // Ensure all stages are properly finalized
                     const stages = [this.uploadStage, this.parseStage, this.validateStage, this.ldapStage];
@@ -579,10 +680,21 @@
             triggerLdapUpload() { this.triggerManualStep('LDAP_UPLOAD'); },
 
             destroySseConnection() {
+                // Clear reconnection timer
+                if (this.sseReconnectTimer) {
+                    clearTimeout(this.sseReconnectTimer);
+                    this.sseReconnectTimer = null;
+                }
+
+                // Close SSE connection
                 if (this.sseEventSource) {
                     this.sseEventSource.close();
                     this.sseEventSource = null;
                 }
+
+                // Reset reconnection state
+                this.sseReconnectAttempts = 0;
+                this.sseReconnectDelay = 2000;
             }
           };
         }

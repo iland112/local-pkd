@@ -43,7 +43,9 @@ import java.util.regex.Pattern;
 public class LdifParserAdapter implements FileParserPort {
 
     private final ProgressService progressService;
-    private final CertificateExistenceService certificateExistenceService; // Inject CertificateExistenceService
+    private final CertificateExistenceService certificateExistenceService;
+    private final com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository;  // NEW: For LDIF Master List storage
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;  // NEW: For Master List CSCAs
 
     private static final String ATTR_USER_CERTIFICATE = "userCertificate;binary";
     private static final String ATTR_CRL = "certificateRevocationList;binary";
@@ -153,15 +155,198 @@ public class LdifParserAdapter implements FileParserPort {
 
     private void parseMasterListContent(byte[] masterListBytes, String dn, ParsedFile parsedFile) {
         try {
+            // Parse CMS-signed Master List binary
             CMSSignedData signedData = new CMSSignedData(new CMSProcessableByteArray(masterListBytes), new ByteArrayInputStream(masterListBytes));
             Store<X509CertificateHolder> certStore = signedData.getCertificates();
             Collection<X509CertificateHolder> certs = certStore.getMatches(null);
-            for (X509CertificateHolder holder : certs) {
-                parseCertificateFromBytes(holder.getEncoded(), dn + " (from MasterList)", parsedFile);
+
+            // Extract country code from DN (e.g., "c=FR" from "cn=...,o=ml,c=FR,dc=data,...")
+            String countryCode = extractCountryCodeFromMasterListDn(dn);
+            if (countryCode == null) {
+                log.warn("Could not extract country code from Master List DN: {}", dn);
+                parsedFile.addError(ParsingError.of("MASTER_LIST_COUNTRY_ERROR", dn, "Could not extract country code from DN"));
+                return;
             }
+
+            // Create and save MasterList aggregate
+            com.smartcoreinc.localpkd.fileparsing.domain.model.MasterListId masterListId =
+                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterListId.newId();
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCode countryCodeVO =
+                com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCode.of(countryCode);
+            com.smartcoreinc.localpkd.fileparsing.domain.model.CmsBinaryData cmsBinary =
+                com.smartcoreinc.localpkd.fileparsing.domain.model.CmsBinaryData.of(masterListBytes);
+
+            com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList masterList =
+                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList.create(
+                    masterListId,
+                    parsedFile.getUploadId(),
+                    countryCodeVO,
+                    null,  // version: null for LDIF Master List
+                    cmsBinary,
+                    null,  // signerInfo: null for LDIF Master List
+                    certs.size()
+                );
+
+            com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList savedMasterList =
+                masterListRepository.save(masterList);
+
+            log.info("Master List saved from LDIF: masterListId={}, country={}, cscaCount={}",
+                savedMasterList.getId().getId(), countryCode, certs.size());
+
+            // Extract and save CSCA certificates with masterListId reference
+            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> cscaCerts =
+                new java.util.ArrayList<>();
+
+            for (X509CertificateHolder holder : certs) {
+                try {
+                    // Parse X509 certificate
+                    CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                    X509Certificate x509Cert = (X509Certificate) certFactory.generateCertificate(
+                        new ByteArrayInputStream(holder.getEncoded())
+                    );
+
+                    // Calculate fingerprint first for duplicate check
+                    String fingerprint = calculateFingerprint(x509Cert);
+
+                    // Check for duplicate fingerprint BEFORE creating Certificate entity
+                    if (certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
+                        parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint,
+                            "CSCA with this fingerprint already exists globally."));
+                        log.warn("Duplicate CSCA skipped from Master List: fingerprint={}", fingerprint);
+                        continue; // Skip this certificate entirely
+                    }
+
+                    // Create Certificate entity from Master List CSCA (only if not duplicate)
+                    com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert =
+                        createCertificateFromMasterListCsca(
+                            parsedFile.getUploadId().getId(),
+                            savedMasterList.getId().getId(),
+                            x509Cert
+                        );
+
+                    cscaCerts.add(cert);
+
+                    // IMPORTANT: Also add CSCA to ParsedFile for validation
+                    // Convert X509Certificate to CertificateData and add to ParsedFile
+                    CertificateData certData = CertificateData.of(
+                        "CSCA",  // Certificate type
+                        countryCode,  // Country code from Master List
+                        x509Cert.getSubjectX500Principal().getName(),
+                        x509Cert.getIssuerX500Principal().getName(),
+                        x509Cert.getSerialNumber().toString(16).toUpperCase(),
+                        convertToLocalDateTime(x509Cert.getNotBefore()),
+                        convertToLocalDateTime(x509Cert.getNotAfter()),
+                        x509Cert.getEncoded(),
+                        fingerprint,
+                        true  // fromLdif
+                    );
+
+                    // Add to ParsedFile (duplicate already checked above)
+                    parsedFile.addCertificate(certData);
+                    log.debug("Added CSCA from Master List to ParsedFile: fingerprint={}", fingerprint);
+
+                } catch (Exception e) {
+                    log.warn("Failed to parse CSCA from Master List: {}", e.getMessage());
+                    // Continue with other certificates
+                }
+            }
+
+            // Save all CSCA certificates from this Master List
+            if (cscaCerts.isEmpty()) {
+                log.warn("No CSCA certificates successfully parsed from Master List: masterListId={}, country={}",
+                    savedMasterList.getId().getId(), countryCode);
+            } else {
+                java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> savedCerts =
+                    certificateRepository.saveAll(cscaCerts);
+
+                log.info("Saved {} CSCA certificates from LDIF Master List", savedCerts.size());
+            }
+
         } catch (Exception e) {
+            log.error("Failed to parse Master List content: {}", e.getMessage(), e);
             parsedFile.addError(ParsingError.of("MASTER_LIST_PARSE_ERROR", dn, e.getMessage()));
         }
+    }
+
+    /**
+     * Extract country code from Master List DN
+     * Example: "cn=CN\=CSCA-FRANCE\,O\=Gouv\,C\=FR,o=ml,c=FR,dc=data,dc=download,dc=pkd,dc=icao,dc=int"
+     * Extracts: "FR"
+     */
+    private String extractCountryCodeFromMasterListDn(String dn) {
+        if (dn == null) return null;
+        // Look for "c=XX" pattern (country code in LDAP DN)
+        Matcher matcher = Pattern.compile(",\\s*c=([A-Z]{2,3})", Pattern.CASE_INSENSITIVE).matcher(dn);
+        if (matcher.find()) {
+            return matcher.group(1).toUpperCase();
+        }
+        return null;
+    }
+
+    /**
+     * Create Certificate entity from Master List CSCA
+     */
+    private com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate createCertificateFromMasterListCsca(
+            java.util.UUID uploadId,
+            java.util.UUID masterListId,
+            X509Certificate x509Cert
+    ) throws Exception {
+        // Extract certificate data
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data x509Data =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data.of(
+                x509Cert.getEncoded(),
+                x509Cert.getPublicKey(),
+                x509Cert.getSerialNumber().toString(16).toUpperCase(),
+                calculateFingerprint(x509Cert)
+            );
+
+        String subjectDn = x509Cert.getSubjectX500Principal().getName();
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo subjectInfo =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo.of(
+                subjectDn,
+                extractDnComponent(subjectDn, "C"),
+                extractDnComponent(subjectDn, "O"),
+                extractDnComponent(subjectDn, "OU"),
+                extractDnComponent(subjectDn, "CN")
+            );
+
+        String issuerDn = x509Cert.getIssuerX500Principal().getName();
+        boolean isCA = x509Cert.getBasicConstraints() != -1;
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo issuerInfo =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo.of(
+                issuerDn,
+                extractDnComponent(issuerDn, "C"),
+                extractDnComponent(issuerDn, "O"),
+                extractDnComponent(issuerDn, "OU"),
+                extractDnComponent(issuerDn, "CN"),
+                isCA
+            );
+
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod validity =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod.of(
+                x509Cert.getNotBefore().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime(),
+                x509Cert.getNotAfter().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            );
+
+        return com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate.createFromMasterList(
+            uploadId,
+            masterListId,  // Link to MasterList entity
+            x509Data,
+            subjectInfo,
+            issuerInfo,
+            validity,
+            x509Cert.getSigAlgName()
+        );
+    }
+
+    private String extractDnComponent(String dn, String component) {
+        if (dn == null || dn.isEmpty()) return null;
+        Pattern pattern = Pattern.compile(
+            "(?:^|,)\\s*" + Pattern.quote(component) + "\\s*=\\s*([^,]+)",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher = pattern.matcher(dn);
+        return matcher.find() ? matcher.group(1).trim() : null;
     }
 
     private String extractCountryCode(String dn) {

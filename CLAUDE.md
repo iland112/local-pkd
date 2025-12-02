@@ -427,6 +427,356 @@ mcp__playwright__browser_snapshot()  # UI 상태 캡처
 
 ---
 
+## 🌳 LDAP DIT Structure & Processing Rules (ICAO PKD 표준)
+
+### 1. LDAP Directory Information Tree (DIT) 구조
+
+#### 1.1 ML File CSCAs (ICAO/UN Root 서명 인증서 모음)
+```
+DN: cn={SUBJECT-DN}+sn={SERIAL},o=csca,c={COUNTRY},dc=data,dc=download,dc=pkd,{baseDN}
+
+예시:
+cn=CN\=CSCA-KOREA\,O\=Government\,C\=KR+sn=A1B2C3D4,o=csca,c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+ObjectClasses:
+- inetOrgPerson
+- pkdDownload
+- pkdMasterList
+- organizationalPerson
+- top
+- person
+
+Attributes:
+- cn: {SUBJECT-DN}
+- sn: {SERIAL-NUMBER}
+- userCertificate;binary: {BASE64-ENCODED-CERTIFICATE}
+- pkdVersion: 1150
+- description: {VALIDATION-STATUS} (VALID/INVALID/EXPIRED + error messages)
+```
+
+**처리 규칙**:
+- ✅ ML 파일에서 520개 CSCA 인증서 추출
+- ✅ `certificate` 테이블에 저장 (`masterListId = null`, `sourceType = MASTER_LIST`)
+- ✅ LDAP에 개별 인증서로 업로드 (`o=csca`)
+- ❌ `master_list` 테이블 생성 금지 (ML 파일은 Master List가 아님)
+
+**구현 위치**: ParseMasterListFileUseCase.java:145-184, LdifConverter.java:79-143
+
+---
+
+#### 1.2 LDIF Master List (국가별 CMS SignedData)
+```
+DN: cn={CSCA-DN},o=ml,c={COUNTRY},dc=data,dc=download,dc=pkd,{baseDN}
+
+예시:
+cn=CN\=CSCA-FRANCE\,O\=Gouv\,C\=FR,o=ml,c=FR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+ObjectClasses:
+- top
+- person
+- pkdMasterList
+- pkdDownload
+
+Attributes:
+- cn: {CSCA-DN}
+- sn: {SERIAL-NUMBER}
+- pkdMasterListContent: {BASE64-ENCODED-CMS-BINARY}
+- pkdVersion: 70
+```
+
+**처리 규칙**:
+- ✅ LDIF 파일에서 국가별 Master List 추출
+- ✅ `master_list` 테이블에 저장 (CMS 바이너리 보존)
+- ✅ Master List에서 개별 CSCA 추출 → `certificate` 테이블 저장 (`masterListId = non-null`, `sourceType = MASTER_LIST`)
+- ✅ LDAP에 Master List CMS 바이너리 업로드 (`o=ml`)
+- ⚠️ 개별 CSCA는 통계/분석용으로만 사용, LDAP에 중복 업로드 (현재 구현)
+  - **참고**: LDIF Master List CSCAs는 이미 Master List binary에 포함되어 있으므로 개별 업로드 불필요
+  - 현재는 Master List binary + 개별 CSCAs 모두 업로드 (향후 최적화 가능)
+
+**구현 위치**: LdifParserAdapter.java:166-242, LdifConverter.java:225-277, UploadToLdapUseCase.java:213-262
+
+---
+
+#### 1.3 DSC (Document Signer Certificates)
+```
+DN: cn={SUBJECT-DN}+sn={SERIAL},o=dsc,c={COUNTRY},dc=data,dc=download,dc=pkd,{baseDN}
+
+예시:
+cn=OU\=Identity Services Passport CA\,OU\=Passports\,O\=Government of New Zealand\,C\=NZ+sn=42E575AF,o=dsc,c=NZ,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+ObjectClasses:
+- inetOrgPerson
+- pkdDownload
+- organizationalPerson
+- top
+- person
+
+Attributes:
+- cn: {SUBJECT-DN}
+- sn: {SERIAL-NUMBER}
+- userCertificate;binary: {BASE64-ENCODED-CERTIFICATE}
+- pkdVersion: 1150
+- description: {VALIDATION-STATUS}
+```
+
+**처리 규칙**:
+- ✅ LDIF 파일에서 DSC 인증서 추출
+- ✅ `certificate` 테이블에 저장 (`sourceType = LDIF_DSC`)
+- ✅ LDAP에 업로드 (`o=dsc`)
+- ✅ Trust Chain 검증 필수 (CSCA 조회 후 서명 검증)
+
+**구현 위치**: LdifParserAdapter.java, LdifConverter.java:79-143
+
+---
+
+#### 1.4 DSC Non-Conformant (비표준 DSC)
+```
+DN: cn={SUBJECT-DN}+sn={SERIAL},o=dsc,c={COUNTRY},dc=nc-data,dc=download,dc=pkd,{baseDN}
+
+차이점:
+- dc=nc-data (비표준 데이터 계층)
+- sourceType = LDIF_DSC_NC
+```
+
+**처리 규칙**:
+- ✅ `dc=nc-data` 계층으로 분리 저장
+- ✅ 검증 규칙은 일반 DSC와 동일
+
+**구현 위치**: LdifConverter.java:96
+
+---
+
+#### 1.5 CRL (Certificate Revocation Lists)
+```
+DN: cn={ISSUER-NAME},o=crl,c={COUNTRY},dc=data,dc=download,dc=pkd,{baseDN}
+
+예시:
+cn=CN\=CSCA-KOREA\,O\=Government\,C\=KR,o=crl,c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+ObjectClasses:
+- top
+- cRLDistributionPoint
+
+Attributes:
+- cn: {ISSUER-NAME}
+- certificateRevocationList;binary: {BASE64-ENCODED-CRL}
+```
+
+**처리 규칙**:
+- ✅ LDIF 파일에서 CRL 추출
+- ✅ `certificate_revocation_list` 테이블에 저장
+- ✅ LDAP에 업로드 (`o=crl`)
+
+**구현 위치**: LdifParserAdapter.java, LdifConverter.java:152-191
+
+---
+
+### 2. File Parsing Rules (ML vs LDIF)
+
+#### 2.1 ML File (.ml) - ICAO/UN Root 서명 CSCA 모음
+
+**파일 특성**:
+- ICAO/UN Root CA가 서명한 전 세계 CSCA 인증서 520개 모음
+- CMS SignedData (PKCS#7) 형식
+- 개별 국가의 Master List가 **아님**
+
+**파싱 프로세스**:
+```java
+// ParseMasterListFileUseCase.java:145-184
+1. MasterListParser로 CMS SignedData 파싱
+2. 520개 CSCA 인증서 추출
+3. Certificate.createFromMasterList(uploadId, null, ...) 호출
+   - masterListId = null (MasterList 엔티티 없음)
+   - sourceType = MASTER_LIST
+4. certificate 테이블에 일괄 저장 (saveAll)
+5. master_list 테이블에는 저장 ❌
+```
+
+**데이터 저장**:
+- ✅ `certificate` 테이블: 520개 CSCA (개별 레코드)
+- ❌ `master_list` 테이블: 저장 안 함
+
+**LDAP 업로드**:
+- ✅ 개별 CSCA 인증서 → `o=csca,c={COUNTRY}`
+
+---
+
+#### 2.2 LDIF File (.ldif) - 국가별 Master List + DSC + CRL
+
+**파일 특성**:
+- 국가별 Master List (CMS SignedData) + DSC + CRL 포함
+- Master List는 각 국가 CSCA가 서명
+- LDIF 형식 (LDAP Data Interchange Format)
+
+**파싱 프로세스**:
+```java
+// LdifParserAdapter.java:166-242
+1. LDIF 엔트리 순회
+2. Master List 발견 시:
+   a. MasterList 엔티티 생성 (CMS binary 보존)
+   b. master_list 테이블에 저장
+   c. CMS SignedData 파싱하여 개별 CSCA 추출
+   d. Certificate.createFromMasterList(uploadId, masterListId, ...) 호출
+      - masterListId = MasterList ID (non-null)
+      - sourceType = MASTER_LIST
+   e. certificate 테이블에 저장 (통계/분석용)
+   f. ParsedFile에도 CertificateData 추가 (검증용)
+3. DSC 발견 시:
+   a. Certificate.createFromLdif(uploadId, DSC, ...) 호출
+      - sourceType = LDIF_DSC
+   b. certificate 테이블에 저장
+4. CRL 발견 시:
+   a. CertificateRevocationList 엔티티 생성
+   b. certificate_revocation_list 테이블에 저장
+```
+
+**데이터 저장**:
+- ✅ `master_list` 테이블: 27개 국가별 Master List (CMS binary)
+- ✅ `certificate` 테이블:
+  - 28개 CSCA (Master List에서 추출, `masterListId = non-null`)
+  - N개 DSC (`sourceType = LDIF_DSC`)
+- ✅ `certificate_revocation_list` 테이블: N개 CRL
+
+**LDAP 업로드**:
+- ✅ Master List CMS binary → `o=ml,c={COUNTRY}`
+- ✅ 개별 CSCA → `o=csca,c={COUNTRY}` (현재 중복 업로드)
+- ✅ DSC → `o=dsc,c={COUNTRY}`
+- ✅ CRL → `o=crl,c={COUNTRY}`
+
+---
+
+### 3. Certificate Validation Rules (Two-Pass Validation)
+
+#### 3.1 Pass 1: CSCA Validation (Self-Signed)
+
+**대상**: `certificateType = CSCA`
+
+**검증 항목**:
+```java
+// ValidateCertificatesUseCase.java:368-453
+1. ✅ Self-Signed Signature 검증
+   - x509Cert.verify(x509Cert.getPublicKey())
+   - 자기 자신의 공개키로 서명 검증
+
+2. ✅ Validity Period 검증
+   - x509Cert.checkValidity()
+   - notBefore <= 현재시간 <= notAfter
+
+3. ✅ Basic Constraints 검증
+   - x509Cert.getBasicConstraints() != -1
+   - CA 인증서 여부 확인 (cA=TRUE)
+```
+
+**검증 결과**:
+- ✅ **VALID**: 모든 검증 통과
+- ⚠️ **INVALID**: 하나 이상의 검증 실패
+  - SIGNATURE_INVALID: 서명 검증 실패
+  - VALIDITY_INVALID: 유효기간 만료
+  - CONSTRAINTS_INVALID: Basic Constraints 위반
+- ⏰ **EXPIRED**: 유효기간 만료
+
+**데이터베이스 기록**:
+- `status`: VALID/INVALID/EXPIRED
+- `validation_errors`: JSON array of ValidationError
+- `validated_at`: 검증 완료 시각
+
+---
+
+#### 3.2 Pass 2: DSC Validation (Trust Chain)
+
+**대상**: `certificateType = DSC` or `DSC_NC`
+
+**검증 항목**:
+```java
+// ValidateCertificatesUseCase.java:473-534
+1. ✅ Trust Chain 검증
+   a. Issuer DN으로 CSCA 조회
+      - certificateRepository.findBySubjectDn(issuerDN)
+   b. CSCA 공개키로 DSC 서명 검증
+      - x509Cert.verify(cscaX509.getPublicKey())
+   c. CSCA 미발견 시 INVALID 처리
+      - ValidationError.critical("CHAIN_INCOMPLETE", "CSCA not found")
+
+2. ✅ Validity Period 검증
+   - x509Cert.checkValidity()
+
+3. ✅ Basic Constraints 검증
+   - getBasicConstraints() >= 0 (CA 가능)
+   - 또는 == -1 (End-Entity 인증서)
+```
+
+**검증 순서**:
+1. **Pass 1 먼저 실행** → 모든 CSCA 검증 완료
+2. **Pass 2 실행** → DSC가 CSCA를 찾아서 Trust Chain 검증
+
+**검증 결과**:
+- ✅ **VALID**: Trust Chain + Validity + Constraints 모두 통과
+- ⚠️ **INVALID**: 하나 이상 실패
+  - CHAIN_INCOMPLETE: CSCA 미발견
+  - SIGNATURE_INVALID: CSCA 서명 검증 실패
+  - VALIDITY_INVALID: 유효기간 문제
+  - CONSTRAINTS_INVALID: Basic Constraints 위반
+
+---
+
+### 4. Certificate Source Type 구분
+
+```java
+public enum CertificateSourceType {
+    MASTER_LIST,    // ML 파일 CSCA (masterListId=null) 또는 LDIF Master List CSCA (masterListId=non-null)
+    LDIF_DSC,       // LDIF 파일 DSC
+    LDIF_CSCA       // LDIF 파일 개별 CSCA (현재 미사용)
+}
+```
+
+**구분 기준**:
+
+| Source Type | masterListId | 파일 유형 | LDAP DN | 설명 |
+|-------------|--------------|-----------|---------|------|
+| MASTER_LIST (null) | null | ML file | o=csca | ICAO/UN Root 서명 CSCA |
+| MASTER_LIST (non-null) | UUID | LDIF Master List | o=csca (현재 중복) | 국가별 Master List CSCA |
+| LDIF_DSC | - | LDIF file | o=dsc | Document Signer Certificate |
+
+**활용**:
+```java
+// Certificate 엔티티
+public boolean isFromMasterList() {
+    return sourceType == CertificateSourceType.MASTER_LIST;
+}
+
+public boolean isFromLdif() {
+    return sourceType != null && sourceType.isFromLdif();
+}
+
+// 구분 로직
+if (cert.getMasterListId() == null) {
+    // ML file CSCA → LDAP 개별 업로드 필요
+} else {
+    // LDIF Master List CSCA → 이미 Master List binary에 포함 (개별 업로드 선택적)
+}
+```
+
+---
+
+### 5. LDAP Upload Strategy Summary
+
+| Item | Source | Database Table | LDAP DN | Upload Status |
+|------|--------|----------------|---------|---------------|
+| ML file CSCA (520개) | ML file | `certificate` | `o=csca,c={COUNTRY}` | ✅ Individual Upload |
+| LDIF Master List CMS | LDIF file | `master_list` | `o=ml,c={COUNTRY}` | ✅ Binary Upload |
+| LDIF Master List CSCA | LDIF Master List | `certificate` | `o=csca,c={COUNTRY}` | ⚠️ Duplicate Upload (선택적) |
+| DSC | LDIF file | `certificate` | `o=dsc,c={COUNTRY}` | ✅ Individual Upload |
+| CRL | LDIF file | `certificate_revocation_list` | `o=crl,c={COUNTRY}` | ✅ Individual Upload |
+
+**최적화 권장사항** (향후):
+- LDIF Master List CSCAs는 이미 Master List binary (`o=ml`)에 포함되어 있으므로 개별 업로드 (`o=csca`) 불필요
+- 현재는 통계/분석 및 검증 용도로 모두 업로드 중
+- 필요 시 `masterListId != null` 조건으로 필터링 가능
+
+**구현 위치**: UploadToLdapUseCase.java:108-163
+
+---
+
 ## 💾 Database Schema (현재 상태)
 
 ### 주요 테이블 (3개)

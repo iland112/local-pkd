@@ -45,15 +45,26 @@ import java.util.Optional;
 public interface SpringDataMasterListRepository extends JpaRepository<MasterList, MasterListId> {
 
     /**
-     * UploadId로 MasterList 조회
+     * UploadId로 MasterList 조회 (단일)
      *
-     * <p>하나의 업로드 파일에 대해 하나의 Master List만 존재해야 합니다.</p>
+     * <p>ML 파일의 경우 하나의 업로드 파일에 대해 하나의 Master List만 존재합니다.</p>
      *
      * @param uploadId UploadId
      * @return Optional<MasterList>
      */
     @Query("SELECT ml FROM MasterList ml WHERE ml.uploadId = :uploadId")
     Optional<MasterList> findByUploadId(@Param("uploadId") UploadId uploadId);
+
+    /**
+     * UploadId로 모든 MasterList 조회 (리스트)
+     *
+     * <p>LDIF 파일의 경우 하나의 업로드 파일에 여러 Master List가 존재할 수 있습니다.</p>
+     *
+     * @param uploadId UploadId
+     * @return List<MasterList> (생성일자 오름차순)
+     */
+    @Query("SELECT ml FROM MasterList ml WHERE ml.uploadId = :uploadId ORDER BY ml.createdAt ASC")
+    List<MasterList> findAllByUploadId(@Param("uploadId") UploadId uploadId);
 
     /**
      * CountryCode로 MasterList 조회 (생성일자 내림차순)

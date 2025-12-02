@@ -68,14 +68,24 @@ public interface MasterListRepository {
     Optional<MasterList> findById(MasterListId id);
 
     /**
-     * UploadId로 MasterList 조회
+     * UploadId로 MasterList 조회 (단일)
      *
-     * <p>하나의 업로드 파일에 대해 하나의 Master List만 존재해야 함</p>
+     * <p>ML 파일의 경우 하나의 업로드 파일에 대해 하나의 Master List만 존재</p>
      *
      * @param uploadId UploadId
      * @return MasterList (Optional)
      */
     Optional<MasterList> findByUploadId(UploadId uploadId);
+
+    /**
+     * UploadId로 모든 MasterList 조회 (리스트)
+     *
+     * <p>LDIF 파일의 경우 하나의 업로드 파일에 여러 Master List가 존재할 수 있음</p>
+     *
+     * @param uploadId UploadId
+     * @return MasterList 목록 (생성일자 오름차순)
+     */
+    List<MasterList> findAllByUploadId(UploadId uploadId);
 
     /**
      * 국가 코드로 MasterList 조회 (생성일자 내림차순)

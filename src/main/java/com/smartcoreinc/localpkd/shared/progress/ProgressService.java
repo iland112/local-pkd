@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.shared.progress;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -44,9 +45,10 @@ import java.util.concurrent.Executor; // Import Executor
 public class ProgressService {
 
     /**
-     * SSE Emitter 타임아웃 (5분)
+     * SSE Emitter 타임아웃 (10분)
+     * 대용량 파일 파싱 시 충분한 시간 확보
      */
-    private static final long SSE_TIMEOUT = 5 * 60 * 1000L;
+    private static final long SSE_TIMEOUT = 10 * 60 * 1000L;
 
     /**
      * 활성 SSE 연결 맵 (uploadId -> SseEmitter)
@@ -160,7 +162,12 @@ public class ProgressService {
                 log.warn("Failed to send progress to client for uploadId {}: {}", progress.getUploadId(), e.getMessage());
                 // 에러 발생 시 해당 emitter 제거 및 완료 처리
                 uploadIdToEmitters.remove(progress.getUploadId());
-                targetEmitter.complete();
+                // Try to complete emitter, but ignore if already unusable
+                try {
+                    targetEmitter.complete();
+                } catch (Exception completionException) {
+                    log.trace("Emitter already unusable for uploadId {}: {}", progress.getUploadId(), completionException.getMessage());
+                }
             }
         }
         else {
@@ -217,9 +224,17 @@ public class ProgressService {
     /**
      * 하트비트 전송 (연결 유지용)
      *
-     * Spring @Scheduled로 주기적으로 호출 가능
+     * 30초마다 자동으로 실행되어 모든 활성 SSE 연결에 heartbeat 전송
+     * 대용량 파일 처리 시 SSE 연결이 타임아웃되는 것을 방지
      */
+    @Scheduled(fixedRate = 30000) // 30초마다 실행
     public void sendHeartbeat() {
+        if (uploadIdToEmitters.isEmpty()) {
+            return; // 활성 연결이 없으면 생략
+        }
+
+        log.debug("Sending heartbeat to {} active SSE connections", uploadIdToEmitters.size());
+
         // 모든 연결된 emitter에 하트비트 전송
         uploadIdToEmitters.forEach((uploadId, emitter) -> {
             try {
@@ -228,7 +243,12 @@ public class ProgressService {
                     .data("{\"timestamp\":" + System.currentTimeMillis() + "}"));
             } catch (IOException e) {
                 log.debug("Failed to send heartbeat to uploadId {}, removing emitter", uploadId);
-                emitter.complete();
+                // Try to complete emitter, but ignore if already unusable
+                try {
+                    emitter.complete();
+                } catch (Exception completionException) {
+                    log.trace("Emitter already unusable for uploadId {}: {}", uploadId, completionException.getMessage());
+                }
                 uploadIdToEmitters.remove(uploadId);
             }
         });
