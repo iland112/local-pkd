@@ -87,29 +87,68 @@ public class LdifParserAdapter implements FileParserPort {
 
     private void parseEntry(Entry entry, int entryNumber, ParsedFile parsedFile) {
         Attribute certAttr = entry.getAttribute(ATTR_USER_CERTIFICATE);
-        if (certAttr != null) parseCertificateFromBytes(certAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        if (certAttr != null) {
+            parseCertificateFromBytes(certAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        }
 
         Attribute crlAttr = entry.getAttribute(ATTR_CRL);
-        if (crlAttr != null) parseCrlFromBytes(crlAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        if (crlAttr != null) {
+            parseCrlFromBytes(crlAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        }
 
         Attribute mlAttr = entry.getAttribute(ATTR_MASTER_LIST_CONTENT);
-        if (mlAttr != null) parseMasterListContent(mlAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        if (mlAttr != null) {
+            parseMasterListContent(mlAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        }
     }
 
+    /**
+     * LDIF 엔트리에서 X.509 인증서를 파싱하여 ParsedFile에 추가합니다.
+     *
+     * <p>
+     *  - CSCA: self-signed (subject == issuer)<br>
+     *  - DSC:  subject != issuer, 일반 데이터 경로 (dc=data)<br>
+     *  - DSC_NC: subject != issuer 이고 DN 경로에 {@code dc=nc-data} 가 포함된 경우
+     * </p>
+     *
+     * <p>
+     * NC-DATA(DSC_NC)는 이후 검증 단계에서 별도의 유효성 검사를 수행하지 않고
+     * 통계/분석 및 LDAP 저장 용도로만 사용됩니다.
+     * </p>
+     */
     private void parseCertificateFromBytes(byte[] certBytes, String dn, ParsedFile parsedFile) {
         try {
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
             X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
-            
-            String countryCode = extractCountryCode(cert.getSubjectX500Principal().getName());
-            String certType = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal()) ? "CSCA" : "DSC";
+
+            String subjectDn = cert.getSubjectX500Principal().getName();
+            String issuerDn = cert.getIssuerX500Principal().getName();
+            String countryCode = extractCountryCode(subjectDn);
+
+            // Determine certificate type:
+            // - CSCA: self-signed
+            // - DSC_NC: non-self-signed AND DN path contains dc=nc-data
+            // - DSC: otherwise
+            boolean selfSigned = subjectDn.equals(issuerDn);
+            boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
+
+            String certType;
+            if (selfSigned) {
+                certType = "CSCA";
+            } else if (isNonConformantPath) {
+                certType = "DSC_NC";
+                log.debug("Detected DSC_NC certificate from nc-data path: dn={}", dn);
+            } else {
+                certType = "DSC";
+            }
+
             String fingerprint = calculateFingerprint(cert); // Calculate fingerprint once
 
             CertificateData certData = CertificateData.of(
                 certType,
                 countryCode,
-                cert.getSubjectX500Principal().getName(),
-                cert.getIssuerX500Principal().getName(),
+                subjectDn,
+                issuerDn,
                 cert.getSerialNumber().toString(16),
                 convertToLocalDateTime(cert.getNotBefore()),
                 convertToLocalDateTime(cert.getNotAfter()),
@@ -117,7 +156,7 @@ public class LdifParserAdapter implements FileParserPort {
                 fingerprint, // Use the calculated fingerprint
                 true
             );
-            
+
             // Check for duplicate fingerprint before adding
             if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
                 parsedFile.addCertificate(certData);

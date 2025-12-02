@@ -237,8 +237,23 @@ public class ValidateCertificatesUseCase {
                         X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
                         certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
 
-                        // Perform validation and get result and errors
-                        validationResult = validateDscCertificate(x509Cert, certData, command.uploadId(), errors);
+                        // NC-DATA(DSC_NC)는 유효성 검사를 수행하지 않고 저장만 수행
+                        if ("DSC_NC".equalsIgnoreCase(certData.getCertificateType())) {
+                            log.info("Skipping validation for DSC_NC certificate (NC-DATA): subjectDN={}", certData.getSubjectDN());
+                            validationResult = ValidationResult.of(
+                                CertificateStatus.VALID, // 저장 및 LDAP 업로드를 위해 VALID로 간주
+                                false, // signatureValid
+                                false, // chainValid
+                                false, // notRevoked
+                                false, // validityValid
+                                false, // constraintsValid
+                                0L     // durationMillis
+                            );
+                        } else {
+                            // Perform validation and get result and errors for standard DSC
+                            validationResult = validateDscCertificate(x509Cert, certData, command.uploadId(), errors);
+                        }
+
                         certificate.recordValidation(validationResult);
                         certificate.addValidationErrors(errors);
 

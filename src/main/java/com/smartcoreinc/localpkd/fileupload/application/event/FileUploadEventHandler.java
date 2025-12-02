@@ -74,20 +74,19 @@ public class FileUploadEventHandler {
             }
 
             // 2. Validate Certificates
-            if (parseResponse.certificateCount() > 0 || parseResponse.crlCount() > 0) {
-                 // Retrieve parsedFileId using uploadId
-                 ParsedFile parsedFile = parsedFileRepository.findByUploadId(uploadedFile.getId())
-                     .orElseThrow(() -> new DomainException("PARSED_FILE_NOT_FOUND", "Parsed file not found for uploadId: " + uploadedFile.getId().getId()));
+            // LDIF(NC-DATA 포함)처럼 Certificate 테이블에 아직 저장되지 않은 경우에도
+            // ParsedFile에 추출된 인증서가 있으면 항상 검증 단계를 수행하도록 조건을 제거한다.
+            ParsedFile parsedFile = parsedFileRepository.findByUploadId(uploadedFile.getId())
+                .orElseThrow(() -> new DomainException("PARSED_FILE_NOT_FOUND", "Parsed file not found for uploadId: " + uploadedFile.getId().getId()));
 
-                 CertificatesValidatedResponse validationResponse = validateCertificates(
-                     uploadedFile.getId().getId(),
-                     parsedFile.getId().getId(), // Pass parsedFileId
-                     parseResponse.certificateCount(),
-                     parseResponse.crlCount() // Pass crlCount
-                 );
-                 if (!validationResponse.success()) {
-                    throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
-                 }
+            CertificatesValidatedResponse validationResponse = validateCertificates(
+                uploadedFile.getId().getId(),
+                parsedFile.getId().getId(), // Pass parsedFileId
+                parseResponse.certificateCount(),
+                parseResponse.crlCount() // Pass crlCount
+            );
+            if (!validationResponse.success()) {
+               throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
             }
             // TODO: Chain to LDAP Upload
 
