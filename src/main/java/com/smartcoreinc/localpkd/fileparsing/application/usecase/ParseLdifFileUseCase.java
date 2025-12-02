@@ -163,14 +163,20 @@ public class ParseLdifFileUseCase {
             // 10. Repository 저장 (모든 Domain Events 발행)
             ParsedFile saved = repository.save(parsedFile);
 
-            // 11. Response 생성 - Certificate 테이블에서 실제 저장된 인증서 개수 확인
-            // LDIF 파일의 경우 Master List에서 추출한 CSCA들이 Certificate 테이블에 직접 저장되므로
-            // ParsedFile.getCertificates().size()가 0이더라도 실제로는 인증서가 존재할 수 있음
-            int actualCertificateCount = certificateRepository.findByUploadId(uploadId.getId()).size();
-            int actualCrlCount = saved.getCrls().size();
+            // 11. Response 생성 - Certificate 테이블 및 ParsedFile 기준으로 실제 개수 계산
+            // LDIF 파일의 경우:
+            //  - Master List에서 추출한 CSCA들은 Certificate 테이블에 직접 저장됨
+            //  - NC-DATA(DSC_NC) 등의 경우에는 ParsedFile에만 존재할 수 있으므로,
+            //    DB 기준 개수가 0이어도 ParsedFile 기준 개수가 0이 아니면 그 값을 사용한다.
+            int dbCertificateCount = certificateRepository.findByUploadId(uploadId.getId()).size();
+            int parsedFileCertCount = saved.getCertificates().size();
+            int parsedFileCrlCount = saved.getCrls().size();
 
-            log.info("LDIF parsing completed: actualCertificateCount={}, actualCrlCount={}, parsedFileCertCount={}",
-                actualCertificateCount, actualCrlCount, saved.getCertificates().size());
+            int effectiveCertificateCount = dbCertificateCount > 0 ? dbCertificateCount : parsedFileCertCount;
+            int effectiveCrlCount = parsedFileCrlCount; // CRL은 아직 DB에 별도 저장하지 않으므로 ParsedFile 기준 사용
+
+            log.info("LDIF parsing completed: dbCertificateCount={}, effectiveCertificateCount={}, crlCount={}, parsedFileCertCount={}",
+                dbCertificateCount, effectiveCertificateCount, effectiveCrlCount, parsedFileCertCount);
 
             return ParseFileResponse.success(
                 saved.getId().getId(),
@@ -179,8 +185,8 @@ public class ParseLdifFileUseCase {
                 saved.getStatus().name(),
                 saved.getParsingStartedAt(),
                 saved.getParsingCompletedAt(),
-                actualCertificateCount,  // 실제 Certificate 테이블의 개수
-                actualCrlCount,
+                effectiveCertificateCount,  // 검증/후속 단계에서 사용할 인증서 개수
+                effectiveCrlCount,
                 saved.getErrors().size(),
                 saved.getStatistics().getDurationMillis()
             );

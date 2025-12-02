@@ -241,14 +241,10 @@ public class ProgressService {
                 emitter.send(SseEmitter.event()
                     .name("heartbeat")
                     .data("{\"timestamp\":" + System.currentTimeMillis() + "}"));
-            } catch (IOException e) {
-                log.debug("Failed to send heartbeat to uploadId {}, removing emitter", uploadId);
-                // Try to complete emitter, but ignore if already unusable
-                try {
-                    emitter.complete();
-                } catch (Exception completionException) {
-                    log.trace("Emitter already unusable for uploadId {}: {}", uploadId, completionException.getMessage());
-                }
+            } catch (Exception e) {
+                // 연결이 이미 끊어진 경우(AsyncRequestNotUsableException 포함) 조용히 emitter만 제거
+                log.debug("Failed to send heartbeat to uploadId {}, removing emitter (reason: {})",
+                    uploadId, e.getClass().getSimpleName());
                 uploadIdToEmitters.remove(uploadId);
             }
         });
