@@ -62,6 +62,11 @@ public class LdapUploadCompletedEvent implements DomainEvent {
     private final int uploadedCrlCount;
 
     /**
+     * LDAP에 성공적으로 업로드된 Master List 개수
+     */
+    private final int uploadedMasterListCount;
+
+    /**
      * LDAP 업로드 실패한 항목 개수
      */
     private final int failedCount;
@@ -82,6 +87,7 @@ public class LdapUploadCompletedEvent implements DomainEvent {
      * @param uploadId 원본 파일 업로드 ID
      * @param uploadedCertificateCount LDAP에 업로드된 인증서 개수
      * @param uploadedCrlCount LDAP에 업로드된 CRL 개수
+     * @param uploadedMasterListCount LDAP에 업로드된 Master List 개수
      * @param failedCount 업로드 실패한 항목 개수
      * @param completedAt 업로드 완료 시각
      */
@@ -89,6 +95,7 @@ public class LdapUploadCompletedEvent implements DomainEvent {
             UUID uploadId,
             int uploadedCertificateCount,
             int uploadedCrlCount,
+            int uploadedMasterListCount,
             int failedCount,
             LocalDateTime completedAt
     ) {
@@ -96,6 +103,7 @@ public class LdapUploadCompletedEvent implements DomainEvent {
         this.uploadId = uploadId;
         this.uploadedCertificateCount = uploadedCertificateCount;
         this.uploadedCrlCount = uploadedCrlCount;
+        this.uploadedMasterListCount = uploadedMasterListCount;
         this.failedCount = failedCount;
         this.completedAt = completedAt;
         this.occurredOn = LocalDateTime.now();
@@ -128,10 +136,10 @@ public class LdapUploadCompletedEvent implements DomainEvent {
     /**
      * 총 업로드 항목 개수
      *
-     * @return uploadedCertificateCount + uploadedCrlCount
+     * @return uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount
      */
     public int getTotalUploaded() {
-        return uploadedCertificateCount + uploadedCrlCount;
+        return uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
     }
 
     /**

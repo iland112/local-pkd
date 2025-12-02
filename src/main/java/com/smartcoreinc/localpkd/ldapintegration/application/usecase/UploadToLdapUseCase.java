@@ -210,14 +210,66 @@ public class UploadToLdapUseCase {
                 }
             }
 
-            // 5. LdapUploadCompletedEvent 생성 및 발행
-            int totalUploaded = uploadedCertificateCount + uploadedCrlCount;
-            int totalFailed = failedCertificateCount + failedCrlCount;
+            // 5. Upload Master Lists from LDIF file
+            java.util.List<com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList> masterLists =
+                    masterListRepository.findAllByUploadId(
+                        new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId())
+                    );
+
+            log.info("Uploading {} Master Lists to LDAP...", masterLists.size());
+            int uploadedMasterListCount = 0;
+            int failedMasterListCount = 0;
+
+            // Master List LDAP 업로드
+            for (int i = 0; i < masterLists.size(); i++) {
+                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList masterList = masterLists.get(i);
+                try {
+                    // Convert to LDIF format
+                    String ldifEntry = ldifConverter.masterListToLdif(masterList);
+
+                    // Upload to LDAP
+                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
+
+                    if (success) {
+                        uploadedMasterListCount++;
+                        log.debug("Master List uploaded to LDAP: id={}, country={}, cscaCount={}",
+                                masterList.getId().getId(),
+                                masterList.getCountryCode().getValue(),
+                                masterList.getCscaCount());
+                    } else {
+                        failedMasterListCount++;
+                        log.warn("Master List upload skipped (duplicate): id={}", masterList.getId().getId());
+                    }
+
+                    // Send progress (99% - before completion)
+                    if ((i + 1) % 5 == 0 || (i + 1) == masterLists.size()) {
+                        progressService.sendProgress(
+                                ProcessingProgress.builder()
+                                        .uploadId(command.uploadId())
+                                        .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
+                                        .percentage(99)
+                                        .message(String.format("Master List LDAP 저장 중 (%d/%d)", i + 1, masterLists.size()))
+                                        .processedCount(i + 1)
+                                        .totalCount(masterLists.size())
+                                        .build()
+                        );
+                    }
+
+                } catch (Exception e) {
+                    failedMasterListCount++;
+                    log.error("Failed to upload Master List to LDAP: id={}", masterList.getId().getId(), e);
+                }
+            }
+
+            // 6. LdapUploadCompletedEvent 생성 및 발행
+            int totalUploaded = uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
+            int totalFailed = failedCertificateCount + failedCrlCount + failedMasterListCount;
 
             LdapUploadCompletedEvent event = new LdapUploadCompletedEvent(
                 command.uploadId(),
                 uploadedCertificateCount,
                 uploadedCrlCount,
+                uploadedMasterListCount,
                 totalFailed,
                 LocalDateTime.now()
             );
@@ -231,10 +283,11 @@ public class UploadToLdapUseCase {
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
                     .percentage(100)
-                    .message(String.format("LDAP 저장 완료: %d 인증서 (%d CSCAs from MasterList), %d CRLs (%d 성공, %d 실패)",
+                    .message(String.format("LDAP 저장 완료: %d 인증서 (%d CSCAs from MasterList), %d CRLs, %d Master Lists (%d 성공, %d 실패)",
                         uploadedCertificateCount,
                         masterListCscaCount,
                         uploadedCrlCount,
+                        uploadedMasterListCount,
                         totalUploaded,
                         totalFailed))
                     .processedCount(totalUploaded + totalFailed)
@@ -248,8 +301,10 @@ public class UploadToLdapUseCase {
                 command.uploadId(),
                 uploadedCertificateCount,
                 uploadedCrlCount,
+                uploadedMasterListCount,
                 failedCertificateCount,
                 failedCrlCount,
+                failedMasterListCount,
                 LocalDateTime.now(),
                 durationMillis
             );

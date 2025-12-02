@@ -45,6 +45,11 @@ public record UploadToLdapResponse(
     int uploadedCrlCount,
 
     /**
+     * LDAP에 성공적으로 업로드된 Master List 개수
+     */
+    int uploadedMasterListCount,
+
+    /**
      * LDAP 업로드 실패한 인증서 개수
      */
     int failedCertificateCount,
@@ -53,6 +58,11 @@ public record UploadToLdapResponse(
      * LDAP 업로드 실패한 CRL 개수
      */
     int failedCrlCount,
+
+    /**
+     * LDAP 업로드 실패한 Master List 개수
+     */
+    int failedMasterListCount,
 
     /**
      * LDAP 업로드 완료 시각
@@ -77,8 +87,10 @@ public record UploadToLdapResponse(
         UUID uploadId,
         int uploadedCertificateCount,
         int uploadedCrlCount,
+        int uploadedMasterListCount,
         int failedCertificateCount,
         int failedCrlCount,
+        int failedMasterListCount,
         LocalDateTime uploadedAt,
         long durationMillis
     ) {
@@ -87,8 +99,10 @@ public record UploadToLdapResponse(
             .uploadId(uploadId)
             .uploadedCertificateCount(uploadedCertificateCount)
             .uploadedCrlCount(uploadedCrlCount)
+            .uploadedMasterListCount(uploadedMasterListCount)
             .failedCertificateCount(failedCertificateCount)
             .failedCrlCount(failedCrlCount)
+            .failedMasterListCount(failedMasterListCount)
             .uploadedAt(uploadedAt)
             .durationMillis(durationMillis)
             .errorMessage(null)
@@ -107,8 +121,10 @@ public record UploadToLdapResponse(
             .uploadId(uploadId)
             .uploadedCertificateCount(0)
             .uploadedCrlCount(0)
+            .uploadedMasterListCount(0)
             .failedCertificateCount(0)
             .failedCrlCount(0)
+            .failedMasterListCount(0)
             .uploadedAt(null)
             .durationMillis(0)
             .errorMessage(errorMessage)
@@ -119,14 +135,14 @@ public record UploadToLdapResponse(
      * 업로드된 총 항목 수
      */
     public int getTotalUploaded() {
-        return uploadedCertificateCount + uploadedCrlCount;
+        return uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
     }
 
     /**
      * 업로드 실패한 총 항목 수
      */
     public int getTotalFailed() {
-        return failedCertificateCount + failedCrlCount;
+        return failedCertificateCount + failedCrlCount + failedMasterListCount;
     }
 
     /**
@@ -151,6 +167,6 @@ public record UploadToLdapResponse(
      * 모든 항목이 성공적으로 업로드되었는지 확인
      */
     public boolean isAllUploaded() {
-        return failedCertificateCount == 0 && failedCrlCount == 0;
+        return failedCertificateCount == 0 && failedCrlCount == 0 && failedMasterListCount == 0;
     }
 }

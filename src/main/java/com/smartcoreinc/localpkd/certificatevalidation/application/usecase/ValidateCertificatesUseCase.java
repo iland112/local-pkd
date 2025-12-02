@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -470,38 +471,30 @@ public class ValidateCertificatesUseCase {
         long validationStartTime = System.currentTimeMillis();
 
         try {
-            // 1. Issuer DN으로 CSCA 조회 (현재는 스킵)
+            // 1. Issuer DN으로 CSCA 조회 및 서명 검증
             String issuerDN = certData.getIssuerDN();
             log.debug("Finding CSCA for DSC validation: issuerDN={}", issuerDN);
 
-            // TODO: CertificateRepository에 findBySubjectDN() 메서드 추가 및 CSCA로 서명 검증 구현 필요
-            // 현재는 CSCA를 찾을 수 없으므로 서명 검증을 스킵하고 경고만 출력
-            signatureValid = false; // Mark as false since verification is skipped
-            errors.add(ValidationError.warning("SIGNATURE_VERIFICATION_SKIPPED", "CSCA lookup not implemented yet. Skipping signature verification for DSC."));
-            log.warn("CSCA lookup not implemented yet. Skipping signature verification for DSC: {}",
-                certData.getSubjectDN());
-
-            // 향후 구현 예정:
-            // List<Certificate> cscaCerts = certificateRepository.findBySubjectDN(issuerDN);
-            // if (cscaCerts.isEmpty()) {
-            //     signatureValid = false;
-            //     errors.add(ValidationError.critical("CHAIN_INCOMPLETE", "CSCA not found for DSC. IssuerDN: " + issuerDN));
-            //     log.error("CSCA not found for DSC. IssuerDN: {}", issuerDN);
-            // } else {
-            //     // CSCA 인증서로 DSC 서명 검증
-            //     Certificate cscaCert = cscaCerts.get(0);
-            //     X509Certificate cscaX509 = convertToX509Certificate(
-            //         cscaCert.getX509Data().getCertificateBinary()
-            //     );
-            //     try {
-            //         x509Cert.verify(cscaX509.getPublicKey());
-            //         log.debug("Signature verified for DSC by CSCA: {}", certData.getSubjectDN());
-            //     } catch (Exception e) {
-            //         signatureValid = false;
-            //         errors.add(ValidationError.critical("SIGNATURE_INVALID", "Signature verification failed by CSCA: " + e.getMessage()));
-            //         log.error("Signature verification failed for DSC by CSCA: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
-            //     }
-            // }
+            Optional<Certificate> cscaCertOpt = certificateRepository.findBySubjectDn(issuerDN);
+            if (cscaCertOpt.isEmpty()) {
+                signatureValid = false;
+                errors.add(ValidationError.critical("CHAIN_INCOMPLETE", "CSCA not found for DSC. IssuerDN: " + issuerDN));
+                log.error("CSCA not found for DSC. IssuerDN: {}", issuerDN);
+            } else {
+                // CSCA 인증서로 DSC 서명 검증
+                Certificate cscaCert = cscaCertOpt.get();
+                X509Certificate cscaX509 = convertToX509Certificate(
+                    cscaCert.getX509Data().getCertificateBinary()
+                );
+                try {
+                    x509Cert.verify(cscaX509.getPublicKey());
+                    log.debug("Signature verified for DSC by CSCA: {}", certData.getSubjectDN());
+                } catch (Exception e) {
+                    signatureValid = false;
+                    errors.add(ValidationError.critical("SIGNATURE_INVALID", "Signature verification failed by CSCA: " + e.getMessage()));
+                    log.error("Signature verification failed for DSC by CSCA: {}. Error: {}", certData.getSubjectDN(), e.getMessage());
+                }
+            }
 
             // 2. Validity period 검증
             try {

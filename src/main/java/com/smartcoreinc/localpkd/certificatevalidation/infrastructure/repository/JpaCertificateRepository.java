@@ -95,8 +95,8 @@ public class JpaCertificateRepository implements CertificateRepository {
             log.warn("Cannot find Certificate by Subject DN: DN is null or blank");
             throw new IllegalArgumentException("subjectDn must not be null or blank");
         }
-        log.debug("Finding Certificate by Subject DN: {}", subjectDn);
-        return jpaRepository.findBySubjectInfo_DistinguishedName(subjectDn);
+        log.debug("Finding Certificate by Subject DN (latest if duplicates): {}", subjectDn);
+        return jpaRepository.findFirstBySubjectInfo_DistinguishedNameOrderByCreatedAtDesc(subjectDn);
     }
 
     @Override

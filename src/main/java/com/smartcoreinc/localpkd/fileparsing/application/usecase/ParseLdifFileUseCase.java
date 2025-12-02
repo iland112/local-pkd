@@ -64,6 +64,7 @@ public class ParseLdifFileUseCase {
     private final ParsedFileRepository repository;
     private final FileParserPort fileParserPort;
     private final ProgressService progressService;
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;
 
     /**
      * Constructor with @Qualifier to specify which FileParserPort bean to inject
@@ -71,11 +72,13 @@ public class ParseLdifFileUseCase {
     public ParseLdifFileUseCase(
             ParsedFileRepository repository,
             @Qualifier("ldifParserAdapter") FileParserPort fileParserPort,
-            ProgressService progressService
+            ProgressService progressService,
+            com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository
     ) {
         this.repository = repository;
         this.fileParserPort = fileParserPort;
         this.progressService = progressService;
+        this.certificateRepository = certificateRepository;
     }
 
     /**
@@ -160,7 +163,15 @@ public class ParseLdifFileUseCase {
             // 10. Repository 저장 (모든 Domain Events 발행)
             ParsedFile saved = repository.save(parsedFile);
 
-            // 11. Response 생성
+            // 11. Response 생성 - Certificate 테이블에서 실제 저장된 인증서 개수 확인
+            // LDIF 파일의 경우 Master List에서 추출한 CSCA들이 Certificate 테이블에 직접 저장되므로
+            // ParsedFile.getCertificates().size()가 0이더라도 실제로는 인증서가 존재할 수 있음
+            int actualCertificateCount = certificateRepository.findByUploadId(uploadId.getId()).size();
+            int actualCrlCount = saved.getCrls().size();
+
+            log.info("LDIF parsing completed: actualCertificateCount={}, actualCrlCount={}, parsedFileCertCount={}",
+                actualCertificateCount, actualCrlCount, saved.getCertificates().size());
+
             return ParseFileResponse.success(
                 saved.getId().getId(),
                 saved.getUploadId().getId(),
@@ -168,8 +179,8 @@ public class ParseLdifFileUseCase {
                 saved.getStatus().name(),
                 saved.getParsingStartedAt(),
                 saved.getParsingCompletedAt(),
-                saved.getCertificates().size(),
-                saved.getCrls().size(),
+                actualCertificateCount,  // 실제 Certificate 테이블의 개수
+                actualCrlCount,
                 saved.getErrors().size(),
                 saved.getStatistics().getDurationMillis()
             );

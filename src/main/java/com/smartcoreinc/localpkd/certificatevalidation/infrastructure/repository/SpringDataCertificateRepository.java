@@ -39,7 +39,17 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
     List<Certificate> findNotUploadedToLdap();
     @Query("SELECT c FROM Certificate c WHERE c.validity.notAfter <= ?1 AND c.validity.notAfter >= ?2")
     List<Certificate> findExpiringSoon(LocalDateTime expiryThreshold, LocalDateTime now);
-    Optional<Certificate> findBySubjectInfo_DistinguishedName(String subjectDn);
+
+    /**
+     * Find certificate by Subject DN (latest if duplicates exist)
+     * Returns the most recently created certificate when multiple certificates have the same Subject DN.
+     * This prevents NonUniqueResultException when duplicate Subject DNs exist.
+     *
+     * @param subjectDn Subject Distinguished Name
+     * @return Optional containing the latest certificate with the given Subject DN
+     */
+    Optional<Certificate> findFirstBySubjectInfo_DistinguishedNameOrderByCreatedAtDesc(String subjectDn);
+
     Optional<Certificate> findByIssuerInfo_DistinguishedName(String issuerDn);
 
     // ===========================

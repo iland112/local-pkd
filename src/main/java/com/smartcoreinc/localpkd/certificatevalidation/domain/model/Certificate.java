@@ -361,7 +361,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
      */
     public static Certificate createFromMasterList(
             java.util.UUID uploadId,
-            java.util.UUID masterListId,
+            java.util.UUID masterListId,  // Nullable: null for ML file, non-null for LDIF Master List
             X509Data x509Data,
             SubjectInfo subjectInfo,
             IssuerInfo issuerInfo,
@@ -371,9 +371,10 @@ public class Certificate extends AggregateRoot<CertificateId> {
         if (uploadId == null) {
             throw new IllegalArgumentException("uploadId cannot be null");
         }
-        if (masterListId == null) {
-            throw new IllegalArgumentException("masterListId cannot be null for Master List certificates");
-        }
+        // masterListId is now nullable:
+        // - null: CSCA from ML file (no MasterList entity created)
+        // - non-null: CSCA from LDIF Master List entry (references MasterList entity)
+
         if (x509Data == null) {
             throw new IllegalArgumentException("x509Data cannot be null");
         }
@@ -397,7 +398,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
             CertificateType.CSCA,  // Always CSCA for Master List
             signatureAlgorithm,
             CertificateSourceType.MASTER_LIST,  // From Master List
-            masterListId
+            masterListId  // Nullable
         );
 
         // Domain Event 발행: 인증서 생성됨

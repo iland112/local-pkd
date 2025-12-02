@@ -112,7 +112,7 @@ public class JpaMasterListRepository implements MasterListRepository {
     }
 
     /**
-     * UploadId로 조회
+     * UploadId로 조회 (단일)
      *
      * @param uploadId UploadId
      * @return Optional<MasterList>
@@ -122,6 +122,19 @@ public class JpaMasterListRepository implements MasterListRepository {
     public Optional<MasterList> findByUploadId(UploadId uploadId) {
         log.debug("Finding MasterList by uploadId: {}", uploadId.getId());
         return jpaRepository.findByUploadId(uploadId);
+    }
+
+    /**
+     * UploadId로 모든 MasterList 조회 (리스트)
+     *
+     * @param uploadId UploadId
+     * @return List<MasterList>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<MasterList> findAllByUploadId(UploadId uploadId) {
+        log.debug("Finding all MasterLists by uploadId: {}", uploadId.getId());
+        return jpaRepository.findAllByUploadId(uploadId);
     }
 
     /**

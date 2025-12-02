@@ -147,34 +147,40 @@ public class ParseMasterListFileUseCase {
                 fileParserPort.parse(command.fileBytes(), fileFormat, parsedFile);
 
                 // ===========================
-                // Phase 3: Master List Aggregate 생성 및 저장
+                // Phase 3: Create MasterList Entity and Extract CSCA Certificates from ML File
                 // ===========================
+                // Note: ML file is a collection of CSCA certificates signed by ICAO/UN root.
+                // We create a MasterList entity to satisfy database constraints and enable traceability.
 
-                // 7-1. MasterListParser를 사용하여 구조화된 데이터 추출
+                // 7-1. MasterListParser를 사용하여 CSCA 인증서 추출
                 MasterListParseResult parseResult = masterListParser.parse(command.fileBytes());
-                log.info("MasterListParser extracted {} CSCAs", parseResult.getCscaCount());
+                log.info("MasterListParser extracted {} CSCAs from ML file", parseResult.getCscaCount());
 
-                // 7-2. MasterList Aggregate 생성 및 저장
+                // 7-2. MasterList 엔티티 생성
+                // ML file은 ICAO/UN의 글로벌 Master List이므로 특별한 country code 사용
                 MasterList masterList = MasterList.create(
-                        MasterListId.newId(),
-                        uploadId,
-                        parseResult.getCountryCode(),
-                        parseResult.getVersion(),
-                        parseResult.getCmsBinary(),
-                        parseResult.getSignerInfo(),
-                        parseResult.getCscaCount()
+                    MasterListId.newId(),
+                    uploadId,
+                    CountryCode.of("ZZ"), // ZZ = International/UN (ICAO ML file)
+                    MasterListVersion.unknown(), // ML files don't have version in command
+                    CmsBinaryData.of(command.fileBytes()),
+                    parseResult.getSignerInfo() != null ? parseResult.getSignerInfo() : SignerInfo.empty(),
+                    parseResult.getCscaCount()
                 );
-                MasterList savedMasterList = masterListRepository.save(masterList);
-                log.info("MasterList saved: masterListId={}, cscaCount={}",
-                        savedMasterList.getId().getId(), savedMasterList.getCscaCount());
 
-                // 7-3. 개별 CSCA Certificate 엔티티 생성 및 저장
+                // 7-3. MasterList 저장 (MasterListCreatedEvent 발행)
+                MasterList savedMasterList = masterListRepository.save(masterList);
+                log.info("Created MasterList entity for ML file: id={}, cscaCount={}",
+                    savedMasterList.getId().getId(), savedMasterList.getCscaCount());
+
+                // 7-4. 개별 CSCA Certificate 엔티티 생성
                 List<Certificate> cscaCertificates = new ArrayList<>();
                 for (MasterListParseResult.ParsedCsca parsedCsca : parseResult.getCscaCertificates()) {
                     try {
+                        // Create Certificate with masterListId from the created MasterList
                         Certificate cert = createCertificateFromParsedCsca(
                                 uploadId.getId(),
-                                savedMasterList.getId().getId(),
+                                savedMasterList.getId().getId(), // Use MasterList ID
                                 parsedCsca
                         );
                         cscaCertificates.add(cert);
@@ -184,9 +190,9 @@ public class ParseMasterListFileUseCase {
                     }
                 }
 
-                // 7-4. Certificate 엔티티 일괄 저장
+                // 7-5. Certificate 엔티티 일괄 저장
                 List<Certificate> savedCertificates = certificateRepository.saveAll(cscaCertificates);
-                log.info("Saved {} CSCA certificates from Master List", savedCertificates.size());
+                log.info("Saved {} CSCA certificates from ML file to certificate table", savedCertificates.size());
 
                 // ===========================
                 // End of Phase 3 Logic
