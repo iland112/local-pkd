@@ -146,6 +146,13 @@
                             </div>
                             <progress class="progress w-full" :class="{'progress-success': parseStage.status === 'COMPLETED', 'progress-error': parseStage.status === 'FAILED', 'progress-info': parseStage.status !== 'COMPLETED' && parseStage.status !== 'FAILED'}" :value="parseStage.percentage" max="100"></progress>
                             <p class="text-xs text-gray-500 mt-1" x-text="parseStage.message"></p>
+                            <!-- Detailed info for parsing -->
+                            <template x-if="parseStage.details">
+                                <div class="text-xs mt-2 p-2 bg-base-200 rounded">
+                                    <div class="font-semibold mb-1">📋 파싱 상세:</div>
+                                    <div class="grid grid-cols-3 gap-2" x-html="parseStage.details"></div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                     <!-- Validate Stage -->
@@ -160,6 +167,13 @@
                             </div>
                             <progress class="progress w-full" :class="{'progress-success': validateStage.status === 'COMPLETED', 'progress-error': validateStage.status === 'FAILED', 'progress-info': validateStage.status !== 'COMPLETED' && validateStage.status !== 'FAILED'}" :value="validateStage.percentage" max="100"></progress>
                             <p class="text-xs text-gray-500 mt-1" x-text="validateStage.message"></p>
+                            <!-- Detailed info for validation -->
+                            <template x-if="validateStage.details">
+                                <div class="text-xs mt-2 p-2 bg-base-200 rounded">
+                                    <div class="font-semibold mb-1">🔍 검증 상세:</div>
+                                    <div class="grid grid-cols-3 gap-2" x-html="validateStage.details"></div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                     <!-- LDAP Stage -->
@@ -174,6 +188,13 @@
                             </div>
                             <progress class="progress w-full" :class="{'progress-success': ldapStage.status === 'COMPLETED', 'progress-error': ldapStage.status === 'FAILED', 'progress-info': ldapStage.status !== 'COMPLETED' && ldapStage.status !== 'FAILED'}" :value="ldapStage.percentage" max="100"></progress>
                             <p class="text-xs text-gray-500 mt-1" x-text="ldapStage.message"></p>
+                            <!-- Detailed info for LDAP upload -->
+                            <template x-if="ldapStage.details">
+                                <div class="text-xs mt-2 p-2 bg-base-200 rounded">
+                                    <div class="font-semibold mb-1">💾 LDAP 저장 상세:</div>
+                                    <div class="grid grid-cols-3 gap-2" x-html="ldapStage.details"></div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -314,10 +335,10 @@
             sseReconnectTimer: null,
 
             // Stage-specific progress
-            uploadStage: { active: false, message: '', percentage: 0, status: '' },
-            parseStage: { active: false, message: '', percentage: 0, status: '' },
-            validateStage: { active: false, message: '', percentage: 0, status: '' },
-            ldapStage: { active: false, message: '', percentage: 0, status: '' },
+            uploadStage: { active: false, message: '', percentage: 0, status: '', details: '' },
+            parseStage: { active: false, message: '', percentage: 0, status: '', details: '' },
+            validateStage: { active: false, message: '', percentage: 0, status: '', details: '' },
+            ldapStage: { active: false, message: '', percentage: 0, status: '', details: '' },
 
             // Overall status
             overallStatus: 'IDLE', // IDLE, IN_PROGRESS, FINALIZED, FAILED
@@ -366,10 +387,10 @@
                     this.sseEventSource = null;
                 }
 
-                this.uploadStage = { active: false, message: '', percentage: 0, status: '' };
-                this.parseStage = { active: false, message: '', percentage: 0, status: '' };
-                this.validateStage = { active: false, message: '', percentage: 0, status: '' };
-                this.ldapStage = { active: false, message: '', percentage: 0, status: '' };
+                this.uploadStage = { active: false, message: '', percentage: 0, status: '', details: '' };
+                this.parseStage = { active: false, message: '', percentage: 0, status: '', details: '' };
+                this.validateStage = { active: false, message: '', percentage: 0, status: '', details: '' };
+                this.ldapStage = { active: false, message: '', percentage: 0, status: '', details: '' };
                 
                 this.overallStatus = 'IN_PROGRESS';
                 this.overallMessage = '';
@@ -603,6 +624,8 @@
                     targetStage.message = progress.message;
                     targetStage.percentage = progress.percentage;
                     targetStage.status = progress.status;
+                    // Parse details field and format it
+                    targetStage.details = this.formatStageDetails(progress);
                 }
 
                 if (progress.errorMessage) {
@@ -678,6 +701,54 @@
             triggerParse() { this.triggerManualStep('PARSE'); },
             triggerValidate() { this.triggerManualStep('VALIDATE'); },
             triggerLdapUpload() { this.triggerManualStep('LDAP_UPLOAD'); },
+
+            formatStageDetails(progress) {
+                if (!progress) return '';
+
+                let html = '';
+
+                // If completed, show detailed statistics
+                if (progress.status === 'COMPLETED' && progress.details && progress.details.trim() !== '') {
+                    // Parse details and create badges
+                    const details = progress.details.split(',').map(d => d.trim());
+                    details.forEach(detail => {
+                        if (detail) {
+                            // Determine badge color based on content
+                            let badgeClass = 'badge-primary';
+                            if (detail.includes('CSCA')) {
+                                badgeClass = 'badge-success';
+                            } else if (detail.includes('DSC_NC')) {
+                                badgeClass = 'badge-accent';
+                            } else if (detail.includes('DSC')) {
+                                badgeClass = 'badge-info';
+                            } else if (detail.includes('CRL')) {
+                                badgeClass = 'badge-warning';
+                            } else if (detail.includes('유효')) {
+                                badgeClass = 'badge-success';
+                            } else if (detail.includes('무효')) {
+                                badgeClass = 'badge-error';
+                            } else if (detail.includes('실패')) {
+                                badgeClass = 'badge-error';
+                            }
+                            html += `<div><span class="badge badge-sm ${badgeClass}">${detail}</span></div>`;
+                        }
+                    });
+                }
+                // If in progress, show current progress
+                else if (progress.processedCount > 0 && progress.totalCount > 0) {
+                    const percentage = Math.round((progress.processedCount / progress.totalCount) * 100);
+                    html += `<div class="col-span-3"><div class="flex items-center gap-2">`;
+                    html += `<span class="text-xs font-medium">진행률: ${percentage}%</span>`;
+                    html += `<span class="text-xs text-gray-500">(${progress.processedCount} / ${progress.totalCount})</span>`;
+                    html += `</div></div>`;
+                }
+                // Show details if available
+                else if (progress.details && progress.details.trim() !== '') {
+                    html += `<div class="col-span-3"><span class="text-xs opacity-70">${progress.details}</span></div>`;
+                }
+
+                return html;
+            },
 
             destroySseConnection() {
                 // Clear reconnection timer

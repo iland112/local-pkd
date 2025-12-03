@@ -75,6 +75,11 @@ public class CertificateValidatedEventHandler {
             log.info("AUTO mode: Starting LDAP upload for {} total certificates ({} valid, {} invalid) and {} total CRLs ({} valid, {} invalid).",
                 totalCertificates, event.getValidCertificateCount(), event.getInvalidCertificateCount(),
                 totalCrls, event.getValidCrlCount(), event.getInvalidCrlCount());
+
+            // Update status to UPLOADING_TO_LDAP
+            uploadedFile.updateStatusToUploadingToLdap();
+            uploadedFileRepository.save(uploadedFile);
+
             progressService.sendProgress(
                 ProcessingProgress.ldapSavingStarted(event.getUploadId(), totalCertificates + totalCrls)
             );

@@ -132,17 +132,36 @@ public class ParseLdifFileUseCase {
                                  + parsedFile.getErrors().size();
                 parsedFile.completeParsing(totalEntries);
 
-                log.info("Parsing completed: {} certificates, {} CRLs, {} errors",
-                    parsedFile.getCertificates().size(),
+                // Calculate type-specific statistics
+                long cscaCount = parsedFile.getCertificates().stream()
+                    .filter(cert -> "CSCA".equals(cert.getCertificateType())).count();
+                long dscCount = parsedFile.getCertificates().stream()
+                    .filter(cert -> "DSC".equals(cert.getCertificateType())).count();
+                long dscNcCount = parsedFile.getCertificates().stream()
+                    .filter(cert -> "DSC_NC".equals(cert.getCertificateType())).count();
+                int crlCount = parsedFile.getCrls().size();
+
+                log.info("Parsing completed: {} certificates (CSCA: {}, DSC: {}, DSC_NC: {}), {} CRLs, {} errors",
+                    parsedFile.getCertificates().size(), cscaCount, dscCount, dscNcCount,
                     parsedFile.getCrls().size(),
                     parsedFile.getErrors().size());
 
-                // 9. SSE 진행 상황 전송: PARSING_COMPLETED (60%)
+                // 9. SSE 진행 상황 전송: PARSING_COMPLETED (60%) with detailed statistics
+                String detailsMsg = String.format("CSCA: %d개, DSC: %d개%s, CRL: %d개",
+                    cscaCount, dscCount,
+                    (dscNcCount > 0 ? ", DSC_NC: " + dscNcCount + "개" : ""),
+                    crlCount);
+
                 progressService.sendProgress(
-                    ProcessingProgress.parsingCompleted(
-                        uploadId.getId(),
-                        totalEntries
-                    )
+                    ProcessingProgress.builder()
+                        .uploadId(uploadId.getId())
+                        .stage(ProcessingStage.PARSING_COMPLETED)
+                        .percentage(50)
+                        .processedCount(totalEntries)
+                        .totalCount(totalEntries)
+                        .message(String.format("파일 파싱 완료 (총 %d개)", totalEntries))
+                        .details(detailsMsg)
+                        .build()
                 );
 
             } catch (FileParserPort.ParsingException e) {

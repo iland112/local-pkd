@@ -99,8 +99,12 @@ public class FileUploadEventHandler {
     }
 
     private ParseFileResponse parseFile(UploadedFile uploadedFile) throws Exception {
+        // Update status to PARSING
+        uploadedFile.updateStatusToParsing();
+        uploadedFileRepository.save(uploadedFile);
+
         progressService.sendProgress(ProcessingProgress.parsingStarted(uploadedFile.getId().getId(), uploadedFile.getFileName().getValue()));
-        
+
         byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
         String fileFormatType = uploadedFile.getFileFormatType();
 
@@ -122,9 +126,17 @@ public class FileUploadEventHandler {
         }
 
         if (response.success()) {
+            // Update status to PARSED after successful parsing
+            uploadedFile.updateStatusToParsed();
+            uploadedFileRepository.save(uploadedFile);
+
             progressService.sendProgress(ProcessingProgress.parsingCompleted(uploadedFile.getId().getId(), response.certificateCount()));
             log.info("Parsing completed successfully for uploadId={}", uploadedFile.getId().getId());
         } else {
+            // Update status to FAILED on parsing error
+            uploadedFile.fail(response.errorMessage());
+            uploadedFileRepository.save(uploadedFile);
+
             progressService.sendProgress(ProcessingProgress.failed(uploadedFile.getId().getId(), ProcessingStage.PARSING_COMPLETED, response.errorMessage()));
             log.error("Parsing failed for uploadId={}: {}", uploadedFile.getId().getId(), response.errorMessage());
         }

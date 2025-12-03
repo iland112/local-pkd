@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.2
+**Version**: 3.3
 **Last Updated**: 2025-12-03
-**Status**: Production Ready (Phase 1-19 Complete + LDAP Validation Status)
+**Status**: Production Ready (Phase 1-19 Complete + Upload Status Tracking)
 
 ---
 
@@ -18,8 +18,10 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 - ✅ OpenLDAP 자동 등록 (검증 상태 포함)
 - ✅ 실시간 진행 상황 (uploadId별 SSE 스트림)
 - ✅ 수동/자동 처리 모드 (Manual/Auto Mode)
-- ✅ 업로드 이력 관리
+- ✅ 업로드 이력 관리 (단계별 상태 추적)
 - ✅ 단계별 진행 상태 UI (Upload → Parse → Validate → LDAP)
+- ✅ 업로드 상태 자동 업데이트 (RECEIVED → PARSING → PARSED → UPLOADING_TO_LDAP → COMPLETED)
+- ✅ 업로드 이력 페이지 4단계 상태 표시 (파싱/검증/LDAP 각각 체크마크)
 - ✅ LDAP 검증 상태 기록 (VALID/INVALID/EXPIRED + 오류 메시지)
 
 **Tech Stack**:
@@ -887,7 +889,7 @@ http://172.24.1.6:8081
 
 ---
 
-## 📊 Current Status (2025-11-28)
+## 📊 Current Status (2025-12-03)
 
 ### Completed Phases ✅
 
@@ -901,9 +903,10 @@ http://172.24.1.6:8081
 | Phase 18 | UI Improvements, Dashboard | ✅ |
 | Phase DSC_NC | Non-Conformant Certificate Support | ✅ |
 | **Async Refactoring** | **비동기 업로드, SSE 개선, Manual Mode** | ✅ |
-| **Phase 19** | **LDAP 검증 상태 기록 (description attribute)** | ✅ **NEW** |
+| **Phase 19** | **LDAP 검증 상태 기록 (description attribute)** | ✅ |
+| **Upload Status Tracking** | **단계별 상태 자동 업데이트, 업로드 이력 4단계 표시** | ✅ **NEW** |
 
-### Recent Refactoring (2025-11-26 ~ 2025-11-28) ✅
+### Recent Refactoring (2025-11-26 ~ 2025-12-03) ✅
 
 1. ✅ **AsyncUploadProcessor 도입** - 즉시 uploadId 반환, 백그라운드 처리
 2. ✅ **uploadId별 SSE 스트림** - 개별 진행 상황 추적
@@ -913,7 +916,10 @@ http://172.24.1.6:8081
 6. ✅ **서버 측 체크섬** - 클라이언트 부담 제거
 7. ✅ **WSL2 네트워크 지원** - Windows Chrome 접근 가능
 8. ✅ **실제 LDAP 업로드 구현** (2025-11-27) - ICAO PKD LDIF 형식 준수, 시뮬레이션 제거
-9. ✅ **LDAP 검증 상태 기록** (2025-11-28 NEW) - description attribute에 VALID/INVALID/EXPIRED + 오류 메시지 포함
+9. ✅ **LDAP 검증 상태 기록** (2025-11-28) - description attribute에 VALID/INVALID/EXPIRED + 오류 메시지 포함
+10. ✅ **업로드 상태 자동 업데이트** (2025-12-03 NEW) - UploadedFile 엔티티 상태가 처리 단계별로 자동 업데이트 (RECEIVED → PARSING → PARSED → UPLOADING_TO_LDAP → COMPLETED)
+11. ✅ **업로드 이력 페이지 개선** (2025-12-03 NEW) - 파싱/검증/LDAP 각각의 상태를 개별 컬럼으로 표시, 완료된 단계는 체크마크 표시
+12. ✅ **SSE 진행 상황 상세화** (2025-12-03 NEW) - 각 단계별 인증서 타입, 유효성 통계를 포함한 상세 정보 표시
 
 ### Remaining TODOs
 

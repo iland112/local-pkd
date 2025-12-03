@@ -61,6 +61,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class LdapUploadEventHandler {
 
     private final ProgressService progressService;
+    private final com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository uploadedFileRepository;
     // TODO: Phase 4에서 추가될 Services
     // private final UploadHistoryService uploadHistoryService;
     // private final NotificationService notificationService;
@@ -95,7 +96,28 @@ public class LdapUploadEventHandler {
         log.info("  - Success Rate: {}%", event.getSuccessRate());
 
         try {
-            // 1. SSE 진행 상황 전송: COMPLETED (100%)
+            // 1. Update UploadedFile status to COMPLETED
+            com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile uploadedFile =
+                uploadedFileRepository.findById(new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(event.getUploadId()))
+                    .orElseThrow(() -> new com.smartcoreinc.localpkd.shared.exception.DomainException(
+                        "UPLOAD_NOT_FOUND",
+                        "UploadedFile not found for ID: " + event.getUploadId()
+                    ));
+
+            if (event.isSuccess()) {
+                // Update status to COMPLETED
+                uploadedFile.updateStatusToCompleted();
+                uploadedFileRepository.save(uploadedFile);
+                log.info("UploadedFile status updated to COMPLETED for uploadId: {}", event.getUploadId());
+            } else {
+                // Update status to FAILED if there were failures
+                String errorMsg = String.format("LDAP upload completed with %d failures", event.getFailedCount());
+                uploadedFile.fail(errorMsg);
+                uploadedFileRepository.save(uploadedFile);
+                log.warn("UploadedFile status updated to FAILED for uploadId: {}", event.getUploadId());
+            }
+
+            // 2. SSE 진행 상황 전송: COMPLETED (100%)
             if (event.isSuccess()) {
                 log.info("LDAP upload completed successfully");
                 progressService.sendProgress(
