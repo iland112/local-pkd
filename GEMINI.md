@@ -354,26 +354,23 @@ curl http://localhost:8081/actuator/health
 
 ### ✅ Completed Tasks
 
-1.  **Resolved Certificate Validation Crashes & Database Issues**:
-    *   **Initial Problem:** Application crashed with `NullPointerException` during certificate validation and later `IllegalArgumentException` (Public Key Null) when processing Master List files. Database transactions were aborting due to `duplicate key` violations, leading to `UnexpectedRollbackException`.
-    *   **Root Causes**:
-        *   Incorrect helper method call in `ValidateCertificatesUseCase` catch blocks when creating dummy error certificates.
-        *   Lack of robust handling for concurrent duplicate certificate insertions within the same transaction, leading to database constraint violations that rolled back the entire transaction.
-        *   Compiler errors related to "local variables referenced from a lambda expression must be final or effectively final" due to complex variable scoping in nested `try-catch` blocks.
-    *   **Solutions Implemented**:
-        *   Corrected `createCertificateFromData` helper method call in `ValidateCertificatesUseCase`.
-        *   Introduced `X509Data.ofIncomplete()` to handle incomplete certificate data for error logging.
-        *   Implemented an in-batch duplicate certificate check using `processedFingerprints` `Set` in `ValidateCertificatesUseCase`.
-        *   Enhanced `ValidateCertificatesUseCase` to gracefully handle `DataIntegrityViolationException` (duplicate key errors) by converting failed `INSERT` attempts into `UPDATE` operations on existing records.
-        *   Refactored certificate saving/updating logic into a new helper method (`handleCertificateSaveOrUpdate`) to resolve "effectively final" compiler errors and improve code modularity.
-
-2.  **Major Codebase Cleanup & Refactoring**:
-    *   **Problem:** Discovered a significant amount of obsolete code (13 files) from a previous, incomplete refactoring phase, particularly related to LDAP integration within the `certificatevalidation` context. These files were still active and incorrectly wired, causing issues and preventing the proper execution of new LDAP logic.
-    *   **Solution Implemented**:
-        *   Identified and safely deleted 13 obsolete Java files (including old LDAP-related commands, responses, use cases, services, and event handlers from the `certificatevalidation` context, and duplicate enum definitions from `common.enums`).
-        *   Created a new, correct `CertificateValidatedEventHandler.java` in the `ldapintegration` context to properly listen for `CertificatesValidatedEvent` and trigger the correct `UploadToLdapUseCase` (from `ldapintegration`).
-        *   Fixed compilation errors resulting from file deletions (e.g., removing a dangling event reference in `Certificate.java`).
-        *   Updated the new event handler to correctly use the `record`-based API of `UploadToLdapCommand` and `UploadToLdapResponse`.
+1.  **Session 2025-12-03: Comprehensive Bug Fixing & Refactoring**:
+    *   **Compilation & Warnings Resolution**:
+        *   Removed unused `LdifParsingEventHandler.java` file, resolving its deprecation warning.
+        *   Replaced deprecated `masterListToLdif` method usage in `UploadToLdapUseCase.java` by removing redundant Master List upload logic.
+        *   Modernized `Locale` usage in `CountryCodeUtil.java` (replacing `toLowerCase()` and `new Locale("", ...)` constructor with `Locale.ROOT` and `Locale.Builder`), resolving its deprecation warning.
+        *   Suppressed deprecation warning on `JpaUploadedFileRepository.save()` with `@SuppressWarnings("deprecation")` after restoring manual event publishing logic, as it was critical for functionality.
+        *   Added `@SuppressWarnings("unchecked")` to multiple methods (`verifySignature`, `extractSignerInfo`, `extractCscaCertificates`, `extractCscaCertificatesForMasterList`) in `MasterListParserAdapter.java` to resolve unchecked operation warnings.
+    *   **Database Schema & Data Persistence**:
+        *   Added Flyway migration `V15__Add_All_Attributes_To_Certificate.sql` to add `all_attributes` column (jsonb) to the `certificate` table.
+        *   Added Flyway migration `V16__Add_all_attributes_to_parsed_certificate.sql` to add `all_attributes` column (jsonb) to the `parsed_certificate` table.
+        *   Refactored `Certificate.java` and `CertificateData.java` to incorporate the `allAttributes` field mapping.
+        *   Refactored `LdifParserAdapter.java` to extract and populate the `allAttributes` field in `CertificateData` from LDIF entries.
+        *   Corrected `LdifConverter.java` to fix "DN not found in certificate attributes" error by always using the stable manual LDIF creation path and ensuring `pkdConformance*` attributes are appended from `allAttributes`.
+    *   **Functional & Runtime Error Resolution**:
+        *   Fixed the parsing workflow (bug: "upload 완료 후 parsing 단계로 진행되지 않아") by restoring explicit event publishing logic in `JpaUploadedFileRepository.java`.
+        *   Addressed `AsyncRequestNotUsableException` (a symptom of previous errors) by robustifying the `onError` callback in `ProgressService.java` with a `try-catch` block, preventing the logging of this secondary exception.
+        *   Confirmed that the certificate validation process now proceeds without errors, with the user observing the importance of CSCA certificates being present for proper validation of DSC/CRL.
 
 ### ⚠️ Outstanding Issues & TODO List
 

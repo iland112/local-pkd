@@ -1,7 +1,7 @@
 # Local PKD Evaluation Project - Development Guide
 
 **Version**: 3.2
-**Last Updated**: 2025-11-28
+**Last Updated**: 2025-12-03
 **Status**: Production Ready (Phase 1-19 Complete + LDAP Validation Status)
 
 ---
@@ -73,7 +73,7 @@ shared/                  # Shared Kernel
 ├── event/               # EventBus, @EventListener, @Async
 ├── exception/           # DomainException, InfrastructureException, BusinessException
 ├── progress/            # ProcessingProgress, ProgressService (SSE), ProgressController
-└── util/                # HashingUtil (SHA-256 checksum)
+└── util/                  # HashingUtil (SHA-256 checksum)
 ```
 
 ---
@@ -351,7 +351,7 @@ mcp__filesystem__get_file_info(path="/path/file.java")
 
 ### 2. Context7 - 라이브러리 문서 조회
 
-```python
+```java
 # Step 1: 라이브러리 ID 확인
 mcp__context7__resolve_library_id(libraryName="spring boot")
 
@@ -365,7 +365,7 @@ mcp__context7__get_library_docs(
 
 ### 3. Sequential Thinking - 복잡한 문제 분석
 
-```python
+```java
 mcp__sequential_thinking__sequentialthinking(
     thought="1단계: 문제 분석...",
     thoughtNumber=1,
@@ -376,7 +376,7 @@ mcp__sequential_thinking__sequentialthinking(
 
 ### 4. Memory - 프로젝트 지식 저장
 
-```python
+```java
 # Entity 생성
 mcp__memory__create_entities(entities=[{
     "name": "AsyncRefactoring2025-11",
@@ -397,7 +397,7 @@ mcp__memory__search_nodes(query="async processing")
 
 ### 5. Playwright - E2E 테스트
 
-```python
+```java
 # 브라우저 시작
 mcp__playwright__browser_navigate(url="http://localhost:8081/file/upload")
 
@@ -413,7 +413,7 @@ mcp__playwright__browser_snapshot()  # UI 상태 캡처
 ## 📚 Key Documents (읽어야 할 문서)
 
 | 문서 | 용도 | 위치 |
-|------|------|------|
+|------|--------|------|
 | **PROJECT_SUMMARY** | 프로젝트 전체 개요 (DB, API, 완료 Phase) | docs/PROJECT_SUMMARY_2025-11-21.md |
 | **TODO_ANALYSIS** | 105개 TODO 분석 (High/Medium/Low 우선순위) | docs/TODO_ANALYSIS.md |
 | **CODE_CLEANUP_REPORT** | 최근 코드 정리 내역 (제거 파일, 빌드 결과) | docs/CODE_CLEANUP_REPORT_2025-11-21.md |
@@ -617,7 +617,7 @@ Attributes:
    b. master_list 테이블에 저장
    c. CMS SignedData 파싱하여 개별 CSCA 추출
    d. Certificate.createFromMasterList(uploadId, masterListId, ...) 호출
-      - masterListId = MasterList ID (non-null)
+      - masterListId = Master List ID (non-null)
       - sourceType = MASTER_LIST
    e. certificate 테이블에 저장 (통계/분석용)
    f. ParsedFile에도 CertificateData 추가 (검증용)
@@ -1031,6 +1031,6 @@ Windows Chrome: "사이트에 연결할 수 없음"
 
 **Document Version**: 3.2
 **Status**: PRODUCTION READY ✅
-**Last Review**: 2025-11-28
+**Last Review**: 2025-12-03
 
 *이 문서는 프로젝트의 핵심 정보와 최신 아키텍처 변경사항을 포함합니다. 상세한 구현 내용은 `docs/` 디렉토리의 개별 문서를 참조하세요.*
