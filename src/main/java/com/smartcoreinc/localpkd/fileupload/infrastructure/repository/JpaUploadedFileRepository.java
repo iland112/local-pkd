@@ -73,11 +73,10 @@ import java.util.Optional;
  * </pre>
  *
  * @author SmartCore Inc.
- * @version 1.0
+ * @version 1.1
  * @since 2025-10-18
  * @see UploadedFileRepository
  * @see SpringDataUploadedFileRepository
- * @see EventBus
  */
 @Slf4j
 @Repository
@@ -85,7 +84,7 @@ import java.util.Optional;
 public class JpaUploadedFileRepository implements UploadedFileRepository {
 
     private final SpringDataUploadedFileRepository jpaRepository;
-    private final EventBus eventBus;
+    private final EventBus eventBus; // EventBus re-injected
 
     /**
      * 업로드된 파일 저장
@@ -97,6 +96,7 @@ public class JpaUploadedFileRepository implements UploadedFileRepository {
      */
     @Override
     @Transactional
+    @SuppressWarnings("deprecation") // Suppress warning about deprecated API usage (TransactionSynchronizationAdapter)
     public UploadedFile save(UploadedFile aggregate) {
         log.debug("Saving UploadedFile: id={}", aggregate.getId().getId());
 

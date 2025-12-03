@@ -355,21 +355,20 @@ public class ValidateCertificatesUseCase {
             );
             return CertificatesValidatedResponse.failure(command.uploadId(), e.getMessage());
 
-        } catch (Exception e) {
-            log.error("Unexpected error during certificate validation", e);
-            progressService.sendProgress(
-                ProcessingProgress.failed(
-                    command.uploadId(),
-                    ProcessingStage.VALIDATION_IN_PROGRESS, // FAILED 이전에 어떤 단계였는지 명시
-                    "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
-                )
-            );
-            return CertificatesValidatedResponse.failure(
-                command.uploadId(),
-                "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
-            );
-        }
-    }
+                    } catch (Exception e) {
+                        log.error("Unexpected error during certificate validation. Details: {}", e.getMessage(), e); // Log full stack trace
+                        progressService.sendProgress(
+                            ProcessingProgress.failed(
+                                command.uploadId(),
+                                ProcessingStage.VALIDATION_IN_PROGRESS, // FAILED 이전에 어떤 단계였는지 명시
+                                "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
+                            )
+                        );
+                        return CertificatesValidatedResponse.failure(
+                            command.uploadId(),
+                            "인증서 검증 중 오류가 발생했습니다: " + e.getMessage()
+                        );
+                    }    }
 
     // ========== Helper Methods ==========
 
@@ -650,7 +649,8 @@ public class ValidateCertificatesUseCase {
             issuerInfo,
             validity,
             certificateType,
-            signatureAlgorithm
+            signatureAlgorithm,
+            certData.getAllAttributes()
         );
     }
     
@@ -726,7 +726,8 @@ public class ValidateCertificatesUseCase {
             issuerInfo,
             validity,
             certificateType,
-            signatureAlgorithm
+            signatureAlgorithm,
+            certData.getAllAttributes()
         );
     }
 

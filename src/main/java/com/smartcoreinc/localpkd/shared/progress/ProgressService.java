@@ -93,12 +93,15 @@ public class ProgressService {
             emitter.complete();
         });
 
-        emitter.onError((ex) -> {
-            log.warn("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
-            uploadIdToEmitters.remove(uploadId);
-            emitter.complete(); // 에러 발생 시 Emitter 완료 처리
-        });
-
+                    emitter.onError((ex) -> {
+                        log.warn("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
+                        uploadIdToEmitters.remove(uploadId);
+                        try { // Safely attempt to complete emitter, ignore if already unusable
+                            emitter.complete();
+                        } catch (Exception completionException) {
+                            log.trace("Emitter already unusable in onError for uploadId {}: {}", uploadId, completionException.getMessage());
+                        }
+                    });
         log.info("New SSE connection established for uploadId: {}. Total connections: {}", uploadId, uploadIdToEmitters.size());
 
         // 연결 확인 이벤트 전송

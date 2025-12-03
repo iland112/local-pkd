@@ -1,6 +1,7 @@
 package com.smartcoreinc.localpkd.common.util;
 
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -70,13 +71,10 @@ public class CountryCodeUtil {
 
         // ISO 3166-1 alpha-2 검증
         try {
-            String[] isoCountries = Locale.getISOCountries();
-            String upperCode = countryCode.toUpperCase();
-
-            for (String isoCountry : isoCountries) {
-                if (isoCountry.equals(upperCode)) {
-                    return true;
-                }
+            // Use modern, Set-based ISO country code validation
+            String upperCode = countryCode.toUpperCase(Locale.ROOT);
+            if (Locale.getISOCountries(Locale.IsoCountryCode.PART1_ALPHA2).contains(upperCode)) {
+                return true;
             }
 
             // 특수 케이스: UN, XK (Kosovo) 등
@@ -113,7 +111,7 @@ public class CountryCodeUtil {
             return UNKNOWN_COUNTRY;
         }
 
-        String normalized = countryCode.trim().toLowerCase();
+        String normalized = countryCode.trim().toLowerCase(Locale.ROOT);
 
         if (isValidCountryCode(normalized)) {
             return normalized;
@@ -134,7 +132,7 @@ public class CountryCodeUtil {
         }
 
         try {
-            Locale locale = new Locale("", countryCode);
+            Locale locale = new Locale.Builder().setRegion(countryCode).build();
             String displayName = locale.getDisplayCountry(Locale.ENGLISH);
 
             if (displayName != null && !displayName.isEmpty()) {
@@ -159,7 +157,7 @@ public class CountryCodeUtil {
         }
 
         try {
-            Locale locale = new Locale("", countryCode);
+            Locale locale = new Locale.Builder().setRegion(countryCode).build();
             String displayName = locale.getDisplayCountry(Locale.KOREAN);
 
             if (displayName != null && !displayName.isEmpty()) {
