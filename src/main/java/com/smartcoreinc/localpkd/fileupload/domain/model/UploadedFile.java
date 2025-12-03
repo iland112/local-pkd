@@ -792,4 +792,42 @@ public class UploadedFile extends AggregateRoot<UploadId> {
             this.manualPauseAtStep = "LDAP_SAVING_STARTED";
         }
     }
+
+    // ===== Status Update Methods for Processing Stages =====
+
+    /**
+     * 파싱 시작 상태로 업데이트
+     *
+     * <p>파일 파싱이 시작될 때 호출됩니다.</p>
+     */
+    public void updateStatusToParsing() {
+        changeStatus(UploadStatus.PARSING);
+    }
+
+    /**
+     * 파싱 완료 상태로 업데이트
+     *
+     * <p>파일 파싱이 성공적으로 완료될 때 호출됩니다.</p>
+     */
+    public void updateStatusToParsed() {
+        changeStatus(UploadStatus.PARSED);
+    }
+
+    /**
+     * LDAP 업로드 시작 상태로 업데이트
+     *
+     * <p>LDAP 서버로의 업로드가 시작될 때 호출됩니다.</p>
+     */
+    public void updateStatusToUploadingToLdap() {
+        changeStatus(UploadStatus.UPLOADING_TO_LDAP);
+    }
+
+    /**
+     * 완료 상태로 업데이트
+     *
+     * <p>모든 처리 단계(파싱, 검증, LDAP 업로드)가 성공적으로 완료될 때 호출됩니다.</p>
+     */
+    public void updateStatusToCompleted() {
+        changeStatus(UploadStatus.COMPLETED);
+    }
 }

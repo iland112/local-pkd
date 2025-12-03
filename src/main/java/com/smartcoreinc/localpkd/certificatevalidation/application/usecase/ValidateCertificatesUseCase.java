@@ -324,15 +324,69 @@ public class ValidateCertificatesUseCase {
             eventPublisher.publishEvent(event);
             log.info("CertificatesValidatedEvent published: uploadId={}", command.uploadId());
 
-            // 6. SSE 진행 상황 전송: VALIDATION_COMPLETED (85%)
+            // 6. 검증 결과 통계 계산
+            // 실제 저장된 Certificate 엔티티에서 통계 수집
+            List<Certificate> allCertificates = certificateRepository.findByUploadId(command.uploadId());
+
+            long cscaValidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.CSCA)
+                .filter(cert -> cert.getStatus() == CertificateStatus.VALID)
+                .count();
+            long cscaInvalidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.CSCA)
+                .filter(cert -> cert.getStatus() == CertificateStatus.INVALID || cert.getStatus() == CertificateStatus.EXPIRED)
+                .count();
+
+            long dscValidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.DSC)
+                .filter(cert -> cert.getStatus() == CertificateStatus.VALID)
+                .count();
+            long dscInvalidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.DSC)
+                .filter(cert -> cert.getStatus() == CertificateStatus.INVALID || cert.getStatus() == CertificateStatus.EXPIRED)
+                .count();
+
+            long dscNcValidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.DSC_NC)
+                .filter(cert -> cert.getStatus() == CertificateStatus.VALID)
+                .count();
+            long dscNcInvalidCount = allCertificates.stream()
+                .filter(cert -> cert.getCertificateType() == CertificateType.DSC_NC)
+                .filter(cert -> cert.getStatus() == CertificateStatus.INVALID || cert.getStatus() == CertificateStatus.EXPIRED)
+                .count();
+
+            log.info("Validation completed: CSCA(Valid: {}, Invalid: {}), DSC(Valid: {}, Invalid: {}), DSC_NC(Valid: {}, Invalid: {})",
+                cscaValidCount, cscaInvalidCount, dscValidCount, dscInvalidCount, dscNcValidCount, dscNcInvalidCount);
+
+            // 통계 메시지 포맷팅
+            StringBuilder detailsMsg = new StringBuilder();
+            if (cscaValidCount > 0 || cscaInvalidCount > 0) {
+                detailsMsg.append(String.format("CSCA: 유효 %d개/무효 %d개", cscaValidCount, cscaInvalidCount));
+            }
+            if (dscValidCount > 0 || dscInvalidCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("DSC: 유효 %d개/무효 %d개", dscValidCount, dscInvalidCount));
+            }
+            if (dscNcValidCount > 0 || dscNcInvalidCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("DSC_NC: 유효 %d개/무효 %d개", dscNcValidCount, dscNcInvalidCount));
+            }
+
+            // 7. SSE 진행 상황 전송: VALIDATION_COMPLETED (85%)
+            int totalProcessed = validCertificateIds.size() + invalidCertificateIds.size() + validCrlIds.size() + invalidCrlIds.size();
             progressService.sendProgress(
-                ProcessingProgress.validationCompleted(
-                    command.uploadId(),
-                    validCertificateIds.size() + invalidCertificateIds.size() + validCrlIds.size() + invalidCrlIds.size()
-                )
+                ProcessingProgress.builder()
+                    .uploadId(command.uploadId())
+                    .stage(ProcessingStage.VALIDATION_COMPLETED)
+                    .percentage(85)
+                    .processedCount(totalProcessed)
+                    .totalCount(totalProcessed)
+                    .message(String.format("인증서 검증 완료 (총 %d개)", totalProcessed))
+                    .details(detailsMsg.toString())
+                    .build()
             );
 
-            // 7. Response 반환
+            // 8. Response 반환
             long durationMillis = System.currentTimeMillis() - startTime;
             return CertificatesValidatedResponse.success(
                 command.uploadId(),

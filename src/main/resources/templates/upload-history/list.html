@@ -173,7 +173,10 @@
                     <th>파일명</th>
                     <th class="text-center">포맷</th>
                     <th class="text-center">크기</th>
-                    <th class="text-center">상태</th>
+                    <th class="text-center">업로드</th>
+                    <th class="text-center">파싱</th>
+                    <th class="text-center">검증</th>
+                    <th class="text-center">LDAP</th>
                     <th class="text-center">업로드 시간</th>
                     <th class="text-center">상세</th>
                   </tr>
@@ -196,15 +199,46 @@
                       <div class="badge badge-primary badge-sm" th:text="${history.fileFormat}">LDIF</div>
                     </td>
                     <td class="text-center font-mono text-sm" th:text="${history.fileSizeDisplay}">45 MB</td>
+                    <!-- 업로드 상태 -->
                     <td class="text-center">
-                      <div
-                        class="badge badge-sm"
-                        th:classappend="${history.status == 'COMPLETED'} ? 'badge-success' :
-                                       (${history.status == 'FAILED'} ? 'badge-error' :
-                                       'badge-warning')"
-                        th:text="${T(com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus).valueOf(history.status).displayName}"
-                      >
-                        상태
+                      <div class="badge badge-sm badge-success">
+                        <i class="fas fa-check text-xs"></i>
+                      </div>
+                    </td>
+                    <!-- 파싱 상태 -->
+                    <td class="text-center">
+                      <div th:class="${'badge badge-sm ' +
+                        (history.status.toString().contains('COMPLETED') ? 'badge-success' :
+                         history.status.toString().contains('FAILED') ? 'badge-error' :
+                         history.status.toString().contains('PARSING') ? 'badge-info' : 'badge-ghost')}">
+                        <i th:class="${'fas text-xs ' +
+                          (history.status.toString().contains('COMPLETED') ? 'fa-check' :
+                           history.status.toString().contains('FAILED') ? 'fa-times' :
+                           history.status.toString().contains('PARSING') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                      </div>
+                    </td>
+                    <!-- 검증 상태 -->
+                    <td class="text-center">
+                      <div th:class="${'badge badge-sm ' +
+                        (history.status.toString() == 'COMPLETED' or history.status.toString().contains('LDAP_SAVING') ? 'badge-success' :
+                         history.status.toString().contains('FAILED') ? 'badge-error' :
+                         history.status.toString().contains('VALIDATION') ? 'badge-info' : 'badge-ghost')}">
+                        <i th:class="${'fas text-xs ' +
+                          (history.status.toString() == 'COMPLETED' or history.status.toString().contains('LDAP_SAVING') ? 'fa-check' :
+                           history.status.toString().contains('FAILED') ? 'fa-times' :
+                           history.status.toString().contains('VALIDATION') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                      </div>
+                    </td>
+                    <!-- LDAP 상태 -->
+                    <td class="text-center">
+                      <div th:class="${'badge badge-sm ' +
+                        (history.status.toString() == 'COMPLETED' ? 'badge-success' :
+                         history.status.toString().contains('FAILED') ? 'badge-error' :
+                         history.status.toString().contains('LDAP') ? 'badge-info' : 'badge-ghost')}">
+                        <i th:class="${'fas text-xs ' +
+                          (history.status.toString() == 'COMPLETED' ? 'fa-check' :
+                           history.status.toString().contains('FAILED') ? 'fa-times' :
+                           history.status.toString().contains('LDAP') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
                       </div>
                     </td>
                     <td class="text-center text-sm" th:text="${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm')}">
@@ -230,7 +264,7 @@
                     </td>
                   </tr>
                   <tr th:if="${historyPage.empty}">
-                    <td colspan="7" class="text-center py-12">
+                    <td colspan="10" class="text-center py-12">
                       <div class="flex flex-col items-center gap-4 text-base-content opacity-50">
                         <i class="fas fa-inbox text-6xl"></i>
                         <p class="text-lg font-semibold">업로드 이력이 없습니다.</p>

@@ -170,6 +170,7 @@ public enum UploadStatus {
         // 정상적인 상태 전이 규칙
         return switch (this) {
             case RECEIVED -> nextStatus == VALIDATING ||
+                    nextStatus == PARSING ||  // Allow direct transition to PARSING
                     nextStatus == DUPLICATE_DETECTED ||
                     nextStatus == FAILED;
 

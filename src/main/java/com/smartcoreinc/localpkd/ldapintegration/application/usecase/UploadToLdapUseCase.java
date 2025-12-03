@@ -215,9 +215,51 @@ public class UploadToLdapUseCase {
             int uploadedMasterListCount = 0;
             int failedMasterListCount = 0;
 
-            // 6. LdapUploadCompletedEvent 생성 및 발행
+            // 6. LDAP 업로드 결과 통계 계산
+            // Calculate totals first
             int totalUploaded = uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
             int totalFailed = failedCertificateCount + failedCrlCount + failedMasterListCount;
+
+            // 업로드된 인증서를 타입별로 집계
+            java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> allCertificates =
+                    certificateRepository.findByUploadId(command.uploadId());
+
+            long cscaUploadedCount = allCertificates.stream()
+                    .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.CSCA)
+                    .count();
+            long dscUploadedCount = allCertificates.stream()
+                    .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC)
+                    .count();
+            long dscNcUploadedCount = allCertificates.stream()
+                    .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC_NC)
+                    .count();
+
+            log.info("LDAP upload completed: CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}, CRL: {}",
+                    cscaUploadedCount, masterListCscaCount, dscUploadedCount, dscNcUploadedCount, uploadedCrlCount);
+
+            // 통계 메시지 포맷팅
+            StringBuilder detailsMsg = new StringBuilder();
+            if (cscaUploadedCount > 0) {
+                detailsMsg.append(String.format("CSCA: %d개", cscaUploadedCount));
+            }
+            if (dscUploadedCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("DSC: %d개", dscUploadedCount));
+            }
+            if (dscNcUploadedCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("DSC_NC: %d개", dscNcUploadedCount));
+            }
+            if (uploadedCrlCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("CRL: %d개", uploadedCrlCount));
+            }
+            if (totalFailed > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("실패: %d개", totalFailed));
+            }
+
+            // 7. LdapUploadCompletedEvent 생성 및 발행
 
             LdapUploadCompletedEvent event = new LdapUploadCompletedEvent(
                 command.uploadId(),
@@ -231,25 +273,20 @@ public class UploadToLdapUseCase {
             eventPublisher.publishEvent(event);
             log.info("LdapUploadCompletedEvent published: uploadId={}", command.uploadId());
 
-            // 6. SSE 진행 상황 전송: LDAP_SAVING_COMPLETED (100%)
+            // 8. SSE 진행 상황 전송: LDAP_SAVING_COMPLETED (100%)
             progressService.sendProgress(
                 ProcessingProgress.builder()
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
                     .percentage(100)
-                    .message(String.format("LDAP 저장 완료: %d 인증서 (%d CSCAs from MasterList), %d CRLs, %d Master Lists (%d 성공, %d 실패)",
-                        uploadedCertificateCount,
-                        masterListCscaCount,
-                        uploadedCrlCount,
-                        uploadedMasterListCount,
-                        totalUploaded,
-                        totalFailed))
+                    .message(String.format("LDAP 저장 완료 (총 %d개)", totalUploaded))
+                    .details(detailsMsg.toString())
                     .processedCount(totalUploaded + totalFailed)
                     .totalCount(command.getTotalCount())
                     .build()
             );
 
-            // 8. Response 반환
+            // 9. Response 반환
             long durationMillis = System.currentTimeMillis() - startTime;
             return UploadToLdapResponse.success(
                 command.uploadId(),
