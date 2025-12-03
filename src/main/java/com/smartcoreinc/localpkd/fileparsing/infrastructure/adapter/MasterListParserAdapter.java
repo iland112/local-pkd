@@ -129,6 +129,7 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
         }
     }
 
+    @SuppressWarnings("unchecked")
     private boolean verifySignature(CMSSignedData signedData, X509Certificate trustAnchor) throws Exception {
         Store<X509CertificateHolder> certStore = signedData.getCertificates();
         SignerInformationStore signerInfos = signedData.getSignerInfos();
@@ -146,6 +147,7 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
         return true;
     }
     
+    @SuppressWarnings("unchecked")
     private void extractCscaCertificates(CMSSignedData signedData, ParsedFile parsedFile) throws Exception {
         CMSProcessable signedContent = signedData.getSignedContent();
         byte[] contentBytes = (byte[]) signedContent.getContent();
@@ -208,7 +210,8 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
             convertToLocalDateTime(x509Cert.getNotAfter()),
             x509Cert.getEncoded(),
             fingerprint, // Use the provided fingerprint
-            true
+            true,
+            null
         );
     }
     
@@ -293,6 +296,7 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
      * @param signedData CMS SignedData
      * @return SignerInfo (DN, 알고리즘 등)
      */
+    @SuppressWarnings("unchecked")
     private SignerInfo extractSignerInfo(CMSSignedData signedData) {
         try {
             Store<X509CertificateHolder> certStore = signedData.getCertificates();

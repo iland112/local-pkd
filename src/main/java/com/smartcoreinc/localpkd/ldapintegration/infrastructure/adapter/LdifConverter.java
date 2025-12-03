@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 /**
  * LdifConverter - Certificate and CRL to LDIF format converter
@@ -82,6 +83,9 @@ public class LdifConverter {
         }
 
         try {
+            // Manual creation from domain object properties
+            log.debug("Converting certificate to LDIF from domain object: certId={}", certificate.getId().getId());
+
             // Extract certificate data
             String countryCode = certificate.getSubjectInfo().getCountryCode();
             String serialNumber = certificate.getX509Data().getSerialNumber();
@@ -129,6 +133,16 @@ public class LdifConverter {
             // Add pkdMasterList objectClass for CSCA
             if (certType == CertificateType.CSCA) {
                 ldif.append("objectClass: pkdMasterList").append("\n");
+            }
+
+            // Append optional conformance attributes if they exist
+            if (certificate.getAllAttributes() != null) {
+                List.of("pkdConformanceText", "pkdConformanceCode", "pkdConformancePolicy").forEach(attrName -> {
+                    if (certificate.getAllAttributes().containsKey(attrName)) {
+                        certificate.getAllAttributes().get(attrName)
+                                .forEach(value -> ldif.append(attrName).append(": ").append(value).append("\n"));
+                    }
+                });
             }
 
             log.debug("Converted certificate to LDIF: dn={}, type={}, size={} bytes",
@@ -273,86 +287,6 @@ public class LdifConverter {
                     countryCode, masterList.getId(), e);
             throw new IllegalArgumentException(
                     "Failed to convert Master List for country " + countryCode + " to LDIF: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Convert MasterList to LDIF format following ICAO PKD structure
-     *
-     * <p><b>DEPRECATED</b>: This method is deprecated. Use {@link #masterListCertificateToLdif(Certificate)}
-     * to upload individual CSCA certificates from Master List instead of the complete CMS binary.</p>
-     *
-     * <p>Master Lists are uploaded as complete CMS-signed binaries (not individual certificates).</p>
-     * <p>This ensures ICAO PKD compliance for Master List storage in LDAP.</p>
-     *
-     * <h3>LDIF Format</h3>
-     * <pre>
-     * dn: cn={ESCAPED-SIGNER-DN},o=ml,c={COUNTRY},dc=ldap,dc=smartcoreinc,dc=com
-     * pkdVersion: 70
-     * sn: 1
-     * cn: {SIGNER-DN}
-     * objectClass: top
-     * objectClass: person
-     * objectClass: pkdMasterList
-     * objectClass: pkdDownload
-     * pkdMasterListContent:: {BASE64-ENCODED-CMS-BINARY}
-     * </pre>
-     *
-     * @param masterList MasterList aggregate to convert
-     * @return LDIF formatted text
-     * @throws IllegalArgumentException if Master List data is invalid
-     * @deprecated Use {@link #masterListCertificateToLdif(Certificate)} instead
-     */
-    @Deprecated(since = "2025-11-28", forRemoval = true)
-    public String masterListToLdif(MasterList masterList) {
-        if (masterList == null) {
-            throw new IllegalArgumentException("MasterList cannot be null");
-        }
-
-        try {
-            // Extract Master List data
-            String countryCode = masterList.getCountryCode().getValue();
-            byte[] cmsBinary = masterList.getCmsBinary().getValue();
-            String signerDn = masterList.getSignerDn();  // Primary CSCA DN from signer info
-
-            // If signer DN is not available, use country code as fallback
-            if (signerDn == null || signerDn.isEmpty()) {
-                signerDn = String.format("CN=CSCA-%s,C=%s", countryCode, countryCode);
-                log.warn("Signer DN not available for Master List id={}, using fallback: {}",
-                        masterList.getId().getId(), signerDn);
-            }
-
-            // Build DN following ICAO PKD structure:
-            // cn={ESCAPED-SIGNER-DN},o=ml,c={COUNTRY},dc=data,dc=download,dc=pkd,{baseDN}
-            String escapedSignerDn = escapeLdapDn(signerDn);
-            String dn = String.format("cn=%s,o=ml,c=%s,dc=data,dc=download,dc=pkd,%s",
-                    escapedSignerDn,
-                    countryCode,
-                    ldapProperties.getBase());
-
-            // Base64 encode CMS binary
-            String base64Cms = Base64.getEncoder().encodeToString(cmsBinary);
-
-            // Build LDIF entry following ICAO PKD Master List format
-            StringBuilder ldif = new StringBuilder();
-            ldif.append("dn: ").append(dn).append("\n");
-            ldif.append("pkdVersion: 70").append("\n");  // Master List PKD version
-            ldif.append("sn: 1").append("\n");  // Serial number (always 1 for Master List)
-            ldif.append("cn: ").append(signerDn).append("\n");
-            ldif.append("objectClass: top").append("\n");
-            ldif.append("objectClass: person").append("\n");
-            ldif.append("objectClass: pkdMasterList").append("\n");
-            ldif.append("objectClass: pkdDownload").append("\n");
-            ldif.append("pkdMasterListContent:: ").append(base64Cms).append("\n");
-
-            log.debug("Converted Master List to LDIF: dn={}, country={}, size={} bytes, cscaCount={}",
-                    dn, countryCode, cmsBinary.length, masterList.getCscaCount());
-
-            return ldif.toString();
-
-        } catch (Exception e) {
-            log.error("Failed to convert Master List to LDIF: id={}", masterList.getId(), e);
-            throw new IllegalArgumentException("Failed to convert Master List to LDIF: " + e.getMessage(), e);
         }
     }
 

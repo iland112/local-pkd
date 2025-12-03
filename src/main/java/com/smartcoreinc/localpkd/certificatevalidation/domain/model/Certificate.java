@@ -4,10 +4,14 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateC
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificateValidatedEvent;
 import com.smartcoreinc.localpkd.shared.domain.AggregateRoot;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -188,6 +192,10 @@ public class Certificate extends AggregateRoot<CertificateId> {
     @AttributeOverride(name = "occurredAt", column = @Column(name = "error_occurred_at"))
     private List<ValidationError> validationErrors = new ArrayList<>();
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "all_attributes", columnDefinition = "jsonb")
+    private Map<String, List<String>> allAttributes;
+
     /**
      * 인증서 생성 시간
      */
@@ -265,7 +273,8 @@ public class Certificate extends AggregateRoot<CertificateId> {
             CertificateType certificateType,
             String signatureAlgorithm,
             CertificateSourceType sourceType,
-            java.util.UUID masterListId
+            java.util.UUID masterListId,
+            Map<String, List<String>> allAttributes
     ) {
         this.id = id;
         this.uploadId = uploadId;
@@ -280,6 +289,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
         this.status = CertificateStatus.VALID; // 초기 상태는 VALID (검증 전)
         this.createdAt = LocalDateTime.now();
         this.uploadedToLdap = false;
+        this.allAttributes = allAttributes;
     }
 
     // ========== Static Factory Methods ==========
@@ -304,7 +314,8 @@ public class Certificate extends AggregateRoot<CertificateId> {
             IssuerInfo issuerInfo,
             ValidityPeriod validity,
             CertificateType certificateType,
-            String signatureAlgorithm
+            String signatureAlgorithm,
+            Map<String, List<String>> allAttributes
     ) {
         if (uploadId == null) {
             throw new IllegalArgumentException("uploadId cannot be null");
@@ -337,7 +348,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
 
         Certificate cert = new Certificate(
             id, uploadId, x509Data, subjectInfo, issuerInfo, validity, certificateType,
-            signatureAlgorithm, sourceType, null
+            signatureAlgorithm, sourceType, null, allAttributes
         );
 
         // Domain Event 발행: 인증서 생성됨
@@ -398,7 +409,8 @@ public class Certificate extends AggregateRoot<CertificateId> {
             CertificateType.CSCA,  // Always CSCA for Master List
             signatureAlgorithm,
             CertificateSourceType.MASTER_LIST,  // From Master List
-            masterListId  // Nullable
+            masterListId,  // Nullable
+            null // No extra attributes from MasterList blob
         );
 
         // Domain Event 발행: 인증서 생성됨
@@ -432,6 +444,10 @@ public class Certificate extends AggregateRoot<CertificateId> {
 
     public CertificateType getCertificateType() {
         return certificateType;
+    }
+
+    public Map<String, List<String>> getAllAttributes() {
+        return allAttributes;
     }
 
     public CertificateStatus getStatus() {

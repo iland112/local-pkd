@@ -34,6 +34,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -86,19 +92,12 @@ public class LdifParserAdapter implements FileParserPort {
     }
 
     private void parseEntry(Entry entry, int entryNumber, ParsedFile parsedFile) {
-        Attribute certAttr = entry.getAttribute(ATTR_USER_CERTIFICATE);
-        if (certAttr != null) {
-            parseCertificateFromBytes(certAttr.getValueByteArray(), entry.getDN(), parsedFile);
-        }
-
-        Attribute crlAttr = entry.getAttribute(ATTR_CRL);
-        if (crlAttr != null) {
-            parseCrlFromBytes(crlAttr.getValueByteArray(), entry.getDN(), parsedFile);
-        }
-
-        Attribute mlAttr = entry.getAttribute(ATTR_MASTER_LIST_CONTENT);
-        if (mlAttr != null) {
-            parseMasterListContent(mlAttr.getValueByteArray(), entry.getDN(), parsedFile);
+        if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
+            parseCertificateFromEntry(entry, parsedFile);
+        } else if (entry.hasAttribute(ATTR_CRL)) {
+            parseCrlFromBytes(entry.getAttribute(ATTR_CRL).getValueByteArray(), entry.getDN(), parsedFile);
+        } else if (entry.hasAttribute(ATTR_MASTER_LIST_CONTENT)) {
+            parseMasterListContent(entry.getAttribute(ATTR_MASTER_LIST_CONTENT).getValueByteArray(), entry.getDN(), parsedFile);
         }
     }
 
@@ -116,7 +115,9 @@ public class LdifParserAdapter implements FileParserPort {
      * 통계/분석 및 LDAP 저장 용도로만 사용됩니다.
      * </p>
      */
-    private void parseCertificateFromBytes(byte[] certBytes, String dn, ParsedFile parsedFile) {
+    private void parseCertificateFromEntry(Entry entry, ParsedFile parsedFile) {
+        byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
+        String dn = entry.getDN();
         try {
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
             X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
@@ -125,10 +126,6 @@ public class LdifParserAdapter implements FileParserPort {
             String issuerDn = cert.getIssuerX500Principal().getName();
             String countryCode = extractCountryCode(subjectDn);
 
-            // Determine certificate type:
-            // - CSCA: self-signed
-            // - DSC_NC: non-self-signed AND DN path contains dc=nc-data
-            // - DSC: otherwise
             boolean selfSigned = subjectDn.equals(issuerDn);
             boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
 
@@ -142,7 +139,23 @@ public class LdifParserAdapter implements FileParserPort {
                 certType = "DSC";
             }
 
-            String fingerprint = calculateFingerprint(cert); // Calculate fingerprint once
+            String fingerprint = calculateFingerprint(cert);
+
+            Map<String, List<String>> allAttributes = new HashMap<>();
+            for (Attribute attr : entry.getAttributes()) {
+                String name = attr.getName();
+                List<String> values = new ArrayList<>();
+                if (attr.hasValue()) {
+                    if (name.endsWith(";binary")) {
+                         for (byte[] val : attr.getValueByteArrays()) {
+                            values.add(Base64.getEncoder().encodeToString(val));
+                        }
+                    } else {
+                        values.addAll(Arrays.asList(attr.getValues()));
+                    }
+                }
+                allAttributes.put(name, values);
+            }
 
             CertificateData certData = CertificateData.of(
                 certType,
@@ -153,11 +166,11 @@ public class LdifParserAdapter implements FileParserPort {
                 convertToLocalDateTime(cert.getNotBefore()),
                 convertToLocalDateTime(cert.getNotAfter()),
                 cert.getEncoded(),
-                fingerprint, // Use the calculated fingerprint
-                true
+                fingerprint,
+                true,
+                allAttributes
             );
 
-            // Check for duplicate fingerprint before adding
             if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
                 parsedFile.addCertificate(certData);
             } else {
@@ -277,7 +290,8 @@ public class LdifParserAdapter implements FileParserPort {
                         convertToLocalDateTime(x509Cert.getNotAfter()),
                         x509Cert.getEncoded(),
                         fingerprint,
-                        true  // fromLdif
+                        true,  // fromLdif
+                        null // All attributes not available here
                     );
 
                     // Add to ParsedFile (duplicate already checked above)
