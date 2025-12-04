@@ -157,6 +157,37 @@ public class FileUploadEventHandler {
     }
     
 
+    /**
+     * Handle FileParsingCompletedEvent to send manual pause for MANUAL mode
+     */
+    @Async("taskExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleFileParsingCompleted(com.smartcoreinc.localpkd.fileparsing.domain.event.FileParsingCompletedEvent event) {
+        log.info("=== [Event-Async] FileParsingCompleted for uploadId: {} ===", event.getUploadId());
+
+        try {
+            Optional<UploadedFile> uploadedFileOpt = uploadedFileRepository.findById(new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(event.getUploadId()));
+            if (uploadedFileOpt.isEmpty()) {
+                log.warn("UploadedFile not found for uploadId: {}", event.getUploadId());
+                return;
+            }
+
+            UploadedFile uploadedFile = uploadedFileOpt.get();
+
+            // In MANUAL mode, send PAUSE event to notify UI that parsing is complete
+            if (uploadedFile.isManualMode()) {
+                log.info("MANUAL mode: Parsing completed for uploadId={}, waiting for user to trigger validation.", event.getUploadId());
+
+                // Send manual pause event to UI
+                progressService.sendProgress(
+                    ProcessingProgress.manualPause(event.getUploadId(), ProcessingStage.PARSING_COMPLETED)
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to handle FileParsingCompleted event for uploadId: {}", event.getUploadId(), e);
+        }
+    }
+
     @EventListener
     public void handleDuplicateFileDetected(DuplicateFileDetectedEvent event) {
         log.warn("=== [Event] DuplicateFileDetected ===");
@@ -168,7 +199,7 @@ public class FileUploadEventHandler {
     public void handleDuplicateFileDetectedAsync(DuplicateFileDetectedEvent event) {
         log.info("=== [Event-Async] DuplicateFileDetected (Additional processing) ===");
     }
-    
+
     private String formatFileSize(long bytes) {
         if (bytes >= 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
         if (bytes >= 1024) return String.format("%.1f KB", bytes / 1024.0);

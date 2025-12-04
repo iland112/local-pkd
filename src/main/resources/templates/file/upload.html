@@ -200,20 +200,49 @@
                 </div>
 
                 <!-- Manual Mode Control Panel -->
-                <div x-show="processingMode === 'MANUAL' && uploadId && !isProcessing && overallStatus !== 'FINALIZED'" class="mt-6 border-t pt-4">
+                <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED'" class="mt-6 border-t pt-4">
                     <h4 class="font-bold text-md mb-3">수동 처리 제어</h4>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button :disabled="parsingCompleted" @click="triggerParse()" class="btn btn-sm" :class="{'btn-success': parsingCompleted, 'btn-primary': !parsingCompleted}">
-                            <i class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
-                            <span x-text="parsingCompleted ? '파싱 완료' : '파싱 시작'"></span>
+                        <!-- Parse Button -->
+                        <button
+                            :disabled="parsingCompleted || parsingInProgress"
+                            @click="triggerParse()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': parsingCompleted,
+                                'btn-primary': !parsingCompleted && !parsingInProgress,
+                                'btn-neutral loading loading-spinner': parsingInProgress
+                            }">
+                            <i x-show="!parsingInProgress" class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
+                            <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '파싱 시작')"></span>
                         </button>
-                        <button :disabled="!parsingCompleted || validationCompleted" @click="triggerValidate()" class="btn btn-sm" :class="{'btn-success': validationCompleted, 'btn-primary': !validationCompleted}">
-                            <i class="fas" :class="{'fa-check-circle': validationCompleted, 'fa-play': !validationCompleted}"></i>
-                            <span x-text="validationCompleted ? '검증 완료' : '검증 시작'"></span>
+
+                        <!-- Validate Button -->
+                        <button
+                            :disabled="!parsingCompleted || validationCompleted || validationInProgress"
+                            @click="triggerValidate()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': validationCompleted,
+                                'btn-primary': parsingCompleted && !validationCompleted && !validationInProgress,
+                                'btn-neutral loading loading-spinner': validationInProgress
+                            }">
+                            <i x-show="!validationInProgress" class="fas" :class="{'fa-check-circle': validationCompleted, 'fa-play': !validationCompleted}"></i>
+                            <span x-text="validationCompleted ? '검증 완료' : (validationInProgress ? '검증 중...' : '검증 시작')"></span>
                         </button>
-                        <button :disabled="!validationCompleted || ldapCompleted" @click="triggerLdapUpload()" class="btn btn-sm" :class="{'btn-success': ldapCompleted, 'btn-primary': !ldapCompleted}">
-                            <i class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
-                            <span x-text="ldapCompleted ? 'LDAP 저장 완료' : 'LDAP 저장 시작'"></span>
+
+                        <!-- LDAP Upload Button -->
+                        <button
+                            :disabled="!validationCompleted || ldapCompleted || ldapInProgress"
+                            @click="triggerLdapUpload()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': ldapCompleted,
+                                'btn-primary': validationCompleted && !ldapCompleted && !ldapInProgress,
+                                'btn-neutral loading loading-spinner': ldapInProgress
+                            }">
+                            <i x-show="!ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
+                            <span x-text="ldapCompleted ? 'LDAP 저장 완료' : (ldapInProgress ? 'LDAP 저장 중...' : 'LDAP 저장 시작')"></span>
                         </button>
                     </div>
                 </div>
@@ -349,6 +378,11 @@
             validationCompleted: false,
             ldapCompleted: false,
 
+            // Manual mode in-progress flags
+            parsingInProgress: false,
+            validationInProgress: false,
+            ldapInProgress: false,
+
             // Error collection
             errorMessages: [],
 
@@ -398,6 +432,11 @@
                 this.parsingCompleted = false;
                 this.validationCompleted = false;
                 this.ldapCompleted = false;
+
+                this.parsingInProgress = false;
+                this.validationInProgress = false;
+                this.ldapInProgress = false;
+
                 this.errorMessages = [];
             },
 
@@ -598,23 +637,56 @@
 
                 // Explicitly activate the stage display when any progress event for it arrives
                 if (progress.step === 'UPLOAD') this.uploadStage.active = true;
-                if (progress.step === 'PARSE') this.parseStage.active = true;
-                if (progress.step === 'VALIDATE') this.validateStage.active = true;
-                if (progress.step === 'LDAP_UPLOAD') this.ldapStage.active = true;
-                
+                if (progress.step === 'PARSE') {
+                    this.parseStage.active = true;
+                    this.parsingInProgress = true;
+                }
+                if (progress.step === 'VALIDATE') {
+                    this.validateStage.active = true;
+                    this.validationInProgress = true;
+                }
+                if (progress.step === 'LDAP_UPLOAD') {
+                    this.ldapStage.active = true;
+                    this.ldapInProgress = true;
+                }
+
                 let targetStage;
                 switch (progress.step) {
                     case 'UPLOAD': targetStage = this.uploadStage; break;
-                    case 'PARSE': targetStage = this.parseStage; break;
-                    case 'VALIDATE': targetStage = this.validateStage; break;
-                    case 'LDAP_UPLOAD': targetStage = this.ldapStage; break;
+                    case 'PARSE':
+                        targetStage = this.parseStage;
+                        // Mark parsing as completed when status is PARSING_COMPLETED
+                        if (progress.status === 'PARSING_COMPLETED') {
+                            this.parsingCompleted = true;
+                            this.parsingInProgress = false;
+                        }
+                        break;
+                    case 'VALIDATE':
+                        targetStage = this.validateStage;
+                        // Mark validation as completed when status is VALIDATION_COMPLETED
+                        if (progress.status === 'VALIDATION_COMPLETED') {
+                            this.validationCompleted = true;
+                            this.validationInProgress = false;
+                        }
+                        break;
+                    case 'LDAP_UPLOAD':
+                        targetStage = this.ldapStage;
+                        // Mark LDAP upload as completed when status is LDAP_SAVING_COMPLETED
+                        if (progress.status === 'LDAP_SAVING_COMPLETED') {
+                            this.ldapCompleted = true;
+                            this.ldapInProgress = false;
+                        }
+                        break;
                     case 'PAUSE': // Handle PAUSE step for updating UI flags for manual buttons
                         if (progress.stage === 'PARSING_COMPLETED') {
                             this.parsingCompleted = true;
+                            this.parsingInProgress = false;
                         } else if (progress.stage === 'VALIDATION_COMPLETED') {
                             this.validationCompleted = true;
+                            this.validationInProgress = false;
                         } else if (progress.stage === 'LDAP_SAVING_COMPLETED') {
                             this.ldapCompleted = true;
+                            this.ldapInProgress = false;
                         }
                         this.isProcessing = false; // Re-enable manual control buttons
                         return; // PAUSE is a special state, not a continuous progress update
@@ -631,18 +703,16 @@
                 if (progress.errorMessage) {
                     this.errorMessages.push(`[${progress.step}] ${progress.errorMessage}`);
                 }
-                
-                // This logic needs to be careful not to reset flags when PAUSE event arrives
-                // if (progress.status === 'COMPLETED' || progress.step === 'PAUSE') { // Finalize parsingCompleted, validationCompleted etc.
-                //     if (progress.step === 'PARSE') this.parsingCompleted = true;
-                //     if (progress.step === 'VALIDATE') this.validationCompleted = true;
-                //     if (progress.step === 'LDAP_UPLOAD') this.ldapCompleted = true;
-                // }
 
                 if (progress.step === 'FINALIZED' || progress.status === 'FAILED') {
                     this.overallStatus = progress.step === 'FINALIZED' ? 'FINALIZED' : 'FAILED';
                     this.overallMessage = progress.message;
                     this.isProcessing = false;
+
+                    // Clear all in-progress flags
+                    this.parsingInProgress = false;
+                    this.validationInProgress = false;
+                    this.ldapInProgress = false;
 
                     // Clear sessionStorage since processing is complete
                     sessionStorage.removeItem('currentUploadId');
@@ -684,17 +754,59 @@
                 this.isProcessing = true;
                 this.errorMessages = this.errorMessages.filter(e => !e.startsWith(`[${step}]`));
 
+                // Step name translations
+                const stepNames = {
+                    'PARSE': '파싱',
+                    'VALIDATE': '검증',
+                    'LDAP_UPLOAD': 'LDAP 저장'
+                };
+
+                // Set in-progress flag for the current step
+                if (step === 'PARSE') {
+                    this.parsingInProgress = true;
+                } else if (step === 'VALIDATE') {
+                    this.validationInProgress = true;
+                } else if (step === 'LDAP_UPLOAD') {
+                    this.ldapInProgress = true;
+                }
+
+                // CRITICAL: Start SSE connection BEFORE triggering the API
+                // This ensures we can receive progress updates during processing
+                this.startSseConnection();
+
+                // Wait for SSE connection to establish (500ms delay)
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Map step names to API endpoints
+                const endpointMap = {
+                    'PARSE': 'parse',
+                    'VALIDATE': 'validate',
+                    'LDAP_UPLOAD': 'upload-to-ldap'
+                };
+                const endpoint = endpointMap[step];
+
                 try {
-                    const response = await fetch(`/api/processing/${step.toLowerCase()}/${this.uploadId}`, { method: 'POST' });
+                    console.log(`[triggerManualStep] step=${step}, stepName=${stepNames[step]}, endpoint=${endpoint}`);
+                    const response = await fetch(`/api/processing/${endpoint}/${this.uploadId}`, { method: 'POST' });
                     if (!response.ok) {
                         const error = await response.json();
                         throw new Error(error.message || '수동 처리 시작에 실패했습니다.');
                     }
-                    showNotification(`${step} 단계 시작됨`, 'info');
-                    this.startSseConnection();
+                    const notificationMessage = `${stepNames[step]} 단계 완료됨`;
+                    console.log(`[triggerManualStep] Showing notification: ${notificationMessage}`);
+                    showNotification(notificationMessage, 'success');
                 } catch (error) {
                     this.errorMessages.push(`[${step}] ${error.message}`);
                     this.isProcessing = false;
+
+                    // Clear in-progress flag on error
+                    if (step === 'PARSE') {
+                        this.parsingInProgress = false;
+                    } else if (step === 'VALIDATE') {
+                        this.validationInProgress = false;
+                    } else if (step === 'LDAP_UPLOAD') {
+                        this.ldapInProgress = false;
+                    }
                 }
             },
             
