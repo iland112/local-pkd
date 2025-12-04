@@ -138,9 +138,14 @@ public class ProcessingController {
     private final ParseMasterListFileUseCase parseMasterListFileUseCase;
     private final FileStoragePort fileStoragePort;
 
-    // TODO: 다음 Use Cases는 Phase 19에서 구현 예정
-    // private final ValidateCertificatesUseCase validateCertificatesUseCase;
-    // private final UploadToLdapUseCase uploadToLdapUseCase;
+    // Manual Mode Use Cases
+    private final com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificatesUseCase validateCertificatesUseCase;
+    private final com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase uploadToLdapUseCase;
+
+    // Repositories for fetching required data
+    private final com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository parsedFileRepository;
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;
+    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository crlRepository;
 
     @Operation(summary = "파일 파싱 시작 (MANUAL 모드)",
                description = "MANUAL 처리 모드로 업로드된 파일의 파싱 단계를 시작합니다.")
@@ -253,10 +258,33 @@ public class ProcessingController {
                         .body(ProcessingResponse.notManualMode(uploadUUID));
             }
 
-            // TODO: ValidateCertificatesUseCase 호출 (Phase 19)
-            // validateCertificatesUseCase.execute(new ValidateCertificatesCommand(uploadId));
+            // Fetch ParsedFile to get parsedFileId and counts
+            com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile parsedFile =
+                    parsedFileRepository.findByUploadId(uploadIdVO)
+                            .orElseThrow(() -> {
+                                log.error("ParsedFile not found for uploadId: {}. File parsing may not be completed yet.", uploadId);
+                                return new com.smartcoreinc.localpkd.shared.exception.DomainException(
+                                        "PARSED_FILE_NOT_FOUND",
+                                        "파일 파싱이 완료되지 않았습니다. 파싱 완료 후 다시 시도해주세요.");
+                            });
 
-            log.info("Certificate validation started: uploadId={}", uploadId);
+            int certificateCount = parsedFile.getCertificates().size();
+            int crlCount = parsedFile.getCrls().size();
+
+            log.info("Certificate validation starting: uploadId={}, certificates={}, crls={}",
+                    uploadId, certificateCount, crlCount);
+
+            // Create and execute ValidateCertificatesCommand
+            com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand command =
+                    com.smartcoreinc.localpkd.certificatevalidation.application.command.ValidateCertificatesCommand.builder()
+                            .uploadId(uploadUUID)
+                            .parsedFileId(parsedFile.getId().getId())
+                            .certificateCount(certificateCount)
+                            .crlCount(crlCount)
+                            .build();
+
+            validateCertificatesUseCase.execute(command);
+
             uploadedFile.markReadyForValidation();
             uploadedFileRepository.save(uploadedFile);
 
@@ -309,10 +337,27 @@ public class ProcessingController {
                         .body(ProcessingResponse.notManualMode(uploadUUID));
             }
 
-            // TODO: UploadToLdapUseCase 호출 (Phase 19)
-            // uploadToLdapUseCase.execute(new UploadToLdapCommand(uploadId));
+            // Count validated certificates and CRLs by uploadId
+            long validCertificateCount = certificateRepository.findByUploadId(uploadUUID).stream()
+                    .filter(cert -> cert.getStatus() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.VALID)
+                    .count();
 
-            log.info("LDAP upload started: uploadId={}", uploadId);
+            long validCrlCount = crlRepository.findByUploadId(uploadUUID).size();
+
+            log.info("LDAP upload starting: uploadId={}, validCertificates={}, validCRLs={}",
+                    uploadId, validCertificateCount, validCrlCount);
+
+            // Create and execute UploadToLdapCommand
+            com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand command =
+                    com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand.builder()
+                            .uploadId(uploadUUID)
+                            .validCertificateCount((int) validCertificateCount)
+                            .validCrlCount((int) validCrlCount)
+                            .batchSize(100)  // Default batch size
+                            .build();
+
+            uploadToLdapUseCase.execute(command);
+
             uploadedFile.markReadyForLdapUpload();
             uploadedFileRepository.save(uploadedFile);
 

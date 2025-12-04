@@ -83,19 +83,23 @@ public class ProgressService {
         // 연결 초기화
         emitter.onCompletion(() -> {
             log.debug("SSE connection for uploadId {} completed", uploadId);
-            uploadIdToEmitters.remove(uploadId);
+            // CRITICAL FIX: Only remove if this emitter is still the current one
+            // This prevents race condition where old emitter's onCompletion removes the new emitter
+            uploadIdToEmitters.remove(uploadId, emitter);
             // 완료된 진행 상황은 캐시에 유지될 수 있음 (scheduleProgressCacheRemoval 에 의해 제거될 것)
         });
 
         emitter.onTimeout(() -> {
             log.debug("SSE connection for uploadId {} timed out", uploadId);
-            uploadIdToEmitters.remove(uploadId);
+            // CRITICAL FIX: Only remove if this emitter is still the current one
+            uploadIdToEmitters.remove(uploadId, emitter);
             emitter.complete();
         });
 
                     emitter.onError((ex) -> {
                         log.warn("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
-                        uploadIdToEmitters.remove(uploadId);
+                        // CRITICAL FIX: Only remove if this emitter is still the current one
+                        uploadIdToEmitters.remove(uploadId, emitter);
                         try { // Safely attempt to complete emitter, ignore if already unusable
                             emitter.complete();
                         } catch (Exception completionException) {
@@ -164,7 +168,8 @@ public class ProgressService {
             } catch (IOException e) {
                 log.warn("Failed to send progress to client for uploadId {}: {}", progress.getUploadId(), e.getMessage());
                 // 에러 발생 시 해당 emitter 제거 및 완료 처리
-                uploadIdToEmitters.remove(progress.getUploadId());
+                // CRITICAL FIX: Only remove if this emitter is still the current one
+                uploadIdToEmitters.remove(progress.getUploadId(), targetEmitter);
                 // Try to complete emitter, but ignore if already unusable
                 try {
                     targetEmitter.complete();
