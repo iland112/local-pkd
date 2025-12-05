@@ -182,10 +182,16 @@ public class ProcessingController {
                         .body(ProcessingResponse.notManualMode(uploadUUID));
             }
 
+            // 파싱 시작 전 상태 업데이트
+            uploadedFile.updateStatusToParsing();
+            uploadedFileRepository.save(uploadedFile);
+            log.info("File status updated to PARSING: uploadId={}", uploadId);
+
             // Read file bytes from storage
             byte[] fileBytes = fileStoragePort.readFile(uploadedFile.getFilePath());
             String fileFormatName = uploadedFile.getFileFormat().getType().name();
 
+            // UseCase 실행 (동기)
             if (uploadedFile.getFileFormat().isLdif()) {
                 parseLdifFileUseCase.execute(ParseLdifFileCommand.builder()
                         .uploadId(uploadIdVO.toUUID()) // Corrected here
@@ -205,9 +211,11 @@ public class ProcessingController {
                         .body(ProcessingResponse.error(uploadUUID, "PARSING", "Unsupported file format"));
             }
 
-            log.info("File parsing started: uploadId={}", uploadId);
+            // 파싱 완료 후 상태 업데이트
+            uploadedFile.updateStatusToParsed();
             uploadedFile.markReadyForParsing();
             uploadedFileRepository.save(uploadedFile);
+            log.info("File parsing completed and status updated to PARSED: uploadId={}", uploadId);
 
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(ProcessingResponse.parsingStarted(uploadUUID));
@@ -347,7 +355,12 @@ public class ProcessingController {
             log.info("LDAP upload starting: uploadId={}, validCertificates={}, validCRLs={}",
                     uploadId, validCertificateCount, validCrlCount);
 
-            // Create and execute UploadToLdapCommand
+            // LDAP 업로드 시작 전 상태 업데이트
+            uploadedFile.updateStatusToUploadingToLdap();
+            uploadedFileRepository.save(uploadedFile);
+            log.info("File status updated to UPLOADING_TO_LDAP: uploadId={}", uploadId);
+
+            // Create and execute UploadToLdapCommand (동기 실행)
             com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand command =
                     com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand.builder()
                             .uploadId(uploadUUID)
@@ -358,8 +371,10 @@ public class ProcessingController {
 
             uploadToLdapUseCase.execute(command);
 
+            // 완료 상태는 LdapUploadEventHandler에서 COMPLETED로 업데이트됨
             uploadedFile.markReadyForLdapUpload();
             uploadedFileRepository.save(uploadedFile);
+            log.info("LDAP upload UseCase completed: uploadId={}", uploadId);
 
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(ProcessingResponse.ldapUploadStarted(uploadUUID));

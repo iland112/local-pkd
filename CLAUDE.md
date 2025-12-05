@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.3
-**Last Updated**: 2025-12-03
-**Status**: Production Ready (Phase 1-19 Complete + Upload Status Tracking)
+**Version**: 3.4
+**Last Updated**: 2025-12-05
+**Status**: Production Ready (Phase 1-19 Complete + Migration Consolidated)
 
 ---
 
@@ -889,7 +889,7 @@ http://172.24.1.6:8081
 
 ---
 
-## 📊 Current Status (2025-12-03)
+## 📊 Current Status (2025-12-05)
 
 ### Completed Phases ✅
 
@@ -906,7 +906,7 @@ http://172.24.1.6:8081
 | **Phase 19** | **LDAP 검증 상태 기록 (description attribute)** | ✅ |
 | **Upload Status Tracking** | **단계별 상태 자동 업데이트, 업로드 이력 4단계 표시** | ✅ **NEW** |
 
-### Recent Refactoring (2025-11-26 ~ 2025-12-03) ✅
+### Recent Refactoring (2025-11-26 ~ 2025-12-05) ✅
 
 1. ✅ **AsyncUploadProcessor 도입** - 즉시 uploadId 반환, 백그라운드 처리
 2. ✅ **uploadId별 SSE 스트림** - 개별 진행 상황 추적
@@ -917,9 +917,11 @@ http://172.24.1.6:8081
 7. ✅ **WSL2 네트워크 지원** - Windows Chrome 접근 가능
 8. ✅ **실제 LDAP 업로드 구현** (2025-11-27) - ICAO PKD LDIF 형식 준수, 시뮬레이션 제거
 9. ✅ **LDAP 검증 상태 기록** (2025-11-28) - description attribute에 VALID/INVALID/EXPIRED + 오류 메시지 포함
-10. ✅ **업로드 상태 자동 업데이트** (2025-12-03 NEW) - UploadedFile 엔티티 상태가 처리 단계별로 자동 업데이트 (RECEIVED → PARSING → PARSED → UPLOADING_TO_LDAP → COMPLETED)
-11. ✅ **업로드 이력 페이지 개선** (2025-12-03 NEW) - 파싱/검증/LDAP 각각의 상태를 개별 컬럼으로 표시, 완료된 단계는 체크마크 표시
-12. ✅ **SSE 진행 상황 상세화** (2025-12-03 NEW) - 각 단계별 인증서 타입, 유효성 통계를 포함한 상세 정보 표시
+10. ✅ **업로드 상태 자동 업데이트** (2025-12-03) - UploadedFile 엔티티 상태가 처리 단계별로 자동 업데이트 (RECEIVED → PARSING → PARSED → UPLOADING_TO_LDAP → COMPLETED)
+11. ✅ **업로드 이력 페이지 개선** (2025-12-03) - 파싱/검증/LDAP 각각의 상태를 개별 컬럼으로 표시, 완료된 단계는 체크마크 표시
+12. ✅ **SSE 진행 상황 상세화** (2025-12-03) - 각 단계별 인증서 타입, 유효성 통계를 포함한 상세 정보 표시
+13. ✅ **중복 인증서 감사 추적 지원** (2025-12-05) - parsed_certificate PK를 (parsed_file_id, fingerprint_sha256)로 변경하여 주기적 PKD 업데이트 시 중복 인증서 이력 추적 가능
+14. ✅ **데이터베이스 마이그레이션 통합** (2025-12-05 **NEW**) - 10개 마이그레이션 파일 (V1-V17, 958 라인)을 단일 V1__Initial_Schema.sql (465 라인)로 통합, ALTER 문 완전 제거, 32개 누락 컬럼 추가, SSE 오류 수정 (상세 내역: [SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md](docs/SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md))
 
 ### Remaining TODOs
 
@@ -1035,8 +1037,8 @@ Windows Chrome: "사이트에 연결할 수 없음"
 
 ---
 
-**Document Version**: 3.2
+**Document Version**: 3.3
 **Status**: PRODUCTION READY ✅
-**Last Review**: 2025-12-03
+**Last Review**: 2025-12-05
 
 *이 문서는 프로젝트의 핵심 정보와 최신 아키텍처 변경사항을 포함합니다. 상세한 구현 내용은 `docs/` 디렉토리의 개별 문서를 참조하세요.*
