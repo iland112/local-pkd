@@ -211,7 +211,7 @@
                             :class="{
                                 'btn-success': parsingCompleted,
                                 'btn-primary': !parsingCompleted && !parsingInProgress,
-                                'btn-neutral loading loading-spinner': parsingInProgress
+                                'bg-gray-400 text-gray-700 loading loading-spinner': parsingInProgress
                             }">
                             <i x-show="!parsingInProgress" class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
                             <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '파싱 시작')"></span>
@@ -225,7 +225,7 @@
                             :class="{
                                 'btn-success': validationCompleted,
                                 'btn-primary': parsingCompleted && !validationCompleted && !validationInProgress,
-                                'btn-neutral loading loading-spinner': validationInProgress
+                                'bg-gray-400 text-gray-700 loading loading-spinner': validationInProgress
                             }">
                             <i x-show="!validationInProgress" class="fas" :class="{'fa-check-circle': validationCompleted, 'fa-play': !validationCompleted}"></i>
                             <span x-text="validationCompleted ? '검증 완료' : (validationInProgress ? '검증 중...' : '검증 시작')"></span>
@@ -239,7 +239,7 @@
                             :class="{
                                 'btn-success': ldapCompleted,
                                 'btn-primary': validationCompleted && !ldapCompleted && !ldapInProgress,
-                                'btn-neutral loading loading-spinner': ldapInProgress
+                                'bg-gray-400 text-gray-700 loading loading-spinner': ldapInProgress
                             }">
                             <i x-show="!ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
                             <span x-text="ldapCompleted ? 'LDAP 저장 완료' : (ldapInProgress ? 'LDAP 저장 중...' : 'LDAP 저장 시작')"></span>

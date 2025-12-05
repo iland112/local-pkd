@@ -257,29 +257,37 @@ public class LdifParserAdapter implements FileParserPort {
                         new ByteArrayInputStream(holder.getEncoded())
                     );
 
+                    // CRITICAL: Filter out Master List Signer certificates
+                    // Master List Signer certificates have basicConstraints = -1 (not a CA)
+                    // Only CA certificates (basicConstraints >= 0) are CSCA
+                    int basicConstraints = x509Cert.getBasicConstraints();
+                    if (basicConstraints == -1) {
+                        log.debug("Skipping Master List Signer certificate (not a CA): subject={}",
+                            x509Cert.getSubjectX500Principal().getName());
+                        continue; // Skip Master List Signer certificates
+                    }
+
                     // Calculate fingerprint first for duplicate check
                     String fingerprint = calculateFingerprint(x509Cert);
 
-                    // Check for duplicate fingerprint BEFORE creating Certificate entity
-                    if (certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
-                        parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint,
-                            "CSCA with this fingerprint already exists globally."));
-                        log.warn("Duplicate CSCA skipped from Master List: fingerprint={}", fingerprint);
-                        continue; // Skip this certificate entirely
+                    // Check for duplicate fingerprint for Certificate entity saving
+                    boolean isDuplicate = certificateExistenceService.existsByFingerprintSha256(fingerprint);
+
+                    if (!isDuplicate) {
+                        // Create Certificate entity from Master List CSCA (only if not duplicate in DB)
+                        com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert =
+                            createCertificateFromMasterListCsca(
+                                parsedFile.getUploadId().getId(),
+                                savedMasterList.getId().getId(),
+                                x509Cert
+                            );
+                        cscaCerts.add(cert);
+                    } else {
+                        log.debug("CSCA already exists in database, skipping Certificate entity save: fingerprint={}", fingerprint);
                     }
 
-                    // Create Certificate entity from Master List CSCA (only if not duplicate)
-                    com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert =
-                        createCertificateFromMasterListCsca(
-                            parsedFile.getUploadId().getId(),
-                            savedMasterList.getId().getId(),
-                            x509Cert
-                        );
-
-                    cscaCerts.add(cert);
-
-                    // IMPORTANT: Also add CSCA to ParsedFile for validation
-                    // Convert X509Certificate to CertificateData and add to ParsedFile
+                    // IMPORTANT: Always add CSCA to ParsedFile for validation, even if duplicate
+                    // This allows validation to proceed with existing certificates
                     CertificateData certData = CertificateData.of(
                         "CSCA",  // Certificate type
                         countryCode,  // Country code from Master List
@@ -294,9 +302,9 @@ public class LdifParserAdapter implements FileParserPort {
                         null // All attributes not available here
                     );
 
-                    // Add to ParsedFile (duplicate already checked above)
+                    // Add to ParsedFile regardless of duplication (needed for validation)
                     parsedFile.addCertificate(certData);
-                    log.debug("Added CSCA from Master List to ParsedFile: fingerprint={}", fingerprint);
+                    log.debug("Added CSCA from Master List to ParsedFile: fingerprint={}, duplicate={}", fingerprint, isDuplicate);
 
                 } catch (Exception e) {
                     log.warn("Failed to parse CSCA from Master List: {}", e.getMessage());

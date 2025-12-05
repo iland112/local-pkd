@@ -10,6 +10,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
@@ -27,6 +28,7 @@ import java.util.UUID;
  *   <li>HttpMessageNotReadableException - 잘못된 JSON 형식 (400)</li>
  *   <li>HttpMediaTypeNotSupportedException - 지원하지 않는 미디어 타입 (415)</li>
  *   <li>NoHandlerFoundException - 찾을 수 없는 엔드포인트 (404)</li>
+ *   <li>AsyncRequestNotUsableException - SSE 클라이언트 연결 종료 (정상 동작, DEBUG)</li>
  *   <li>Exception - 예상치 못한 예외 (500)</li>
  * </ul>
  *
@@ -248,6 +250,34 @@ public class GlobalExceptionHandler {
      * @param request HTTP 요청
      * @return 500 Internal Server Error 응답
      */
+
+    /**
+     * AsyncRequestNotUsableException - SSE 클라이언트 연결 종료 (정상 동작)
+     *
+     * <p>SSE(Server-Sent Events) 연결이 클라이언트에 의해 종료된 경우 발생합니다.
+     * 이는 정상적인 동작이므로 DEBUG 레벨로 로깅하고 응답하지 않습니다.</p>
+     *
+     * <p><b>발생 시나리오</b>:</p>
+     * <ul>
+     *   <li>작업 완료 후 클라이언트가 SSE 연결 종료</li>
+     *   <li>Heartbeat 스케줄러가 종료된 연결에 메시지 전송 시도</li>
+     *   <li>브라우저 탭 닫기 또는 페이지 이동</li>
+     * </ul>
+     *
+     * @param e AsyncRequestNotUsableException
+     * @param request HTTP 요청
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsableException(
+            AsyncRequestNotUsableException e,
+            WebRequest request) {
+
+        // SSE 클라이언트 연결 종료는 정상 동작이므로 DEBUG 레벨로 로깅
+        log.debug("SSE client disconnected (normal behavior): {}", e.getMessage());
+
+        // 응답하지 않음 - 이미 연결이 종료되었으므로 ResponseEntity 반환 불가
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(
             Exception e,

@@ -1,7 +1,5 @@
 package com.smartcoreinc.localpkd.ldapintegration.application.response;
 
-import lombok.Builder;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -22,7 +20,6 @@ import java.util.UUID;
  * }
  * </pre>
  */
-@Builder
 public record UploadToLdapResponse(
     /**
      * 성공 여부
@@ -94,19 +91,19 @@ public record UploadToLdapResponse(
         LocalDateTime uploadedAt,
         long durationMillis
     ) {
-        return UploadToLdapResponse.builder()
-            .success(true)
-            .uploadId(uploadId)
-            .uploadedCertificateCount(uploadedCertificateCount)
-            .uploadedCrlCount(uploadedCrlCount)
-            .uploadedMasterListCount(uploadedMasterListCount)
-            .failedCertificateCount(failedCertificateCount)
-            .failedCrlCount(failedCrlCount)
-            .failedMasterListCount(failedMasterListCount)
-            .uploadedAt(uploadedAt)
-            .durationMillis(durationMillis)
-            .errorMessage(null)
-            .build();
+        return new UploadToLdapResponse(
+            true,
+            uploadId,
+            uploadedCertificateCount,
+            uploadedCrlCount,
+            uploadedMasterListCount,
+            failedCertificateCount,
+            failedCrlCount,
+            failedMasterListCount,
+            uploadedAt,
+            durationMillis,
+            null
+        );
     }
 
     /**
@@ -116,19 +113,19 @@ public record UploadToLdapResponse(
         UUID uploadId,
         String errorMessage
     ) {
-        return UploadToLdapResponse.builder()
-            .success(false)
-            .uploadId(uploadId)
-            .uploadedCertificateCount(0)
-            .uploadedCrlCount(0)
-            .uploadedMasterListCount(0)
-            .failedCertificateCount(0)
-            .failedCrlCount(0)
-            .failedMasterListCount(0)
-            .uploadedAt(null)
-            .durationMillis(0)
-            .errorMessage(errorMessage)
-            .build();
+        return new UploadToLdapResponse(
+            false,
+            uploadId,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            errorMessage
+        );
     }
 
     /**

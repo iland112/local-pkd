@@ -97,14 +97,11 @@ public class ProgressService {
         });
 
                     emitter.onError((ex) -> {
-                        log.warn("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
+                        log.debug("SSE connection for uploadId {} error: {}", uploadId, ex.getMessage());
                         // CRITICAL FIX: Only remove if this emitter is still the current one
                         uploadIdToEmitters.remove(uploadId, emitter);
-                        try { // Safely attempt to complete emitter, ignore if already unusable
-                            emitter.complete();
-                        } catch (Exception completionException) {
-                            log.trace("Emitter already unusable in onError for uploadId {}: {}", uploadId, completionException.getMessage());
-                        }
+                        // DO NOT call emitter.complete() here - the connection is already in error state
+                        // Spring will handle cleanup automatically
                     });
         log.info("New SSE connection established for uploadId: {}. Total connections: {}", uploadId, uploadIdToEmitters.size());
 
@@ -116,7 +113,11 @@ public class ProgressService {
         } catch (IOException e) {
             log.error("Failed to send connection event for uploadId {}", uploadId, e);
             uploadIdToEmitters.remove(uploadId);
-            emitter.complete();
+            try {
+                emitter.complete();
+            } catch (Exception completionException) {
+                log.trace("Failed to complete emitter after connection error: {}", completionException.getMessage());
+            }
         }
 
         // 연결 시점에 최신 진행 상황 전송 (만약 있다면)
@@ -130,7 +131,11 @@ public class ProgressService {
             } catch (IOException e) {
                 log.warn("Failed to send cached progress to new emitter for uploadId {}: {}", uploadId, e.getMessage());
                 uploadIdToEmitters.remove(uploadId);
-                emitter.complete();
+                try {
+                    emitter.complete();
+                } catch (Exception completionException) {
+                    log.trace("Failed to complete emitter after cached progress error: {}", completionException.getMessage());
+                }
             }
         }
 
@@ -166,16 +171,12 @@ public class ProgressService {
                     .name("progress")
                     .data(progress.toJson()));
             } catch (IOException e) {
-                log.warn("Failed to send progress to client for uploadId {}: {}", progress.getUploadId(), e.getMessage());
-                // 에러 발생 시 해당 emitter 제거 및 완료 처리
+                log.debug("Failed to send progress to client for uploadId {}: {}", progress.getUploadId(), e.getMessage());
+                // 에러 발생 시 해당 emitter 제거
                 // CRITICAL FIX: Only remove if this emitter is still the current one
                 uploadIdToEmitters.remove(progress.getUploadId(), targetEmitter);
-                // Try to complete emitter, but ignore if already unusable
-                try {
-                    targetEmitter.complete();
-                } catch (Exception completionException) {
-                    log.trace("Emitter already unusable for uploadId {}: {}", progress.getUploadId(), completionException.getMessage());
-                }
+                // DO NOT call emitter.complete() here - the connection is already in error state
+                // Spring will handle cleanup automatically
             }
         }
         else {
