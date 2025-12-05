@@ -118,6 +118,7 @@ public class UploadToLdapUseCase {
             log.info("Uploading {} certificates to LDAP ({} CSCAs from Master List, {} from LDIF)...",
                     certificates.size(), masterListCscaCount, certificates.size() - masterListCscaCount);
             int uploadedCertificateCount = 0;
+            int skippedCertificateCount = 0;
             int failedCertificateCount = 0;
 
             // 인증서 LDAP 업로드 (including CSCAs from Master List)
@@ -137,8 +138,8 @@ public class UploadToLdapUseCase {
                                 cert.isFromMasterList() ? "MasterList" : "LDIF",
                                 cert.getSubjectInfo().getCountryCode());
                     } else {
-                        failedCertificateCount++;
-                        log.warn("Certificate upload skipped (duplicate): id={}", cert.getId().getId());
+                        skippedCertificateCount++;
+                        log.debug("Certificate upload skipped (duplicate): id={}", cert.getId().getId());
                     }
 
                     // Send progress every 10 items or at the end
@@ -168,6 +169,7 @@ public class UploadToLdapUseCase {
 
             log.info("Uploading {} CRLs to LDAP...", crls.size());
             int uploadedCrlCount = 0;
+            int skippedCrlCount = 0;
             int failedCrlCount = 0;
 
             // CRL LDAP 업로드
@@ -185,8 +187,8 @@ public class UploadToLdapUseCase {
                         log.debug("CRL uploaded to LDAP: id={}, issuer={}, country={}",
                                 crl.getId().getId(), crl.getIssuerName().getValue(), crl.getCountryCode().getValue());
                     } else {
-                        failedCrlCount++;
-                        log.warn("CRL upload skipped (duplicate): id={}", crl.getId().getId());
+                        skippedCrlCount++;
+                        log.debug("CRL upload skipped (duplicate): id={}", crl.getId().getId());
                     }
 
                     // Send progress every 10 items or at the end
@@ -236,6 +238,7 @@ public class UploadToLdapUseCase {
 
             log.info("LDAP upload completed: CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}, CRL: {}",
                     cscaUploadedCount, masterListCscaCount, dscUploadedCount, dscNcUploadedCount, uploadedCrlCount);
+            log.info("Skipped (duplicates): {} certificates, {} CRLs", skippedCertificateCount, skippedCrlCount);
 
             // 통계 메시지 포맷팅
             StringBuilder detailsMsg = new StringBuilder();

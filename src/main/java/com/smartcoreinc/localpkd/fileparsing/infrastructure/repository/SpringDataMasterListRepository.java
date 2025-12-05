@@ -102,4 +102,13 @@ public interface SpringDataMasterListRepository extends JpaRepository<MasterList
      */
     @Query("SELECT COUNT(ml) FROM MasterList ml WHERE ml.countryCode = :countryCode")
     long countByCountryCode(@Param("countryCode") CountryCode countryCode);
+
+    /**
+     * UploadId로 MasterList 개수 조회
+     *
+     * @param uploadId UploadId
+     * @return MasterList 개수
+     */
+    @Query("SELECT COUNT(ml) FROM MasterList ml WHERE ml.uploadId = :uploadId")
+    long countByUploadId(@Param("uploadId") UploadId uploadId);
 }

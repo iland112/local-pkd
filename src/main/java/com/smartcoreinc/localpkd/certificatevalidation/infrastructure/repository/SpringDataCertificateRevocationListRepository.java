@@ -96,6 +96,14 @@ public interface SpringDataCertificateRevocationListRepository extends JpaReposi
     List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId);
 
     /**
+     * 업로드 ID로 CRL 개수 조회
+     *
+     * @param uploadId 원본 업로드 파일 ID
+     * @return CRL 개수
+     */
+    long countByUploadId(java.util.UUID uploadId);
+
+    /**
      * 발급자명과 국가 코드로 존재 여부 확인
      *
      * @param issuerName CSCA 발급자명

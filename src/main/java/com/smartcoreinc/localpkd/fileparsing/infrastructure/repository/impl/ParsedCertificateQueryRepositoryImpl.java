@@ -5,6 +5,8 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.UUID;
+
 @Repository
 @RequiredArgsConstructor
 public class ParsedCertificateQueryRepositoryImpl implements ParsedCertificateQueryRepository {
@@ -18,5 +20,22 @@ public class ParsedCertificateQueryRepositoryImpl implements ParsedCertificateQu
                 .setParameter("fingerprintSha256", fingerprintSha256)
                 .getSingleResult();
         return count > 0;
+    }
+
+    @Override
+    public long countByUploadId(UUID uploadId) {
+        return entityManager.createQuery(
+                        "SELECT COUNT(c) FROM ParsedFile pf JOIN pf.certificates c WHERE pf.uploadId.id = :uploadId", Long.class)
+                .setParameter("uploadId", uploadId)
+                .getSingleResult();
+    }
+
+    @Override
+    public long countByUploadIdAndCertType(UUID uploadId, String certType) {
+        return entityManager.createQuery(
+                        "SELECT COUNT(c) FROM ParsedFile pf JOIN pf.certificates c WHERE pf.uploadId.id = :uploadId AND c.certificateType = :certType", Long.class)
+                .setParameter("uploadId", uploadId)
+                .setParameter("certType", certType)
+                .getSingleResult();
     }
 }
