@@ -256,7 +256,17 @@
                                  data-hash=${history.fileHash},
                                  data-expected=${history.expectedChecksum},
                                  data-calculated=${history.calculatedChecksum},
-                                 data-error=${history.errorMessage}"
+                                 data-error=${history.errorMessage},
+                                 data-parsed-total=${history.parsedCertificateCount},
+                                 data-parsed-csca=${history.parsedCscaCount},
+                                 data-parsed-dsc=${history.parsedDscCount},
+                                 data-parsed-dsc-nc=${history.parsedDscNcCount},
+                                 data-parsed-crl=${history.parsedCrlCount},
+                                 data-parsed-ml=${history.parsedMasterListCount},
+                                 data-validated-total=${history.validatedCertificateCount},
+                                 data-valid-count=${history.validCertificateCount},
+                                 data-invalid-count=${history.invalidCertificateCount},
+                                 data-expired-count=${history.expiredCertificateCount}"
                         onclick="showDetailFromBtn(this)"
                       >
                         <i class="fas fa-eye"></i>
@@ -415,6 +425,69 @@
               </div>
             </div>
 
+            <!-- Processing Statistics Section -->
+            <div id="statistics-section" class="mt-6" style="display: none;">
+              <div class="divider">
+                <span class="text-sm font-semibold text-base-content opacity-70">
+                  <i class="fas fa-chart-bar mr-1"></i>
+                  처리 통계
+                </span>
+              </div>
+
+              <!-- Parsing Statistics -->
+              <div class="mb-4">
+                <h4 class="text-sm font-semibold mb-2">
+                  <i class="fas fa-file-code text-primary mr-1"></i>
+                  파일 파싱
+                </h4>
+                <div class="stats stats-horizontal shadow bg-base-200">
+                  <div class="stat">
+                    <div class="stat-title">인증서</div>
+                    <div class="stat-value text-sm" id="detail-parsed-total">-</div>
+                    <div class="stat-desc">
+                      CSCA: <span id="detail-parsed-csca">-</span> /
+                      DSC: <span id="detail-parsed-dsc">-</span> /
+                      DSC_NC: <span id="detail-parsed-dsc-nc">-</span>
+                    </div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">CRL</div>
+                    <div class="stat-value text-sm" id="detail-parsed-crl">-</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">Master List</div>
+                    <div class="stat-value text-sm" id="detail-parsed-ml">-</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Validation Statistics -->
+              <div class="mb-4">
+                <h4 class="text-sm font-semibold mb-2">
+                  <i class="fas fa-check-circle text-success mr-1"></i>
+                  인증서 검증
+                </h4>
+                <div class="stats stats-horizontal shadow bg-base-200">
+                  <div class="stat">
+                    <div class="stat-title">검증 완료</div>
+                    <div class="stat-value text-sm" id="detail-validated-total">-</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">유효</div>
+                    <div class="stat-value text-sm text-success" id="detail-valid-count">-</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">무효</div>
+                    <div class="stat-value text-sm text-error" id="detail-invalid-count">-</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">만료</div>
+                    <div class="stat-value text-sm text-warning" id="detail-expired-count">-</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Error Section -->
             <div class="space-y-4 mt-6">
               <div id="error-section" class="col-span-2" style="display: none;">
@@ -441,7 +514,7 @@
     <th:block layout:fragment="script-content">
       <script>
         // Show detail modal
-        function showDetail(id, filename, format, size, status, time, hash, expectedChecksum, calculatedChecksum, errorMsg) {
+        function showDetail(id, filename, format, size, status, time, hash, expectedChecksum, calculatedChecksum, errorMsg, stats) {
           document.getElementById('detail-id').textContent = id;
           document.getElementById('detail-filename').textContent = filename;
           document.getElementById('detail-format').textContent = format;
@@ -478,6 +551,28 @@
             checksumSection.style.display = 'none';
           }
 
+          // Statistics section
+          const statsSection = document.getElementById('statistics-section');
+          if (stats && (stats.parsedTotal > 0 || stats.validatedTotal > 0)) {
+            // Parsing Statistics
+            document.getElementById('detail-parsed-total').textContent = stats.parsedTotal || '0';
+            document.getElementById('detail-parsed-csca').textContent = stats.parsedCsca || '0';
+            document.getElementById('detail-parsed-dsc').textContent = stats.parsedDsc || '0';
+            document.getElementById('detail-parsed-dsc-nc').textContent = stats.parsedDscNc || '0';
+            document.getElementById('detail-parsed-crl').textContent = stats.parsedCrl || '0';
+            document.getElementById('detail-parsed-ml').textContent = stats.parsedMl || '0';
+
+            // Validation Statistics
+            document.getElementById('detail-validated-total').textContent = stats.validatedTotal || '0';
+            document.getElementById('detail-valid-count').textContent = stats.validCount || '0';
+            document.getElementById('detail-invalid-count').textContent = stats.invalidCount || '0';
+            document.getElementById('detail-expired-count').textContent = stats.expiredCount || '0';
+
+            statsSection.style.display = 'block';
+          } else {
+            statsSection.style.display = 'none';
+          }
+
           // Error section
           const errorSection = document.getElementById('error-section');
           if (errorMsg && errorMsg !== 'null' && errorMsg.trim() !== '') {
@@ -492,7 +587,19 @@
 
         function showDetailFromBtn(btn) {
           const d = btn.dataset;
-          showDetail(d.id, d.filename, d.format, d.size, d.status, d.time, d.hash, d.expected, d.calculated, d.error);
+          const stats = {
+            parsedTotal: parseInt(d.parsedTotal) || 0,
+            parsedCsca: parseInt(d.parsedCsca) || 0,
+            parsedDsc: parseInt(d.parsedDsc) || 0,
+            parsedDscNc: parseInt(d.parsedDscNc) || 0,
+            parsedCrl: parseInt(d.parsedCrl) || 0,
+            parsedMl: parseInt(d.parsedMl) || 0,
+            validatedTotal: parseInt(d.validatedTotal) || 0,
+            validCount: parseInt(d.validCount) || 0,
+            invalidCount: parseInt(d.invalidCount) || 0,
+            expiredCount: parseInt(d.expiredCount) || 0
+          };
+          showDetail(d.id, d.filename, d.format, d.size, d.status, d.time, d.hash, d.expected, d.calculated, d.error, stats);
         }
         
         // Copy to clipboard

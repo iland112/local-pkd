@@ -87,4 +87,25 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
      */
     @Query("SELECT c FROM Certificate c WHERE c.sourceType IN ('LDIF_DSC', 'LDIF_CSCA')")
     List<Certificate> findLdifCertificates();
+
+    // ===========================
+    // Statistics Queries for Upload History
+    // ===========================
+
+    /**
+     * Count total certificates by uploadId
+     *
+     * @param uploadId Upload ID
+     * @return Total certificate count
+     */
+    long countByUploadId(java.util.UUID uploadId);
+
+    /**
+     * Count certificates by uploadId and status
+     *
+     * @param uploadId Upload ID
+     * @param status Certificate status
+     * @return Certificate count for the given status
+     */
+    long countByUploadIdAndStatus(java.util.UUID uploadId, CertificateStatus status);
 }

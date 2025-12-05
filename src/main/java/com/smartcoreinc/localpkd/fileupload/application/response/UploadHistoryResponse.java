@@ -26,6 +26,9 @@ import java.util.UUID;
  *   <li>예상 체크섬 (SHA-1, optional)</li>
  *   <li>계산된 체크섬 (SHA-1, optional)</li>
  *   <li>에러 메시지 (optional)</li>
+ *   <li>파싱 통계 (optional)</li>
+ *   <li>검증 통계 (optional)</li>
+ *   <li>LDAP 통계 (optional)</li>
  * </ul>
  *
  * <h3>사용 예시</h3>
@@ -67,7 +70,21 @@ public record UploadHistoryResponse(
         Boolean isNewerVersion,
         String expectedChecksum,    // optional - SHA-1 expected checksum
         String calculatedChecksum,  // optional - SHA-1 calculated checksum
-        String errorMessage         // optional
+        String errorMessage,        // optional
+
+        // Parsing Statistics
+        Integer parsedCertificateCount,    // Total parsed certificates
+        Integer parsedCscaCount,           // CSCA count
+        Integer parsedDscCount,            // DSC count
+        Integer parsedDscNcCount,          // DSC_NC count
+        Integer parsedCrlCount,            // CRL count
+        Integer parsedMasterListCount,     // Master List count
+
+        // Validation Statistics
+        Integer validatedCertificateCount, // Total validated
+        Integer validCertificateCount,     // Valid count
+        Integer invalidCertificateCount,   // Invalid count
+        Integer expiredCertificateCount    // Expired count
 ) {
     /**
      * UploadedFile Aggregate로부터 생성
@@ -87,7 +104,19 @@ public record UploadHistoryResponse(
             Boolean isNewerVersion,
             String expectedChecksum,
             String calculatedChecksum,
-            String errorMessage
+            String errorMessage,
+
+            // Statistics
+            Integer parsedCertificateCount,
+            Integer parsedCscaCount,
+            Integer parsedDscCount,
+            Integer parsedDscNcCount,
+            Integer parsedCrlCount,
+            Integer parsedMasterListCount,
+            Integer validatedCertificateCount,
+            Integer validCertificateCount,
+            Integer invalidCertificateCount,
+            Integer expiredCertificateCount
     ) {
         return UploadHistoryResponse.builder()
                 .uploadId(uploadId)
@@ -105,6 +134,16 @@ public record UploadHistoryResponse(
                 .expectedChecksum(expectedChecksum)
                 .calculatedChecksum(calculatedChecksum)
                 .errorMessage(errorMessage)
+                .parsedCertificateCount(parsedCertificateCount)
+                .parsedCscaCount(parsedCscaCount)
+                .parsedDscCount(parsedDscCount)
+                .parsedDscNcCount(parsedDscNcCount)
+                .parsedCrlCount(parsedCrlCount)
+                .parsedMasterListCount(parsedMasterListCount)
+                .validatedCertificateCount(validatedCertificateCount)
+                .validCertificateCount(validCertificateCount)
+                .invalidCertificateCount(invalidCertificateCount)
+                .expiredCertificateCount(expiredCertificateCount)
                 .build();
     }
 }

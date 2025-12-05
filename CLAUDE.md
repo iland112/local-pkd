@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.4
+**Version**: 3.5
 **Last Updated**: 2025-12-05
-**Status**: Production Ready (Phase 1-19 Complete + Migration Consolidated)
+**Status**: Production Ready (Phase 1-19 Complete + Upload Statistics Feature)
 
 ---
 
@@ -23,6 +23,7 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 - ✅ 업로드 상태 자동 업데이트 (RECEIVED → PARSING → PARSED → UPLOADING_TO_LDAP → COMPLETED)
 - ✅ 업로드 이력 페이지 4단계 상태 표시 (파싱/검증/LDAP 각각 체크마크)
 - ✅ LDAP 검증 상태 기록 (VALID/INVALID/EXPIRED + 오류 메시지)
+- ✅ 업로드 상세정보 통계 표시 (파싱/검증 통계, DaisyUI stats 컴포넌트)
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -921,7 +922,8 @@ http://172.24.1.6:8081
 11. ✅ **업로드 이력 페이지 개선** (2025-12-03) - 파싱/검증/LDAP 각각의 상태를 개별 컬럼으로 표시, 완료된 단계는 체크마크 표시
 12. ✅ **SSE 진행 상황 상세화** (2025-12-03) - 각 단계별 인증서 타입, 유효성 통계를 포함한 상세 정보 표시
 13. ✅ **중복 인증서 감사 추적 지원** (2025-12-05) - parsed_certificate PK를 (parsed_file_id, fingerprint_sha256)로 변경하여 주기적 PKD 업데이트 시 중복 인증서 이력 추적 가능
-14. ✅ **데이터베이스 마이그레이션 통합** (2025-12-05 **NEW**) - 10개 마이그레이션 파일 (V1-V17, 958 라인)을 단일 V1__Initial_Schema.sql (465 라인)로 통합, ALTER 문 완전 제거, 32개 누락 컬럼 추가, SSE 오류 수정 (상세 내역: [SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md](docs/SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md))
+14. ✅ **데이터베이스 마이그레이션 통합** (2025-12-05) - 10개 마이그레이션 파일 (V1-V17, 958 라인)을 단일 V1__Initial_Schema.sql (465 라인)로 통합, ALTER 문 완전 제거, 32개 누락 컬럼 추가, SSE 오류 수정 (상세 내역: [SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md](docs/SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md))
+15. ✅ **업로드 통계 기능 구현** (2025-12-05 **NEW**) - 업로드 상세정보 dialog에 파싱 통계(인증서 타입별, CRL, Master List) 및 검증 통계(총 검증, 유효, 무효, 만료) 추가, 4개 repository에 uploadId 기반 count 메서드 구현, DaisyUI stats 컴포넌트로 시각화 (상세 내역: [SESSION_2025-12-05_UPLOAD_STATISTICS.md](docs/SESSION_2025-12-05_UPLOAD_STATISTICS.md))
 
 ### Remaining TODOs
 
@@ -998,6 +1000,55 @@ Windows Chrome: "사이트에 연결할 수 없음"
 2. WSL IP 주소 확인: `hostname -I`
 3. Windows 방화벽에서 8081 포트 허용 확인
 4. Windows에서 `http://<WSL-IP>:8081` 접속
+
+### 6. LDAP Base DN 삭제 복구
+
+```
+LDAP Error: No such object (32)
+Apache Directory Studio: Base DN이 사라짐
+```
+
+**긴급 복구 (30초)**:
+
+```bash
+cd /home/kbjung/projects/java/smartcore/local-pkd
+./scripts/restore-ldap.sh
+# 비밀번호 입력: core
+```
+
+**또는 한 줄 명령어**:
+
+```bash
+ldapadd -x -H ldap://192.168.100.10:389 \
+    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w "core" \
+    -f scripts/restore-base-dn.ldif
+```
+
+**상세 매뉴얼**:
+
+- 빠른 참조: [scripts/QUICK_RECOVERY.txt](scripts/QUICK_RECOVERY.txt)
+- 전체 가이드: [scripts/RECOVERY_MANUAL.md](scripts/RECOVERY_MANUAL.md)
+- 기술 문서: [docs/LDAP_BASE_DN_RECOVERY.md](docs/LDAP_BASE_DN_RECOVERY.md)
+
+**복구 후 확인**:
+
+```bash
+# Base DN 존재 확인
+ldapsearch -x -H ldap://192.168.100.10:389 \
+    -b "dc=ldap,dc=smartcoreinc,dc=com" -s base "(objectClass=*)" dn
+
+# Apache Directory Studio에서 F5로 새로고침
+```
+
+**백업 생성 (권장)**:
+
+```bash
+mkdir -p ~/ldap-backups
+ldapsearch -x -H ldap://192.168.100.10:389 \
+    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w "core" \
+    -b "dc=ldap,dc=smartcoreinc,dc=com" -LLL "(objectClass=*)" \
+    > ~/ldap-backups/backup-$(date +%Y%m%d-%H%M%S).ldif
+```
 
 ---
 

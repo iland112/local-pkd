@@ -1,0 +1,38 @@
+# LDAP Base DN Recovery Script
+# Purpose: Restore base DN and required directory structure for ICAO PKD system
+# Date: 2025-12-05
+
+# 1. Base DN (Root)
+dn: dc=ldap,dc=smartcoreinc,dc=com
+objectClass: top
+objectClass: domain
+dc: ldap
+description: SmartCore Inc. LDAP Root Directory
+
+# 2. PKD Layer
+dn: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+objectClass: top
+objectClass: domain
+dc: pkd
+description: Public Key Directory Layer
+
+# 3. Download Layer
+dn: dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+objectClass: top
+objectClass: domain
+dc: download
+description: PKD Download Layer
+
+# 4. Data Layer (Standard)
+dn: dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+objectClass: top
+objectClass: domain
+dc: data
+description: ICAO PKD Standard Data Layer
+
+# 5. Non-Conformant Data Layer
+dn: dc=nc-data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+objectClass: top
+objectClass: domain
+dc: nc-data
+description: ICAO PKD Non-Conformant Data Layer

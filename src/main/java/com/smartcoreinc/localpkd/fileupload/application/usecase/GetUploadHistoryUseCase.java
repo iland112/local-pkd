@@ -39,6 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class GetUploadHistoryUseCase {
 
     private final SpringDataUploadedFileRepository repository;
+    private final com.smartcoreinc.localpkd.fileparsing.infrastructure.repository.ParsedCertificateQueryRepository parsedCertificateQueryRepository;
+    private final com.smartcoreinc.localpkd.certificatevalidation.infrastructure.repository.SpringDataCertificateRevocationListRepository crlRepository;
+    private final com.smartcoreinc.localpkd.fileparsing.infrastructure.repository.SpringDataMasterListRepository masterListRepository;
+    private final com.smartcoreinc.localpkd.certificatevalidation.infrastructure.repository.SpringDataCertificateRepository certificateRepository;
 
     @Transactional(readOnly = true)
     public Page<UploadHistoryResponse> execute(GetUploadHistoryQuery query) {
@@ -82,8 +86,35 @@ public class GetUploadHistoryUseCase {
      * UploadedFile을 UploadHistoryResponse로 변환
      */
     private UploadHistoryResponse toResponse(UploadedFile uploadedFile) {
+        java.util.UUID uploadId = uploadedFile.getId().getId();
+
+        // Parsing Statistics (from ParsedFile)
+        int parsedTotal = (int) parsedCertificateQueryRepository.countByUploadId(uploadId);
+        int parsedCsca = (int) parsedCertificateQueryRepository.countByUploadIdAndCertType(uploadId, "CSCA");
+        int parsedDsc = (int) parsedCertificateQueryRepository.countByUploadIdAndCertType(uploadId, "DSC");
+        int parsedDscNc = (int) parsedCertificateQueryRepository.countByUploadIdAndCertType(uploadId, "DSC_NC");
+        int parsedCrlCount = (int) crlRepository.countByUploadId(uploadId);
+        int parsedMasterListCount = (int) masterListRepository.countByUploadId(
+            new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(uploadId)
+        );
+
+        // Validation Statistics (from Certificate)
+        int validatedTotal = (int) certificateRepository.countByUploadId(uploadId);
+        int validCount = (int) certificateRepository.countByUploadIdAndStatus(
+            uploadId,
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.VALID
+        );
+        int invalidCount = (int) certificateRepository.countByUploadIdAndStatus(
+            uploadId,
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.INVALID
+        );
+        int expiredCount = (int) certificateRepository.countByUploadIdAndStatus(
+            uploadId,
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.EXPIRED
+        );
+
         return UploadHistoryResponse.from(
-            uploadedFile.getId().getId(),
+            uploadId,
             uploadedFile.getFileName().getValue(),
             uploadedFile.getFileSize().getBytes(),
             uploadedFile.getFileSizeDisplay(),
@@ -97,7 +128,21 @@ public class GetUploadHistoryUseCase {
             uploadedFile.getIsNewerVersion(),
             uploadedFile.getExpectedChecksum() != null ? uploadedFile.getExpectedChecksum().getValue() : null,
             uploadedFile.getCalculatedChecksum() != null ? uploadedFile.getCalculatedChecksum().getValue() : null,
-            uploadedFile.getErrorMessage()
+            uploadedFile.getErrorMessage(),
+
+            // Parsing Statistics
+            parsedTotal,
+            parsedCsca,
+            parsedDsc,
+            parsedDscNc,
+            parsedCrlCount,
+            parsedMasterListCount,
+
+            // Validation Statistics
+            validatedTotal,
+            validCount,
+            invalidCount,
+            expiredCount
         );
     }
 }
