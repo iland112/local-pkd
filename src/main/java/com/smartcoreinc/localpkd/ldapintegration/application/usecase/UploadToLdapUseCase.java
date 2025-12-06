@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * UploadToLdapUseCase - LDAP 서버 업로드 Use Case
@@ -115,35 +117,34 @@ public class UploadToLdapUseCase {
                     .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.CSCA)
                     .count();
 
-            log.info("Uploading {} certificates to LDAP ({} CSCAs from Master List, {} from LDIF)...",
-                    certificates.size(), masterListCscaCount, certificates.size() - masterListCscaCount);
+            log.info("Uploading {} certificates to LDAP ({} CSCAs from Master List, {} from LDIF) with batch size {}...",
+                    certificates.size(), masterListCscaCount, certificates.size() - masterListCscaCount, command.batchSize());
             int uploadedCertificateCount = 0;
             int skippedCertificateCount = 0;
             int failedCertificateCount = 0;
 
-            // 인증서 LDAP 업로드 (including CSCAs from Master List)
+            // ✅ 인증서 LDAP 배치 업로드 (including CSCAs from Master List)
+            List<String> certBatch = new ArrayList<>();
             for (int i = 0; i < certificates.size(); i++) {
                 com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificates.get(i);
                 try {
                     // Convert to LDIF format (CSCAs will use o=csca)
                     String ldifEntry = ldifConverter.certificateToLdif(cert);
+                    certBatch.add(ldifEntry);
 
-                    // Upload to LDAP
-                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
-
-                    if (success) {
-                        uploadedCertificateCount++;
-                        log.debug("Certificate uploaded to LDAP: id={}, type={}, source={}, country={}",
-                                cert.getId().getId(), cert.getCertificateType(),
-                                cert.isFromMasterList() ? "MasterList" : "LDIF",
-                                cert.getSubjectInfo().getCountryCode());
-                    } else {
-                        skippedCertificateCount++;
-                        log.debug("Certificate upload skipped (duplicate): id={}", cert.getId().getId());
+                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 배치 업로드
+                    if (certBatch.size() >= command.batchSize() || (i + 1) == certificates.size()) {
+                        log.info("Uploading certificate batch: {} entries", certBatch.size());
+                        int successCount = ldapAdapter.addLdifEntriesBatch(certBatch);
+                        uploadedCertificateCount += successCount;
+                        skippedCertificateCount += (certBatch.size() - successCount);
+                        log.info("Certificate batch uploaded: {} success, {} skipped",
+                            successCount, certBatch.size() - successCount);
+                        certBatch.clear();
                     }
 
-                    // Send progress every 10 items or at the end
-                    if ((i + 1) % 10 == 0 || (i + 1) == certificates.size()) {
+                    // Send progress every 100 items or at the end
+                    if ((i + 1) % 100 == 0 || (i + 1) == certificates.size()) {
                         int percentage = 90 + ((i + 1) * 5 / certificates.size());  // 90-95%
                         progressService.sendProgress(
                                 ProcessingProgress.builder()
@@ -159,7 +160,7 @@ public class UploadToLdapUseCase {
 
                 } catch (Exception e) {
                     failedCertificateCount++;
-                    log.error("Failed to upload certificate to LDAP: id={}", cert.getId().getId(), e);
+                    log.error("Failed to convert certificate to LDIF: id={}", cert.getId().getId(), e);
                 }
             }
 
@@ -167,28 +168,29 @@ public class UploadToLdapUseCase {
             java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList> crls =
                     crlRepository.findByUploadId(command.uploadId());
 
-            log.info("Uploading {} CRLs to LDAP...", crls.size());
+            log.info("Uploading {} CRLs to LDAP with batch size {}...", crls.size(), command.batchSize());
             int uploadedCrlCount = 0;
             int skippedCrlCount = 0;
             int failedCrlCount = 0;
 
-            // CRL LDAP 업로드
+            // ✅ CRL LDAP 배치 업로드
+            List<String> crlBatch = new ArrayList<>();
             for (int i = 0; i < crls.size(); i++) {
                 com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList crl = crls.get(i);
                 try {
                     // Convert to LDIF format
                     String ldifEntry = ldifConverter.crlToLdif(crl);
+                    crlBatch.add(ldifEntry);
 
-                    // Upload to LDAP
-                    boolean success = ldapAdapter.addLdifEntry(ldifEntry);
-
-                    if (success) {
-                        uploadedCrlCount++;
-                        log.debug("CRL uploaded to LDAP: id={}, issuer={}, country={}",
-                                crl.getId().getId(), crl.getIssuerName().getValue(), crl.getCountryCode().getValue());
-                    } else {
-                        skippedCrlCount++;
-                        log.debug("CRL upload skipped (duplicate): id={}", crl.getId().getId());
+                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 배치 업로드
+                    if (crlBatch.size() >= command.batchSize() || (i + 1) == crls.size()) {
+                        log.info("Uploading CRL batch: {} entries", crlBatch.size());
+                        int successCount = ldapAdapter.addLdifEntriesBatch(crlBatch);
+                        uploadedCrlCount += successCount;
+                        skippedCrlCount += (crlBatch.size() - successCount);
+                        log.info("CRL batch uploaded: {} success, {} skipped",
+                            successCount, crlBatch.size() - successCount);
+                        crlBatch.clear();
                     }
 
                     // Send progress every 10 items or at the end
@@ -208,7 +210,7 @@ public class UploadToLdapUseCase {
 
                 } catch (Exception e) {
                     failedCrlCount++;
-                    log.error("Failed to upload CRL to LDAP: id={}", crl.getId().getId(), e);
+                    log.error("Failed to convert CRL to LDIF: id={}", crl.getId().getId(), e);
                 }
             }
 

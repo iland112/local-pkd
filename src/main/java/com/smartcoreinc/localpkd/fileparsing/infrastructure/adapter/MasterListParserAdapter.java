@@ -167,18 +167,48 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
                 try {
                     org.bouncycastle.asn1.x509.Certificate bcCert = org.bouncycastle.asn1.x509.Certificate.getInstance(encodable);
                     X509CertificateHolder holder = new X509CertificateHolder(bcCert);
-                    X509Certificate x509Cert = converter.getCertificate(holder);
-                    
-                    String fingerprint = calculateFingerprint(x509Cert); // Calculate fingerprint
+
+                    X509Certificate x509Cert = null;
+                    boolean usesFallbackParsing = false;
+
+                    // Try to convert to X509Certificate
+                    try {
+                        x509Cert = converter.getCertificate(holder);
+                    } catch (Exception e) {
+                        // Check if this is an EC Parameter error
+                        if (e.getMessage() != null && e.getMessage().contains("ECParameters")) {
+                            log.warn("Certificate uses explicit EC parameters, using fallback parsing: subject={}",
+                                holder.getSubject().toString());
+                            usesFallbackParsing = true;
+                            // Continue with fallback - we'll extract data from holder directly
+                        } else {
+                            // Other conversion error, rethrow
+                            throw e;
+                        }
+                    }
+
+                    String fingerprint = usesFallbackParsing ?
+                        calculateFingerprintFromBytes(holder.getEncoded()) :
+                        calculateFingerprint(x509Cert);
+
                     // Check for duplicate fingerprint before adding
                     if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
-                        parsedFile.addCertificate(createCertificateData(x509Cert, fingerprint));
+                        CertificateData certData = usesFallbackParsing ?
+                            createCertificateDataFromHolder(holder, fingerprint) :
+                            createCertificateData(x509Cert, fingerprint);
+                        parsedFile.addCertificate(certData);
+
+                        if (usesFallbackParsing) {
+                            log.info("Successfully parsed certificate with explicit EC parameters using fallback: fingerprint={}",
+                                fingerprint.substring(0, 16) + "...");
+                        }
                     } else {
                         parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
                         log.warn("Duplicate certificate skipped: fingerprint_sha256={}", fingerprint);
                     }
                 } catch (Exception e) {
                     parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", "Certificate", e.getMessage()));
+                    log.warn("Failed to parse certificate: {}", e.getMessage());
                 }
             }
         }
@@ -355,26 +385,115 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
                 try {
                     org.bouncycastle.asn1.x509.Certificate bcCert = org.bouncycastle.asn1.x509.Certificate.getInstance(encodable);
                     X509CertificateHolder holder = new X509CertificateHolder(bcCert);
-                    X509Certificate x509Cert = converter.getCertificate(holder);
 
-                    String fingerprint = calculateFingerprint(x509Cert);
-                    String subjectDn = x509Cert.getSubjectX500Principal().getName();
-                    String countryCodeStr = extractCountryCode(subjectDn);
-                    CountryCode countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
+                    X509Certificate x509Cert = null;
+                    boolean usesFallbackParsing = false;
 
-                    parsedCscas.add(MasterListParseResult.ParsedCsca.of(
-                            x509Cert,
-                            fingerprint,
-                            countryCode
-                    ));
+                    // Try to convert to X509Certificate
+                    try {
+                        x509Cert = converter.getCertificate(holder);
+                    } catch (Exception e) {
+                        // Check if this is an EC Parameter error
+                        if (e.getMessage() != null && e.getMessage().contains("ECParameters")) {
+                            log.warn("Certificate uses explicit EC parameters, using fallback parsing for MasterList: subject={}",
+                                holder.getSubject().toString());
+                            usesFallbackParsing = true;
+                            // Continue with fallback - we'll extract data from holder directly
+                        } else {
+                            // Other conversion error, rethrow
+                            throw e;
+                        }
+                    }
+
+                    String fingerprint;
+                    String subjectDn;
+                    String countryCodeStr;
+                    CountryCode countryCode;
+
+                    if (usesFallbackParsing) {
+                        fingerprint = calculateFingerprintFromBytes(holder.getEncoded());
+                        subjectDn = holder.getSubject().toString();
+                        countryCodeStr = extractCountryCode(subjectDn);
+                        countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
+
+                        // Create ParsedCsca with null x509Cert (fallback mode)
+                        // Note: ParsedCsca.of() should handle null X509Certificate gracefully
+                        parsedCscas.add(MasterListParseResult.ParsedCsca.of(
+                                null,  // x509Cert is null in fallback mode
+                                fingerprint,
+                                countryCode
+                        ));
+                    } else {
+                        fingerprint = calculateFingerprint(x509Cert);
+                        subjectDn = x509Cert.getSubjectX500Principal().getName();
+                        countryCodeStr = extractCountryCode(subjectDn);
+                        countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
+
+                        parsedCscas.add(MasterListParseResult.ParsedCsca.of(
+                                x509Cert,
+                                fingerprint,
+                                countryCode
+                        ));
+                    }
 
                 } catch (Exception e) {
-                    log.warn("Failed to extract CSCA certificate: {}", e.getMessage());
+                    log.warn("Failed to extract CSCA certificate for MasterList: {}", e.getMessage());
                     // Continue with other certificates
                 }
             }
         }
 
         return parsedCscas;
+    }
+
+    // ===========================
+    // Fallback Parsing Helpers for EC Parameter Issue
+    // ===========================
+
+    /**
+     * Calculate SHA-256 fingerprint from raw certificate bytes
+     * Used when X509Certificate conversion fails due to EC parameter issues
+     */
+    private String calculateFingerprintFromBytes(byte[] certBytes) throws Exception {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        md.update(certBytes);
+        byte[] digest = md.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02X", b & 0xFF));
+        }
+        return sb.toString().toLowerCase();
+    }
+
+    /**
+     * Create CertificateData from X509CertificateHolder (fallback parsing)
+     * Used when X509Certificate conversion fails due to EC parameter issues
+     */
+    private CertificateData createCertificateDataFromHolder(
+        X509CertificateHolder holder,
+        String fingerprint
+    ) throws Exception {
+        String subjectDn = holder.getSubject().toString();
+        String issuerDn = holder.getIssuer().toString();
+        String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
+        String countryCode = extractCountryCode(subjectDn);
+
+        // Extract validity dates
+        LocalDateTime notBefore = convertToLocalDateTime(holder.getNotBefore());
+        LocalDateTime notAfter = convertToLocalDateTime(holder.getNotAfter());
+
+        return CertificateData.of(
+            "CSCA",  // Certificate type
+            countryCode,
+            subjectDn,
+            issuerDn,
+            serialNumber,
+            notBefore,
+            notAfter,
+            holder.getEncoded(),
+            fingerprint,
+            true,  // fromMasterList
+            null // All attributes not available here
+        );
     }
 }

@@ -9,10 +9,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Repository
@@ -130,6 +127,26 @@ public class JpaCertificateRepository implements CertificateRepository {
         log.debug("Checking existence of Certificate by fingerprint: {}...",
             fingerprintSha256.substring(0, 8));
         return jpaRepository.existsByX509Data_FingerprintSha256(fingerprintSha256);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> findFingerprintsByFingerprintSha256In(Set<String> fingerprints) {
+        if (fingerprints == null) {
+            log.warn("Cannot find fingerprints by batch: fingerprints set is null");
+            throw new IllegalArgumentException("fingerprints must not be null");
+        }
+
+        if (fingerprints.isEmpty()) {
+            log.debug("Fingerprints set is empty, returning empty list");
+            return Collections.emptyList();
+        }
+
+        log.debug("Finding existing fingerprints (batch query): {} fingerprints to check", fingerprints.size());
+        List<String> existingFingerprints = jpaRepository.findFingerprintsByFingerprintSha256In(fingerprints);
+        log.debug("Found {} existing fingerprints out of {} total", existingFingerprints.size(), fingerprints.size());
+
+        return existingFingerprints;
     }
 
     @Override

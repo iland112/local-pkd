@@ -35,11 +35,13 @@ import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -66,19 +68,56 @@ public class LdifParserAdapter implements FileParserPort {
     public void parse(byte[] fileBytes, FileFormat fileFormat, ParsedFile parsedFile) throws ParsingException {
         if (!supports(fileFormat)) throw new ParsingException("Unsupported file format: " + fileFormat.getDisplayName());
 
-        int entryNumber = 0;
-        int estimatedTotalEntries = Math.max(fileBytes.length / 200, 100);
+        log.info("Starting LDIF parsing with batch duplicate check optimization");
+
+        // ✅ Step 1: 모든 엔트리를 먼저 읽고 fingerprint 수집
+        List<Entry> allEntries = new ArrayList<>();
+        Set<String> allFingerprints = new HashSet<>();
 
         try (LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(fileBytes))) {
             Entry entry;
             while ((entry = ldifReader.readEntry()) != null) {
-                entryNumber++;
-                updateProgress(parsedFile, entryNumber, estimatedTotalEntries);
-                parseEntry(entry, entryNumber, parsedFile);
+                allEntries.add(entry);
+
+                // 인증서 엔트리면 fingerprint 계산
+                if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
+                    byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
+                    try {
+                        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                        X509Certificate cert = (X509Certificate) certFactory.generateCertificate(
+                            new ByteArrayInputStream(certBytes)
+                        );
+                        String fingerprint = calculateFingerprint(cert);
+                        allFingerprints.add(fingerprint);
+                    } catch (Exception e) {
+                        log.warn("Failed to calculate fingerprint for entry: {}", entry.getDN(), e);
+                    }
+                }
             }
         } catch (Exception e) {
-            throw new ParsingException("LDIF parsing error: " + e.getMessage(), e);
+            throw new ParsingException("LDIF reading error: " + e.getMessage(), e);
         }
+
+        log.info("LDIF entries loaded: {} total, {} certificates with fingerprints",
+            allEntries.size(), allFingerprints.size());
+
+        // ✅ Step 2: 일괄 중복 체크 (단일 쿼리)
+        Set<String> existingFingerprints = certificateExistenceService.findExistingFingerprints(allFingerprints);
+        log.info("Batch duplicate check completed: {} existing out of {} total fingerprints",
+            existingFingerprints.size(), allFingerprints.size());
+
+        // ✅ Step 3: 엔트리 파싱 (중복 체크는 메모리 Set으로 수행)
+        int entryNumber = 0;
+        int estimatedTotalEntries = allEntries.size();
+
+        for (Entry entry : allEntries) {
+            entryNumber++;
+            updateProgress(parsedFile, entryNumber, estimatedTotalEntries);
+            parseEntryWithCache(entry, entryNumber, parsedFile, existingFingerprints);
+        }
+
+        log.info("LDIF parsing completed: {} entries processed, {} new certificates added",
+            allEntries.size(), parsedFile.getCertificates().size());
     }
     
     private void updateProgress(ParsedFile parsedFile, int entryNumber, int estimatedTotalEntries) {
@@ -91,6 +130,23 @@ public class LdifParserAdapter implements FileParserPort {
         }
     }
 
+    /**
+     * ✅ 캐시 기반 엔트리 파싱 (배치 중복 체크 최적화)
+     */
+    private void parseEntryWithCache(Entry entry, int entryNumber, ParsedFile parsedFile, Set<String> existingFingerprints) {
+        if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
+            parseCertificateFromEntryWithCache(entry, parsedFile, existingFingerprints);
+        } else if (entry.hasAttribute(ATTR_CRL)) {
+            parseCrlFromBytes(entry.getAttribute(ATTR_CRL).getValueByteArray(), entry.getDN(), parsedFile);
+        } else if (entry.hasAttribute(ATTR_MASTER_LIST_CONTENT)) {
+            parseMasterListContent(entry.getAttribute(ATTR_MASTER_LIST_CONTENT).getValueByteArray(), entry.getDN(), parsedFile);
+        }
+    }
+
+    /**
+     * @deprecated Use {@link #parseEntryWithCache(Entry, int, ParsedFile, Set)} for better performance
+     */
+    @Deprecated
     private void parseEntry(Entry entry, int entryNumber, ParsedFile parsedFile) {
         if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
             parseCertificateFromEntry(entry, parsedFile);
@@ -98,6 +154,78 @@ public class LdifParserAdapter implements FileParserPort {
             parseCrlFromBytes(entry.getAttribute(ATTR_CRL).getValueByteArray(), entry.getDN(), parsedFile);
         } else if (entry.hasAttribute(ATTR_MASTER_LIST_CONTENT)) {
             parseMasterListContent(entry.getAttribute(ATTR_MASTER_LIST_CONTENT).getValueByteArray(), entry.getDN(), parsedFile);
+        }
+    }
+
+    /**
+     * ✅ 캐시 기반 인증서 파싱 (배치 중복 체크 최적화)
+     *
+     * <p>메모리 Set으로 중복 체크하여 DB 조회 없음 (N+1 문제 해결)</p>
+     */
+    private void parseCertificateFromEntryWithCache(Entry entry, ParsedFile parsedFile, Set<String> existingFingerprints) {
+        byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
+        String dn = entry.getDN();
+        try {
+            CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
+
+            String subjectDn = cert.getSubjectX500Principal().getName();
+            String issuerDn = cert.getIssuerX500Principal().getName();
+            String countryCode = extractCountryCode(subjectDn);
+
+            boolean selfSigned = subjectDn.equals(issuerDn);
+            boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
+
+            String certType;
+            if (selfSigned) {
+                certType = "CSCA";
+            } else if (isNonConformantPath) {
+                certType = "DSC_NC";
+                log.debug("Detected DSC_NC certificate from nc-data path: dn={}", dn);
+            } else {
+                certType = "DSC";
+            }
+
+            String fingerprint = calculateFingerprint(cert);
+
+            Map<String, List<String>> allAttributes = new HashMap<>();
+            for (Attribute attr : entry.getAttributes()) {
+                String name = attr.getName();
+                List<String> values = new ArrayList<>();
+                if (attr.hasValue()) {
+                    if (name.endsWith(";binary")) {
+                         for (byte[] val : attr.getValueByteArrays()) {
+                            values.add(Base64.getEncoder().encodeToString(val));
+                        }
+                    } else {
+                        values.addAll(Arrays.asList(attr.getValues()));
+                    }
+                }
+                allAttributes.put(name, values);
+            }
+
+            // ✅ 메모리 Set으로 중복 체크 (DB 조회 없음)
+            if (!existingFingerprints.contains(fingerprint)) {
+                CertificateData certData = CertificateData.of(
+                    certType,
+                    countryCode,
+                    subjectDn,
+                    issuerDn,
+                    cert.getSerialNumber().toString(16),
+                    convertToLocalDateTime(cert.getNotBefore()),
+                    convertToLocalDateTime(cert.getNotAfter()),
+                    cert.getEncoded(),
+                    fingerprint,
+                    true,
+                    allAttributes
+                );
+                parsedFile.addCertificate(certData);
+            } else {
+                parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
+                log.debug("Duplicate certificate skipped: fingerprint_sha256={}", fingerprint);
+            }
+        } catch (Exception e) {
+            parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", dn, e.getMessage()));
         }
     }
 
@@ -114,7 +242,10 @@ public class LdifParserAdapter implements FileParserPort {
      * NC-DATA(DSC_NC)는 이후 검증 단계에서 별도의 유효성 검사를 수행하지 않고
      * 통계/분석 및 LDAP 저장 용도로만 사용됩니다.
      * </p>
+     *
+     * @deprecated Use {@link #parseCertificateFromEntryWithCache(Entry, ParsedFile, Set)} for better performance
      */
+    @Deprecated
     private void parseCertificateFromEntry(Entry entry, ParsedFile parsedFile) {
         byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
         String dn = entry.getDN();
@@ -251,36 +382,72 @@ public class LdifParserAdapter implements FileParserPort {
 
             for (X509CertificateHolder holder : certs) {
                 try {
-                    // Parse X509 certificate
-                    CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-                    X509Certificate x509Cert = (X509Certificate) certFactory.generateCertificate(
-                        new ByteArrayInputStream(holder.getEncoded())
-                    );
+                    X509Certificate x509Cert = null;
+                    boolean usesFallbackParsing = false;
+
+                    // Try to parse X509 certificate using standard CertificateFactory
+                    try {
+                        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                        x509Cert = (X509Certificate) certFactory.generateCertificate(
+                            new ByteArrayInputStream(holder.getEncoded())
+                        );
+                    } catch (Exception e) {
+                        // Check if this is an EC Parameter error
+                        if (e.getMessage() != null && e.getMessage().contains("ECParameters")) {
+                            log.warn("Certificate uses explicit EC parameters, using fallback parsing: subject={}",
+                                holder.getSubject().toString());
+                            usesFallbackParsing = true;
+                            // Continue with fallback - we'll extract data from holder directly
+                        } else {
+                            // Other parsing error, rethrow
+                            throw e;
+                        }
+                    }
 
                     // CRITICAL: Filter out Master List Signer certificates
                     // Master List Signer certificates have basicConstraints = -1 (not a CA)
                     // Only CA certificates (basicConstraints >= 0) are CSCA
-                    int basicConstraints = x509Cert.getBasicConstraints();
+                    int basicConstraints;
+                    if (usesFallbackParsing) {
+                        // Extract basicConstraints from X509CertificateHolder
+                        basicConstraints = extractBasicConstraintsFromHolder(holder);
+                    } else {
+                        basicConstraints = x509Cert.getBasicConstraints();
+                    }
+
                     if (basicConstraints == -1) {
-                        log.debug("Skipping Master List Signer certificate (not a CA): subject={}",
-                            x509Cert.getSubjectX500Principal().getName());
+                        String subjectDn = usesFallbackParsing ?
+                            holder.getSubject().toString() :
+                            x509Cert.getSubjectX500Principal().getName();
+                        log.debug("Skipping Master List Signer certificate (not a CA): subject={}", subjectDn);
                         continue; // Skip Master List Signer certificates
                     }
 
                     // Calculate fingerprint first for duplicate check
-                    String fingerprint = calculateFingerprint(x509Cert);
+                    String fingerprint = usesFallbackParsing ?
+                        calculateFingerprintFromBytes(holder.getEncoded()) :
+                        calculateFingerprint(x509Cert);
 
                     // Check for duplicate fingerprint for Certificate entity saving
                     boolean isDuplicate = certificateExistenceService.existsByFingerprintSha256(fingerprint);
 
                     if (!isDuplicate) {
                         // Create Certificate entity from Master List CSCA (only if not duplicate in DB)
-                        com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert =
-                            createCertificateFromMasterListCsca(
+                        com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert;
+                        if (usesFallbackParsing) {
+                            cert = createCertificateFromMasterListCscaFallback(
+                                parsedFile.getUploadId().getId(),
+                                savedMasterList.getId().getId(),
+                                holder,
+                                fingerprint
+                            );
+                        } else {
+                            cert = createCertificateFromMasterListCsca(
                                 parsedFile.getUploadId().getId(),
                                 savedMasterList.getId().getId(),
                                 x509Cert
                             );
+                        }
                         cscaCerts.add(cert);
                     } else {
                         log.debug("CSCA already exists in database, skipping Certificate entity save: fingerprint={}", fingerprint);
@@ -288,23 +455,29 @@ public class LdifParserAdapter implements FileParserPort {
 
                     // IMPORTANT: Always add CSCA to ParsedFile for validation, even if duplicate
                     // This allows validation to proceed with existing certificates
-                    CertificateData certData = CertificateData.of(
-                        "CSCA",  // Certificate type
-                        countryCode,  // Country code from Master List
-                        x509Cert.getSubjectX500Principal().getName(),
-                        x509Cert.getIssuerX500Principal().getName(),
-                        x509Cert.getSerialNumber().toString(16).toUpperCase(),
-                        convertToLocalDateTime(x509Cert.getNotBefore()),
-                        convertToLocalDateTime(x509Cert.getNotAfter()),
-                        x509Cert.getEncoded(),
-                        fingerprint,
-                        true,  // fromLdif
-                        null // All attributes not available here
-                    );
+                    CertificateData certData;
+                    if (usesFallbackParsing) {
+                        certData = createCertificateDataFromHolder(holder, countryCode, fingerprint);
+                    } else {
+                        certData = CertificateData.of(
+                            "CSCA",  // Certificate type
+                            countryCode,  // Country code from Master List
+                            x509Cert.getSubjectX500Principal().getName(),
+                            x509Cert.getIssuerX500Principal().getName(),
+                            x509Cert.getSerialNumber().toString(16).toUpperCase(),
+                            convertToLocalDateTime(x509Cert.getNotBefore()),
+                            convertToLocalDateTime(x509Cert.getNotAfter()),
+                            x509Cert.getEncoded(),
+                            fingerprint,
+                            true,  // fromLdif
+                            null // All attributes not available here
+                        );
+                    }
 
                     // Add to ParsedFile regardless of duplication (needed for validation)
                     parsedFile.addCertificate(certData);
-                    log.debug("Added CSCA from Master List to ParsedFile: fingerprint={}, duplicate={}", fingerprint, isDuplicate);
+                    log.debug("Added CSCA from Master List to ParsedFile: fingerprint={}, duplicate={}, fallbackParsing={}",
+                        fingerprint, isDuplicate, usesFallbackParsing);
 
                 } catch (Exception e) {
                     log.warn("Failed to parse CSCA from Master List: {}", e.getMessage());
@@ -317,10 +490,12 @@ public class LdifParserAdapter implements FileParserPort {
                 log.warn("No CSCA certificates successfully parsed from Master List: masterListId={}, country={}",
                     savedMasterList.getId().getId(), countryCode);
             } else {
-                java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> savedCerts =
-                    certificateRepository.saveAll(cscaCerts);
-
-                log.info("Saved {} CSCA certificates from LDIF Master List", savedCerts.size());
+                // ❌ REMOVED: Parsing phase should NOT save Certificate entities (DDD architecture violation)
+                // Certificate entities should only be created and saved by ValidateCertificatesUseCase
+                // java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> savedCerts =
+                //     certificateRepository.saveAll(cscaCerts);
+                // log.info("Saved {} CSCA certificates from LDIF Master List", savedCerts.size());
+                log.info("Parsed {} CSCA certificates from LDIF Master List (will be saved during validation phase)", cscaCerts.size());
             }
 
         } catch (Exception e) {
@@ -440,5 +615,152 @@ public class LdifParserAdapter implements FileParserPort {
             log.warn("Could not extract CRL number", e);
             return null;
         }
+    }
+
+    // ===========================
+    // Fallback Parsing Helpers for EC Parameter Issue
+    // ===========================
+
+    /**
+     * Extract basicConstraints extension from X509CertificateHolder
+     * Used when X509Certificate conversion fails due to EC parameter issues
+     */
+    private int extractBasicConstraintsFromHolder(X509CertificateHolder holder) {
+        try {
+            org.bouncycastle.asn1.x509.Extension ext = holder.getExtension(Extension.basicConstraints);
+            if (ext == null) {
+                return -1; // Not a CA
+            }
+            org.bouncycastle.asn1.x509.BasicConstraints bc = org.bouncycastle.asn1.x509.BasicConstraints.getInstance(ext.getParsedValue());
+            if (!bc.isCA()) {
+                return -1;
+            }
+            if (bc.getPathLenConstraint() == null) {
+                return Integer.MAX_VALUE;
+            }
+            return bc.getPathLenConstraint().intValue();
+        } catch (Exception e) {
+            log.warn("Failed to extract basicConstraints from holder, assuming -1 (not a CA): {}", e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
+     * Calculate SHA-256 fingerprint from raw certificate bytes
+     */
+    private String calculateFingerprintFromBytes(byte[] certBytes) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        md.update(certBytes);
+        byte[] digest = md.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Create CertificateData from X509CertificateHolder (fallback parsing)
+     * Used when X509Certificate conversion fails due to EC parameter issues
+     */
+    private CertificateData createCertificateDataFromHolder(
+        X509CertificateHolder holder,
+        String countryCode,
+        String fingerprint
+    ) throws Exception {
+        String subjectDn = holder.getSubject().toString();
+        String issuerDn = holder.getIssuer().toString();
+        String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
+
+        // Extract validity dates
+        java.util.Date notBefore = holder.getNotBefore();
+        java.util.Date notAfter = holder.getNotAfter();
+        LocalDateTime notBeforeLdt = convertToLocalDateTime(notBefore);
+        LocalDateTime notAfterLdt = convertToLocalDateTime(notAfter);
+
+        return CertificateData.of(
+            "CSCA",  // Certificate type
+            countryCode,
+            subjectDn,
+            issuerDn,
+            serialNumber,
+            notBeforeLdt,
+            notAfterLdt,
+            holder.getEncoded(),
+            fingerprint,
+            true,  // fromLdif
+            null // All attributes not available here
+        );
+    }
+
+    /**
+     * Create Certificate entity from X509CertificateHolder (fallback parsing)
+     * Used when X509Certificate conversion fails due to EC parameter issues
+     */
+    private com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate createCertificateFromMasterListCscaFallback(
+        java.util.UUID uploadId,
+        java.util.UUID masterListId,
+        X509CertificateHolder holder,
+        String fingerprint
+    ) throws Exception {
+        String subjectDn = holder.getSubject().toString();
+        String issuerDn = holder.getIssuer().toString();
+        String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
+
+        // Extract country code from DN
+        String countryCode = extractCountryCode(subjectDn);
+
+        // Create X509Data (note: publicKey will be null in fallback mode)
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data x509Data =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data.of(
+                holder.getEncoded(),
+                null,  // PublicKey not available in fallback mode
+                serialNumber,
+                fingerprint
+            );
+
+        // Create SubjectInfo (fallback mode - extract from X509CertificateHolder)
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo subjectInfo =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo.of(
+                subjectDn,
+                extractDnComponent(subjectDn, "C"),
+                extractDnComponent(subjectDn, "O"),
+                extractDnComponent(subjectDn, "OU"),
+                extractDnComponent(subjectDn, "CN")
+            );
+
+        // Create IssuerInfo (fallback mode)
+        // Note: isCA cannot be reliably determined in fallback mode without basicConstraints
+        // We assume true since this is a CSCA certificate
+        boolean isCA = true;  // Assume CA for CSCA certificates
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo issuerInfo =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo.of(
+                issuerDn,
+                extractDnComponent(issuerDn, "C"),
+                extractDnComponent(issuerDn, "O"),
+                extractDnComponent(issuerDn, "OU"),
+                extractDnComponent(issuerDn, "CN"),
+                isCA
+            );
+
+        // Create ValidityPeriod
+        com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod validity =
+            com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod.of(
+                convertToLocalDateTime(holder.getNotBefore()),
+                convertToLocalDateTime(holder.getNotAfter())
+            );
+
+        // Extract signature algorithm
+        String signatureAlgorithm = holder.getSignatureAlgorithm().getAlgorithm().getId();
+
+        return com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate.createFromMasterList(
+            uploadId,
+            masterListId,
+            x509Data,
+            subjectInfo,
+            issuerInfo,
+            validity,
+            signatureAlgorithm
+        );
     }
 }
