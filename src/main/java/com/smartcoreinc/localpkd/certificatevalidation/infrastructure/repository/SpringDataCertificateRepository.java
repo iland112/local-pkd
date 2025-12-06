@@ -32,6 +32,17 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
     void deleteById(CertificateId id);
     boolean existsById(CertificateId id);
     boolean existsByX509Data_FingerprintSha256(String fingerprintSha256);
+
+    /**
+     * 배치 fingerprint로 기존 Certificate 조회
+     * Phase 1-1 배치 중복 체크 최적화: N+1 query → single IN query
+     *
+     * @param fingerprints 조회할 fingerprint 집합
+     * @return DB에 이미 존재하는 fingerprint 목록
+     */
+    @Query("SELECT c.x509Data.fingerprintSha256 FROM Certificate c WHERE c.x509Data.fingerprintSha256 IN :fingerprints")
+    List<String> findFingerprintsByFingerprintSha256In(@org.springframework.data.repository.query.Param("fingerprints") java.util.Set<String> fingerprints);
+
     List<Certificate> findByUploadId(java.util.UUID uploadId);
     List<Certificate> findByStatus(com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus status);
     List<Certificate> findBySubjectInfo_CountryCode(String countryCode);

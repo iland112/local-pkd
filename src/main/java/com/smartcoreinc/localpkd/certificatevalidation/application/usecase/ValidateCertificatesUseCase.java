@@ -9,6 +9,7 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.Certifi
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -131,15 +133,49 @@ public class ValidateCertificatesUseCase {
 
             int totalCertificates = certificateDataList.size();
 
-            // === Pass 1: CSCA 인증서만 먼저 검증/저장 ===
-            log.info("=== Pass 1: CSCA certificate validation started ===");
+            // === Pass 1: CSCA 인증서만 먼저 검증/저장 (✅ 배치 저장) ===
+            log.info("=== Pass 1: CSCA certificate validation started (Batch save optimization) ===");
             int cscaProcessed = 0;
+            List<Certificate> cscaBatch = new ArrayList<>();
+            final int BATCH_SIZE = 1000;
+
+            // ✅ 파일 형식 확인 (ML vs LDIF)
+            String fileFormat = parsedFile.getFileFormat().toStorageValue();
+            log.info("File format: {}", fileFormat);
+
+            // ✅ Phase 1-1: 배치 중복 체크 (Pass 1 - CSCA)
+            // 모든 CSCA fingerprint 수집
+            Set<String> cscaFingerprints = new HashSet<>();
+            for (CertificateData certData : certificateDataList) {
+                if (certData.isCsca()) {
+                    cscaFingerprints.add(certData.getFingerprintSha256());
+                }
+            }
+            log.info("Collected {} CSCA fingerprints for duplicate check", cscaFingerprints.size());
+
+            // DB에서 이미 존재하는 fingerprint 조회 (단일 쿼리)
+            Set<String> existingCscaFingerprints = new HashSet<>();
+            if (!cscaFingerprints.isEmpty()) {
+                List<String> existingList = certificateRepository.findFingerprintsByFingerprintSha256In(cscaFingerprints);
+                existingCscaFingerprints = new HashSet<>(existingList);
+                log.info("Found {} existing CSCA certificates in database (will be skipped)", existingCscaFingerprints.size());
+            }
+
             for (int i = 0; i < totalCertificates; i++) { // Loop over all certificates
                 CertificateData certData = certificateDataList.get(i);
 
                 if (certData.isCsca()) {
                     cscaProcessed++;
-                    
+
+                    // ✅ Phase 1-1: DB 중복 체크 (이전 업로드와 중복)
+                    if (existingCscaFingerprints.contains(certData.getFingerprintSha256())) {
+                        log.info("Skipping CSCA certificate already in database: fingerprint={}, subject={}",
+                            certData.getFingerprintSha256().substring(0, 16) + "...",
+                            certData.getSubjectDN());
+                        continue;
+                    }
+
+                    // 동일 트랜잭션 내 중복 체크
                     if (processedFingerprints.contains(certData.getFingerprintSha256())) {
                         log.warn("Skipping duplicate certificate within the same batch: fingerprint={}", certData.getFingerprintSha256());
                         // 이 경우, invalidCertificateIds에 추가하지 않고 단순히 건너뜁니다.
@@ -155,43 +191,52 @@ public class ValidateCertificatesUseCase {
                             cscaProcessed, certData.getCountryCode(), certData.getSubjectDN());
 
                         X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
-                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
-                        
+                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId(), parsedFile.getFileFormat());
+
                         // Perform validation and get result and errors
                         validationResult = validateCscaCertificate(x509Cert, certData, errors);
                         certificate.recordValidation(validationResult);
                         certificate.addValidationErrors(errors);
 
-                        // Save/update certificate in separate transaction (REQUIRES_NEW)
-                        certificateSaveService.saveOrUpdate(
-                            certificate, validationResult, errors,
-                            validCertificateIds, invalidCertificateIds, processedFingerprints,
-                            true, // isCsca = true
-                            command.uploadId()
-                        );
+                        // ✅ 배치에 추가 (개별 저장 대신)
+                        cscaBatch.add(certificate);
+                        processedFingerprints.add(certData.getFingerprintSha256());
+
+                        // 유효/무효 리스트에 추가 (미리 분류)
+                        if (certificate.isValid()) {
+                            validCertificateIds.add(certificate.getId().getId());
+                        } else {
+                            invalidCertificateIds.add(certificate.getId().getId());
+                        }
 
                     } catch (Exception e) {
                         // Handle unexpected errors during processing a single certificate
                         errors.add(ValidationError.critical("UNEXPECTED_PROCESSING_ERROR", "Unexpected error processing CSCA: " + e.getMessage()));
                         validationResult = ValidationResult.of(CertificateStatus.INVALID, false, false, false, false, false, 0); // Default failed result
-                        
+
                         try {
                             if (certificate == null) {
-                                certificate = createCertificateFromData(certData, command.uploadId());
+                                certificate = createCertificateFromData(certData, command.uploadId(), parsedFile.getFileFormat());
                             }
                             certificate.addValidationErrors(errors);
 
-                            // Save/update certificate in separate transaction (REQUIRES_NEW) after error
-                            certificateSaveService.saveOrUpdate(
-                                certificate, validationResult, errors,
-                                validCertificateIds, invalidCertificateIds, processedFingerprints,
-                                true, // isCsca = true
-                                command.uploadId()
-                            );
+                            // ✅ 오류 인증서도 배치에 추가
+                            cscaBatch.add(certificate);
+                            processedFingerprints.add(certData.getFingerprintSha256());
+                            invalidCertificateIds.add(certificate.getId().getId());
+
                             log.error("CSCA certificate processing failed: subject={}. Error: {}", certData.getSubjectDN(), e.getMessage());
                         } catch (Exception creationEx) {
                             log.error("Failed to create or save dummy error certificate for subject={}. Error: {}", certData.getSubjectDN(), creationEx.getMessage());
                         }
+                    }
+
+                    // ✅ 배치 크기가 BATCH_SIZE에 도달하면 일괄 저장
+                    if (cscaBatch.size() >= BATCH_SIZE) {
+                        log.info("Saving CSCA batch: {} certificates", cscaBatch.size());
+                        certificateRepository.saveAll(cscaBatch);
+                        log.info("CSCA batch saved successfully: {} certificates", cscaBatch.size());
+                        cscaBatch.clear();
                     }
 
                     // SSE 진행 상황 업데이트 (55-70% 범위 - Pass 1)
@@ -208,18 +253,59 @@ public class ValidateCertificatesUseCase {
                 }
             }
 
+            // ✅ 남은 CSCA 배치 저장
+            if (!cscaBatch.isEmpty()) {
+                log.info("Saving final CSCA batch: {} certificates", cscaBatch.size());
+                certificateRepository.saveAll(cscaBatch);
+                log.info("Final CSCA batch saved successfully: {} certificates", cscaBatch.size());
+                cscaBatch.clear();
+            }
+
             log.info("Pass 1 completed: {} CSCA certificates processed ({} valid, {} invalid)",
                 cscaProcessed, validCertificateIds.size(), invalidCertificateIds.size());
 
-            // === Pass 2: DSC/DSC_NC 인증서 검증/저장 ===
-            log.info("=== Pass 2: DSC/DSC_NC certificate validation started ===");
+            // ✅ CSCA 캐시 구축 (DSC 검증 시 N+1 쿼리 제거)
+            Map<String, Certificate> cscaCache = buildCscaCache(command.uploadId());
+            log.info("CSCA cache built: {} entries (Performance optimization: N+1 query elimination)", cscaCache.size());
+
+            // === Pass 2: DSC/DSC_NC 인증서 검증/저장 (✅ 배치 저장) ===
+            log.info("=== Pass 2: DSC/DSC_NC certificate validation started (Batch save optimization) ===");
             int dscProcessed = 0;
+            List<Certificate> dscBatch = new ArrayList<>();
+
+            // ✅ Phase 1-1: 배치 중복 체크 (Pass 2 - DSC/DSC_NC)
+            // 모든 DSC/DSC_NC fingerprint 수집
+            Set<String> dscFingerprints = new HashSet<>();
+            for (CertificateData certData : certificateDataList) {
+                if (!certData.isCsca()) { // CSCA가 아니면 DSC/DSC_NC
+                    dscFingerprints.add(certData.getFingerprintSha256());
+                }
+            }
+            log.info("Collected {} DSC/DSC_NC fingerprints for duplicate check", dscFingerprints.size());
+
+            // DB에서 이미 존재하는 fingerprint 조회 (단일 쿼리)
+            Set<String> existingDscFingerprints = new HashSet<>();
+            if (!dscFingerprints.isEmpty()) {
+                List<String> existingList = certificateRepository.findFingerprintsByFingerprintSha256In(dscFingerprints);
+                existingDscFingerprints = new HashSet<>(existingList);
+                log.info("Found {} existing DSC/DSC_NC certificates in database (will be skipped)", existingDscFingerprints.size());
+            }
+
             for (int i = 0; i < totalCertificates; i++) { // Loop over all certificates
                 CertificateData certData = certificateDataList.get(i);
 
                 if (!certData.isCsca()) { // CSCA가 아니면 DSC/DSC_NC
                     dscProcessed++;
 
+                    // ✅ Phase 1-1: DB 중복 체크 (이전 업로드와 중복)
+                    if (existingDscFingerprints.contains(certData.getFingerprintSha256())) {
+                        log.info("Skipping DSC/DSC_NC certificate already in database: fingerprint={}, subject={}",
+                            certData.getFingerprintSha256().substring(0, 16) + "...",
+                            certData.getSubjectDN());
+                        continue;
+                    }
+
+                    // 동일 트랜잭션 내 중복 체크
                     if (processedFingerprints.contains(certData.getFingerprintSha256())) {
                         log.warn("Skipping duplicate certificate within the same batch: fingerprint={}", certData.getFingerprintSha256());
                         // 이 경우, invalidCertificateIds에 추가하지 않고 단순히 건너뜁니다.
@@ -235,7 +321,7 @@ public class ValidateCertificatesUseCase {
                             dscProcessed, certData.getCertificateType(), certData.getCountryCode(), certData.getSubjectDN());
 
                         X509Certificate x509Cert = convertToX509Certificate(certData.getCertificateBinary());
-                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId());
+                        certificate = createCertificateFromData(certData, x509Cert, command.uploadId(), parsedFile.getFileFormat());
 
                         // NC-DATA(DSC_NC)는 유효성 검사를 수행하지 않고 저장만 수행
                         if ("DSC_NC".equalsIgnoreCase(certData.getCertificateType())) {
@@ -250,43 +336,52 @@ public class ValidateCertificatesUseCase {
                                 0L     // durationMillis
                             );
                         } else {
-                            // Perform validation and get result and errors for standard DSC
-                            validationResult = validateDscCertificate(x509Cert, certData, command.uploadId(), errors);
+                            // Perform validation and get result and errors for standard DSC (✅ with cache)
+                            validationResult = validateDscCertificate(x509Cert, certData, command.uploadId(), errors, cscaCache);
                         }
 
                         certificate.recordValidation(validationResult);
                         certificate.addValidationErrors(errors);
 
-                        // Save/update certificate in separate transaction (REQUIRES_NEW)
-                        certificateSaveService.saveOrUpdate(
-                            certificate, validationResult, errors,
-                            validCertificateIds, invalidCertificateIds, processedFingerprints,
-                            false, // isCsca = false
-                            command.uploadId()
-                        );
+                        // ✅ 배치에 추가 (개별 저장 대신)
+                        dscBatch.add(certificate);
+                        processedFingerprints.add(certData.getFingerprintSha256());
+
+                        // 유효/무효 리스트에 추가 (미리 분류)
+                        if (certificate.isValid()) {
+                            validCertificateIds.add(certificate.getId().getId());
+                        } else {
+                            invalidCertificateIds.add(certificate.getId().getId());
+                        }
 
                     } catch (Exception e) {
                         // Handle unexpected errors during processing a single certificate
                         errors.add(ValidationError.critical("UNEXPECTED_PROCESSING_ERROR", "Unexpected error processing DSC/DSC_NC: " + e.getMessage()));
                         validationResult = ValidationResult.of(CertificateStatus.INVALID, false, false, false, false, false, 0);
-                        
+
                         try {
                             if (certificate == null) {
-                                certificate = createCertificateFromData(certData, command.uploadId());
+                                certificate = createCertificateFromData(certData, command.uploadId(), parsedFile.getFileFormat());
                             }
                             certificate.addValidationErrors(errors);
 
-                            // Save/update certificate in separate transaction (REQUIRES_NEW) after error
-                            certificateSaveService.saveOrUpdate(
-                                certificate, validationResult, errors,
-                                validCertificateIds, invalidCertificateIds, processedFingerprints,
-                                false, // isCsca = false
-                                command.uploadId()
-                            );
+                            // ✅ 오류 인증서도 배치에 추가
+                            dscBatch.add(certificate);
+                            processedFingerprints.add(certData.getFingerprintSha256());
+                            invalidCertificateIds.add(certificate.getId().getId());
+
                             log.error("DSC/DSC_NC certificate processing failed: subject={}. Error: {}", certData.getSubjectDN(), e.getMessage());
                         } catch (Exception creationEx) {
                             log.error("Failed to create or save dummy error certificate for subject={}. Error: {}", certData.getSubjectDN(), creationEx.getMessage());
                         }
+                    }
+
+                    // ✅ 배치 크기가 BATCH_SIZE에 도달하면 일괄 저장
+                    if (dscBatch.size() >= BATCH_SIZE) {
+                        log.info("Saving DSC batch: {} certificates", dscBatch.size());
+                        certificateRepository.saveAll(dscBatch);
+                        log.info("DSC batch saved successfully: {} certificates", dscBatch.size());
+                        dscBatch.clear();
                     }
 
                     // SSE 진행 상황 업데이트 (70-85% 범위 - Pass 2)
@@ -300,6 +395,14 @@ public class ValidateCertificatesUseCase {
                         )
                     );
                 }
+            }
+
+            // ✅ 남은 DSC 배치 저장
+            if (!dscBatch.isEmpty()) {
+                log.info("Saving final DSC batch: {} certificates", dscBatch.size());
+                certificateRepository.saveAll(dscBatch);
+                log.info("Final DSC batch saved successfully: {} certificates", dscBatch.size());
+                dscBatch.clear();
             }
 
             log.info("Pass 2 completed: Total certificates validated: {} ({} valid, {} invalid)",
@@ -519,10 +622,10 @@ public class ValidateCertificatesUseCase {
     }
 
     /**
-     * DSC/DSC_NC 인증서 검증
+     * DSC/DSC_NC 인증서 검증 (✅ 캐시 기반 - N+1 쿼리 제거)
      *
      * ICAO Doc 9303에 따라:
-     * 1. CSCA로 서명 검증 (Issuer CSCA 조회)
+     * 1. CSCA로 서명 검증 (Issuer CSCA 캐시 조회)
      * 2. Validity period 검증
      * 3. Basic Constraints 검증 (CA=false 또는 없음)
      */
@@ -530,7 +633,8 @@ public class ValidateCertificatesUseCase {
         X509Certificate x509Cert,
         CertificateData certData,
         java.util.UUID uploadId,
-        List<ValidationError> errors
+        List<ValidationError> errors,
+        Map<String, Certificate> cscaCache  // ✅ CSCA 캐시 추가
     ) {
         boolean signatureValid = true;
         boolean validityValid = true;
@@ -539,24 +643,28 @@ public class ValidateCertificatesUseCase {
         long validationStartTime = System.currentTimeMillis();
 
         try {
-            // 1. Issuer DN으로 CSCA 조회 및 서명 검증
+            // 1. Issuer DN으로 CSCA 조회 및 서명 검증 (✅ 캐시에서 조회)
             String issuerDN = certData.getIssuerDN();
-            log.debug("Finding CSCA for DSC validation: issuerDN={}", issuerDN);
+            log.debug("Finding CSCA for DSC validation from cache: issuerDN={}", issuerDN);
 
-            Optional<Certificate> cscaCertOpt = certificateRepository.findBySubjectDn(issuerDN);
-            if (cscaCertOpt.isEmpty()) {
+            // ❌ 기존: DB 조회
+            // Optional<Certificate> cscaCertOpt = certificateRepository.findBySubjectDn(issuerDN);
+
+            // ✅ 개선: 캐시 조회 (메모리 Map lookup - 0.001ms)
+            Certificate cscaCert = cscaCache.get(issuerDN);
+
+            if (cscaCert == null) {
                 signatureValid = false;
                 errors.add(ValidationError.critical("CHAIN_INCOMPLETE", "CSCA not found for DSC. IssuerDN: " + issuerDN));
-                log.error("CSCA not found for DSC. IssuerDN: {}", issuerDN);
+                log.error("CSCA not found in cache for DSC. IssuerDN: {}", issuerDN);
             } else {
                 // CSCA 인증서로 DSC 서명 검증
-                Certificate cscaCert = cscaCertOpt.get();
                 X509Certificate cscaX509 = convertToX509Certificate(
                     cscaCert.getX509Data().getCertificateBinary()
                 );
                 try {
                     x509Cert.verify(cscaX509.getPublicKey());
-                    log.debug("Signature verified for DSC by CSCA: {}", certData.getSubjectDN());
+                    log.debug("Signature verified for DSC by CSCA from cache: {}", certData.getSubjectDN());
                 } catch (Exception e) {
                     signatureValid = false;
                     errors.add(ValidationError.critical("SIGNATURE_INVALID", "Signature verification failed by CSCA: " + e.getMessage()));
@@ -629,7 +737,8 @@ public class ValidateCertificatesUseCase {
      */
     private Certificate createCertificateFromData(
         CertificateData certData,
-        java.util.UUID uploadId
+        java.util.UUID uploadId,
+        FileFormat fileFormat
     ) throws Exception {
         // Fallback or default values for x509Cert dependent fields
         PublicKey dummyPublicKey = null; // Or generate a dummy if strictly needed
@@ -695,23 +804,40 @@ public class ValidateCertificatesUseCase {
         // CertificateType 결정
         CertificateType certificateType = CertificateType.valueOf(certData.getCertificateType());
 
-        // Certificate 생성
-        return Certificate.create(
-            uploadId,
-            x509Data,
-            subjectInfo,
-            issuerInfo,
-            validity,
-            certificateType,
-            signatureAlgorithm,
-            certData.getAllAttributes()
-        );
+        // ✅ 파일 형식에 따라 적절한 factory method 선택
+        if (fileFormat.isMasterList()) {
+            // ML 파일: createFromMasterList() 사용 (source_type = MASTER_LIST)
+            log.debug("Creating certificate from ML file using createFromMasterList() (incomplete X509)");
+            return Certificate.createFromMasterList(
+                uploadId,
+                null,  // masterListId = null for ML file
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validity,
+                signatureAlgorithm
+            );
+        } else {
+            // LDIF 파일: create() 사용 (source_type = LDIF_CSCA or LDIF_DSC)
+            log.debug("Creating certificate from LDIF file using create() (incomplete X509)");
+            return Certificate.create(
+                uploadId,
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validity,
+                certificateType,
+                signatureAlgorithm,
+                certData.getAllAttributes()
+            );
+        }
     }
     
     private Certificate createCertificateFromData(
         CertificateData certData,
         X509Certificate x509Cert,
-        java.util.UUID uploadId
+        java.util.UUID uploadId,
+        FileFormat fileFormat
     ) throws Exception {
         // X509Data 생성
         X509Data x509Data = X509Data.of(
@@ -772,17 +898,33 @@ public class ValidateCertificatesUseCase {
         // 서명 알고리즘
         String signatureAlgorithm = x509Cert.getSigAlgName();
 
-        // Certificate 생성
-        return Certificate.create(
-            uploadId,
-            x509Data,
-            subjectInfo,
-            issuerInfo,
-            validity,
-            certificateType,
-            signatureAlgorithm,
-            certData.getAllAttributes()
-        );
+        // ✅ 파일 형식에 따라 적절한 factory method 선택
+        if (fileFormat.isMasterList()) {
+            // ML 파일: createFromMasterList() 사용 (source_type = MASTER_LIST)
+            log.debug("Creating certificate from ML file using createFromMasterList()");
+            return Certificate.createFromMasterList(
+                uploadId,
+                null,  // masterListId = null for ML file
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validity,
+                signatureAlgorithm
+            );
+        } else {
+            // LDIF 파일: create() 사용 (source_type = LDIF_CSCA or LDIF_DSC)
+            log.debug("Creating certificate from LDIF file using create()");
+            return Certificate.create(
+                uploadId,
+                x509Data,
+                subjectInfo,
+                issuerInfo,
+                validity,
+                certificateType,
+                signatureAlgorithm,
+                certData.getAllAttributes()
+            );
+        }
     }
 
     /**
@@ -835,5 +977,33 @@ public class ValidateCertificatesUseCase {
         return date.toInstant()
             .atZone(ZoneId.systemDefault())
             .toLocalDateTime();
+    }
+
+    /**
+     * ✅ CSCA 캐시 구축 메서드
+     * Performance optimization: DSC 검증 시 N+1 쿼리 제거
+     *
+     * @param uploadId 업로드 ID
+     * @return SubjectDN → Certificate 매핑 캐시
+     */
+    private Map<String, Certificate> buildCscaCache(UUID uploadId) {
+        log.debug("Building CSCA cache for uploadId: {}", uploadId);
+
+        // 모든 인증서 조회 (단일 쿼리)
+        List<Certificate> allCertificates = certificateRepository.findByUploadId(uploadId);
+
+        // CSCA만 필터링하여 Map 구축
+        Map<String, Certificate> cscaCache = allCertificates.stream()
+            .filter(cert -> cert.getCertificateType() == CertificateType.CSCA)
+            .collect(java.util.stream.Collectors.toMap(
+                cert -> cert.getSubjectInfo().getDistinguishedName(),  // Key: SubjectDN
+                cert -> cert,                                            // Value: Certificate
+                (existing, replacement) -> existing                      // 중복 시 기존 값 유지
+            ));
+
+        log.info("CSCA cache built successfully: {} CSCAs cached from {} total certificates",
+            cscaCache.size(), allCertificates.size());
+
+        return cscaCache;
     }
 }

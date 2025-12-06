@@ -191,8 +191,11 @@ public class ParseMasterListFileUseCase {
                 }
 
                 // 7-5. Certificate 엔티티 일괄 저장
-                List<Certificate> savedCertificates = certificateRepository.saveAll(cscaCertificates);
-                log.info("Saved {} CSCA certificates from ML file to certificate table", savedCertificates.size());
+                // ❌ REMOVED: Parsing phase should NOT save Certificate entities (DDD architecture violation)
+                // Certificate entities should only be created and saved by ValidateCertificatesUseCase
+                // List<Certificate> savedCertificates = certificateRepository.saveAll(cscaCertificates);
+                // log.info("Saved {} CSCA certificates from ML file to certificate table", savedCertificates.size());
+                log.info("Skipping Certificate entity save during parsing (will be saved during validation phase)");
 
                 // ===========================
                 // End of Phase 3 Logic

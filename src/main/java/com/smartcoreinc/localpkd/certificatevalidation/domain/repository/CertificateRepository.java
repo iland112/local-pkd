@@ -177,6 +177,29 @@ public interface CertificateRepository {
     boolean existsByFingerprint(String fingerprintSha256);
 
     /**
+     * 배치 fingerprint로 기존 Certificate 조회
+     *
+     * <p>Phase 1-1 배치 중복 체크 최적화: N+1 query → single IN query</p>
+     * <p>여러 fingerprint를 한 번에 조회하여 성능 향상</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * Set<String> fingerprintsToCheck = Set.of("abc123...", "def456...", "ghi789...");
+     * List<String> existingFingerprints = certificateRepository.findFingerprintsByFingerprintSha256In(fingerprintsToCheck);
+     *
+     * // 중복되지 않은 인증서만 필터링
+     * List<Certificate> nonDuplicates = certificates.stream()
+     *     .filter(cert -> !existingFingerprints.contains(cert.getX509Data().getFingerprintSha256()))
+     *     .collect(Collectors.toList());
+     * }</pre>
+     *
+     * @param fingerprints 조회할 fingerprint 집합
+     * @return DB에 이미 존재하는 fingerprint 목록 (없으면 빈 리스트)
+     * @throws IllegalArgumentException fingerprints가 null인 경우
+     */
+    java.util.List<String> findFingerprintsByFingerprintSha256In(java.util.Set<String> fingerprints);
+
+    /**
      * 업로드 ID로 Certificate 목록 조회
      *
      * <p>특정 업로드 파일에서 추출된 모든 인증서를 조회합니다.</p>
