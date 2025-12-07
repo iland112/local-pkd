@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html
+  lang="ko"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div th:replace="~{file/dashboard-content :: dashboard-content}"></div>
+    </div>
+  </body>
+</html>

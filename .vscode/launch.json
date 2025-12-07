@@ -1,0 +1,36 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "BinaryDnDecoder",
+            "request": "launch",
+            "mainClass": "com.smartcoreinc.localpkd.ldif.service.BinaryDnDecoder",
+            "projectName": "local-pkd"
+        },
+        {
+            "type": "java",
+            "name": "DTManTest",
+            "request": "launch",
+            "mainClass": "com.smartcoreinc.localpkd.DTManTest",
+            "projectName": "local-pkd"
+        },
+        {
+            "type": "java",
+            "name": "IcaoMasterListParsingTest",
+            "request": "launch",
+            "mainClass": "com.smartcoreinc.localpkd.icao.IcaoMasterListParsingTest",
+            "projectName": "local-pkd"
+        },
+        {
+            "type": "java",
+            "name": "LocalPkdEvaluationProjectApplication",
+            "request": "launch",
+            "mainClass": "com.smartcoreinc.localpkd.LocalPkdEvaluationProjectApplication",
+            "projectName": "local-pkd"
+        }
+    ]
+}

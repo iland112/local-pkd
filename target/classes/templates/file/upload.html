@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html
+  lang="ko"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div
+        class="container mx-auto px-4 py-8 max-w-7xl"
+        x-data="uploadPageState()"
+        @alpine:init="init()"
+        @beforeunload.window="destroySseConnection()"
+      >
+
+        <!-- Success Alert -->
+        <div th:if="${success}" class="alert alert-success mb-4 shadow-lg" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span th:text="${success}">Success message</span>
+          <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
+        </div>
+
+        <!-- Error Alert -->
+        <div th:if="${error}" class="alert alert-error mb-4 shadow-lg" x-data="{ show: true }" x-show="show">
+          <svg xmlns="http://www.w3.00/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span th:text="${error}">Error message</span>
+          <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-stretch">
+          <!-- Left Column: Upload Form -->
+          <div id="uploadFunctionCard" class="col-span-1 lg:col-span-3">
+            <div class="card bg-base-100 shadow-xl h-full"> <!-- sticky top-8 제거 -->
+              <div class="card-body flex flex-col"> <!-- flex flex-col 추가 -->
+                <h2 class="card-title text-2xl">
+                  <i class="fas fa-cloud-upload-alt text-primary"></i>
+                  <span>파일 업로드</span>
+                </h2>
+                <p class="text-sm text-base-content opacity-70 mb-4">
+                  LDIF, Master List 파일을 처리 서버에 업로드합니다.
+                </p>
+
+                <!-- Processing Mode Selector Fragment -->
+                <div class="mb-6 pb-6 border-b border-base-300">
+                  <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}" />
+                </div>
+
+                <!-- Upload Form -->
+                <form id="uploadForm" @submit.prevent="handleUpload()" class="flex flex-col flex-grow"> <!-- flex flex-col flex-grow 추가 -->
+                  <!-- Drag and Drop File Input -->
+                  <div
+                    class="form-control w-full flex-grow"
+                    @dragover.prevent="isDragging = true"
+                    @dragleave.prevent="isDragging = false"
+                    @drop.prevent="handleFileDrop($event)"
+                  > <!-- flex-grow 추가 -->
+                    <label class="label">
+                      <span class="label-text font-semibold">
+                        <i class="fas fa-file-upload text-primary mr-1"></i>
+                        파일 선택
+                      </span>
+                    </label>
+                    <div
+                      x-ref="dropzone"
+                      class="relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-300"
+                      :class="{
+                        'border-primary bg-primary bg-opacity-10': isDragging,
+                        'border-base-300 hover:border-primary hover:bg-base-200': !isDragging && !selectedFile,
+                        'border-success bg-success bg-opacity-10': selectedFile
+                      }"
+                      @click="$refs.fileInput.click()"
+                    >
+                      <input
+                        id="fileInput"
+                        x-ref="fileInput"
+                        type="file"
+                        name="file"
+                        :accept="fileAccept"
+                        class="hidden"
+                        required
+                        @change="handleFileSelection($event)"
+                      />
+                      <div class="flex flex-col items-center justify-center space-y-2">
+                        <i class="fas fa-cloud-upload-alt text-4xl" :class="selectedFile ? 'text-success' : 'text-base-content opacity-50'"></i>
+                        <p x-show="!selectedFile" class="text-base-content opacity-70">
+                          파일을 여기로 드래그하거나 클릭하여 선택하세요.
+                        </p>
+                        <p x-show="selectedFile" class="font-semibold text-success" x-text="fileInfo"></p>
+                        <p class="text-xs text-base-content opacity-50">
+                          (LDIF, ML 파일 지원 / 최대 100MB)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- File Type Warning -->
+                  <div x-show="!isValidFileType" class="alert alert-warning mt-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>지원하지 않는 파일 형식입니다. LDIF 또는 ML 파일을 선택해주세요.</span>
+                  </div>
+
+                  <!-- Hidden Fields -->
+                  <input type="hidden" name="forceUpload" value="false" />
+                  <input type="hidden" name="processingMode" x-model="processingMode" />
+
+                  <!-- Action Buttons -->
+                  <div class="card-actions justify-end mt-6">
+                    <button type="button" onclick="window.location.href='/upload-history'" class="btn btn-outline gap-2">
+                      <i class="fas fa-history"></i>
+                      업로드 이력
+                    </button>
+                    <button type="submit" id="uploadBtn" class="btn btn-primary gap-2" :disabled="isProcessing || !selectedFile || !isValidFileType">
+                      <span x-show="isProcessing" class="loading loading-spinner"></span>
+                      <i x-show="!isProcessing" class="fas fa-upload"></i>
+                      업로드
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Progress & Results -->
+          <div class="col-span-1 lg:col-span-2">
+            <!-- Upload Process Card -->
+            <div id="uploadProcessCard"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform -translate-y-2"
+                 x-transition:enter-end="opacity-100 transform translate-y-0"
+            >
+              <div class="card bg-base-100 shadow-xl h-full">
+                <div class="card-body flex flex-col"> <!-- flex flex-col 추가 -->
+                  <h3 class="card-title text-lg mb-4 flex items-center">
+                    <i class="fas fa-tasks text-info"></i>
+                    처리 진행 상황 <span x-show="uploadId" class="font-mono text-sm">(<span x-text="uploadId"></span>)</span>
+                  </h3>
+                  
+                  <!-- Stage Progress Steps -->
+                  <ul class="steps steps-vertical w-full flex-grow"> <!-- flex-grow 추가 -->
+                    <li class="step mb-4" :class="{
+                          'step-primary': uploadStage.status === 'IN_PROGRESS',
+                          'step-success': uploadStage.status === 'COMPLETED',
+                          'step-error': uploadStage.status === 'FAILED'
+                        }">
+                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                        <div class="step-title">파일 업로드</div>
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="uploadStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
+                        <progress class="progress progress-primary w-full" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress> <!-- progress bar 추가 -->
+                        <div class="text-xs font-mono w-full" x-show="uploadStage.percentage > 0" x-text="uploadStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                      </div>
+                    </li>
+                    <li class="step mb-4" :class="{
+                          'step-primary': parseStage.status === 'IN_PROGRESS',
+                          'step-success': parseStage.status === 'COMPLETED',
+                          'step-error': parseStage.status === 'FAILED'
+                        }">
+                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                        <div class="step-title">파일 파싱</div>
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="parseStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
+                        <progress class="progress progress-primary w-full" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress> <!-- progress bar 추가 -->
+                        <div class="text-xs font-mono w-full" x-show="parseStage.percentage > 0" x-text="parseStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <template x-if="parseStage.details">
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div> <!-- w-full 추가 -->
+                        </template>
+                      </div>
+                    </li>
+                    <li class="step mb-4" :class="{
+                          'step-primary': validateStage.status === 'IN_PROGRESS',
+                          'step-success': validateStage.status === 'COMPLETED',
+                          'step-error': validateStage.status === 'FAILED'
+                        }">
+                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                        <div class="step-title">인증서 검증</div>
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="validateStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
+                        <progress class="progress progress-primary w-full" :value="validateStage.percentage" max="100" x-show="validateStage.percentage > 0"></progress> <!-- progress bar 추가 -->
+                        <div class="text-xs font-mono w-full" x-show="validateStage.percentage > 0" x-text="validateStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <template x-if="validateStage.details">
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="validateStage.details"></div> <!-- w-full 추가 -->
+                        </template>
+                      </div>
+                    </li>
+                    <li class="step" :class="{
+                          'step-primary': ldapStage.status === 'IN_PROGRESS',
+                          'step-success': ldapStage.status === 'COMPLETED',
+                          'step-error': ldapStage.status === 'FAILED'
+                        }">
+                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                        <div class="step-title">LDAP 저장</div>
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="ldapStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
+                        <progress class="progress progress-primary w-full" :value="ldapStage.percentage" max="100" x-show="ldapStage.percentage > 0"></progress> <!-- progress bar 추가 -->
+                        <div class="text-xs font-mono w-full" x-show="ldapStage.percentage > 0" x-text="ldapStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <template x-if="ldapStage.details">
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="ldapStage.details"></div> <!-- w-full 추가 -->
+                        </template>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <!-- Manual Mode Control Panel -->
+                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-6 border-t pt-4">
+                    <h4 class="font-bold text-md mb-3">수동 처리 제어</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <!-- Parse Button -->
+                        <button
+                            :disabled="parsingCompleted || parsingInProgress"
+                            @click="triggerParse()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': parsingCompleted,
+                                'btn-primary': !parsingCompleted && !parsingInProgress,
+                                'loading': parsingInProgress
+                            }">
+                            <i x-show="!parsingInProgress" class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
+                            <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '파싱 시작')"></span>
+                        </button>
+
+                        <!-- Validate Button -->
+                        <button
+                            :disabled="!parsingCompleted || validationCompleted || validationInProgress"
+                            @click="triggerValidate()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': validationCompleted,
+                                'btn-primary': parsingCompleted && !validationCompleted && !validationInProgress,
+                                'loading': validationInProgress
+                            }">
+                            <i x-show="!validationInProgress" class="fas" :class="{'fa-check-circle': validationCompleted, 'fa-play': !validationCompleted}"></i>
+                            <span x-text="validationCompleted ? '검증 완료' : (validationInProgress ? '검증 중...' : '검증 시작')"></span>
+                        </button>
+
+                        <!-- LDAP Upload Button -->
+                        <button
+                            :disabled="!validationCompleted || ldapCompleted || ldapInProgress"
+                            @click="triggerLdapUpload()"
+                            class="btn btn-sm"
+                            :class="{
+                                'btn-success': ldapCompleted,
+                                'btn-primary': validationCompleted && !ldapCompleted && !ldapInProgress,
+                                'loading': ldapInProgress
+                            }">
+                            <i x-show="!ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
+                            <span x-text="ldapCompleted ? 'LDAP 저장 완료' : (ldapInProgress ? 'LDAP 저장 중...' : 'LDAP 저장 시작')"></span>
+                        </button>
+                    </div>
+                  </div>
+
+                  <!-- Final Status Message -->
+                  <div x-show="overallStatus === 'FINALIZED' || overallStatus === 'FAILED'" class="mt-6 alert" :class="{'alert-success': overallStatus === 'FINALIZED', 'alert-error': overallStatus === 'FAILED'}">
+                     <i class="fas" :class="{'fa-check-circle': overallStatus === 'FINALIZED', 'fa-exclamation-triangle': overallStatus === 'FAILED'}"></i>
+                    <span x-text="overallMessage"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Error Card -->
+            <div x-show="errorMessages.length > 0" class="col-span-full"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+            >
+              <div class="card bg-red-100 border border-red-400 text-red-700 shadow-xl">
+                  <div class="card-body">
+                      <div class="flex justify-between items-center">
+                        <h3 class="card-title text-lg">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            오류 발생
+                        </h3>
+                        <button @click="errorMessages = []" class="btn btn-sm btn-ghost">✕</button>
+                      </div>
+                      <ul class="list-disc list-inside mt-2 space-y-1 text-sm">
+                          <template x-for="(error, index) in errorMessages" :key="index">
+                              <li x-text="error"></li>
+                          </template>
+                      </ul>
+                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Duplicate Warning Modal -->
+      <dialog id="duplicateModal" class="modal">
+        <div class="modal-box max-w-2xl">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+          </form>
+          <h3 class="font-bold text-lg text-warning mb-4">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            중복 파일 경고
+          </h3>
+
+          <div class="alert alert-warning mb-4">
+            <p id="duplicateMessage"></p>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <tbody>
+                <tr>
+                  <th>파일명</th>
+                  <td id="dupFileName" class="font-mono text-xs">-</td>
+                </tr>
+                <tr>
+                  <th>업로드 ID</th>
+                  <td id="dupFileId" class="font-mono text-xs">-</td>
+                </tr>
+                <tr>
+                  <th>업로드 일시</th>
+                  <td id="dupUploadDate">-</td>
+                </tr>
+                <tr>
+                  <th>상태</th>
+                  <td id="dupStatus">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="modal-action">
+              <button class="btn btn-outline" onclick="document.getElementById('duplicateModal').close()">취소</button>
+              <button class="btn btn-info gap-2" @click="viewExistingFile()">
+                <i class="fas fa-eye"></i>
+                기존 파일 보기
+              </button>
+              <button class="btn btn-error gap-2" @click="forceUpload()">
+                <i class="fas fa-sync-alt"></i>
+                강제 업로드
+              </button>
+          </div>
+        </div>
+      </dialog>
+    </div>
+
+    <th:block layout:fragment="script-content">
+      <script>
+        function uploadPageState() {
+          return {
+            // Drag & Drop state
+            isDragging: false,
+
+            // File state
+            fileType: 'unknown',
+            fileAccept: '.ldif,.ml',
+            isValidFileType: true,
+            fileInfo: '',
+            selectedFile: null,
+
+            // Upload & Processing state
+            isProcessing: false,
+            existingFileId: null,
+            uploadId: null,
+            sseEventSource: null,
+            processingMode: 'AUTO',
+
+            // SSE reconnection state
+            sseReconnectAttempts: 0,
+            maxSseReconnectAttempts: 5,
+            sseReconnectDelay: 2000,
+            sseReconnectTimer: null,
+
+            // Stage-specific progress
+            uploadStage: { active: true, message: '파일을 선택하여 업로드를 시작하세요.', percentage: 0, status: 'IDLE', details: '' },
+            parseStage: { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' },
+            validateStage: { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' },
+            ldapStage: { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' },
+
+            // Overall status
+            overallStatus: 'IDLE', // IDLE, IN_PROGRESS, FINALIZED, FAILED
+            overallMessage: '',
+
+            // Manual mode completion flags
+            parsingCompleted: false,
+            validationCompleted: false,
+            ldapCompleted: false,
+
+            // Manual mode in-progress flags
+            parsingInProgress: false,
+            validationInProgress: false,
+            ldapInProgress: false,
+
+            // Error collection
+            errorMessages: [],
+
+            init() {
+              this.$el.addEventListener('processing-mode-changed', (event) => {
+                  this.processingMode = event.detail.mode;
+              });
+              const savedUploadId = sessionStorage.getItem('currentUploadId');
+              if (savedUploadId) {
+                  this.uploadId = savedUploadId;
+                  this.startSseConnection();
+              }
+            },
+
+            resetProgressState() {
+                this.isProcessing = false; // 초기 상태는 false로 설정
+                this.uploadId = null;
+                sessionStorage.removeItem('currentUploadId');
+                this.sseReconnectAttempts = 0;
+                this.sseReconnectDelay = 2000;
+                if (this.sseReconnectTimer) clearTimeout(this.sseReconnectTimer);
+                if (this.sseEventSource) this.sseEventSource.close();
+                this.uploadStage = { active: true, message: '파일을 선택하여 업로드를 시작하세요.', percentage: 0, status: 'IDLE', details: '' };
+                this.parseStage = { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' };
+                this.validateStage = { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' };
+                this.ldapStage = { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' };
+                this.overallStatus = 'IDLE';
+                this.overallMessage = '';
+                this.parsingCompleted = false;
+                this.validationCompleted = false;
+                this.ldapCompleted = false;
+                this.parsingInProgress = false;
+                this.validationInProgress = false;
+                this.ldapInProgress = false;
+                this.errorMessages = [];
+            },
+
+            handleFileDrop(event) {
+              this.isDragging = false;
+              const files = event.dataTransfer.files;
+              if (files.length > 0) {
+                // Manually set the files for the hidden input
+                this.$refs.fileInput.files = files;
+                // Create a new 'change' event to trigger handleFileSelection
+                const changeEvent = new Event('change', { bubbles: true });
+                this.$refs.fileInput.dispatchEvent(changeEvent);
+              }
+            },
+
+            handleFileSelection(event) {
+              this.selectedFile = event.target.files[0];
+              if (!this.selectedFile) {
+                  this.fileInfo = '';
+                  this.isValidFileType = true; // Reset validation
+                  return;
+              };
+              this.fileInfo = `${this.selectedFile.name} (${formatFileSize(this.selectedFile.size)})`;
+
+              const fileName = this.selectedFile.name.toLowerCase();
+              if (fileName.endsWith('.ldif')) {
+                this.setFileType('ldif');
+              } else if (fileName.endsWith('.ml')) {
+                this.setFileType('ml');
+              } else {
+                this.setFileType('unknown');
+              }
+            },
+
+            setFileType(type) {
+                this.fileType = type;
+                this.isValidFileType = type !== 'unknown';
+            },
+
+            async handleUpload() {
+              if (!this.selectedFile || !this.isValidFileType) {
+                showNotification('업로드할 올바른 형식의 파일을 선택해주세요.', 'warning');
+                return;
+              }
+              const MAX_FILE_SIZE = 100 * 1024 * 1024;
+              if (this.selectedFile.size > MAX_FILE_SIZE) {
+                showNotification('파일 크기는 100MB 이하여야 합니다.', 'error');
+                return;
+              }
+              this.resetProgressState();
+              this.uploadStage.active = true;
+              try {
+                this.updateUploadProgress('파일 업로드 중...', 50, 'IN_PROGRESS');
+                await this.submitFormAjax();
+              } catch (error) {
+                this.isProcessing = false;
+                this.handleUploadError(error, '업로드');
+              }
+            },
+
+            updateUploadProgress(message, percentage, status = 'IN_PROGRESS') {
+                this.uploadStage.message = message;
+                this.uploadStage.percentage = percentage;
+                this.uploadStage.status = status;
+            },
+
+            async submitFormAjax() {
+              const formData = new FormData(document.querySelector('#uploadForm'));
+              const response = await fetch('/file/upload', {
+                method: 'POST',
+                body: formData
+              });
+              if (!response.ok) {
+                 const error = await response.json();
+                 throw new Error(error.message || '서버에서 업로드를 실패했습니다.');
+              }
+              const result = await response.json();
+              this.uploadId = result.uploadId;
+              this.updateUploadProgress('업로드 완료', 100, 'COMPLETED');
+              if (this.processingMode === 'AUTO') {
+                this.startSseConnection();
+              } else {
+                this.isProcessing = false;
+              }
+            },
+
+            forceUpload() {
+                document.querySelector('input[name="forceUpload"]').value = 'true';
+                document.getElementById('duplicateModal').close();
+                this.submitFormAjax().catch(error => this.handleUploadError(error, '강제 업로드'));
+            },
+
+            handleUploadError(error, context) {
+                console.error(`${context} error:`, error);
+                this.errorMessages.push(`${context} 중 오류: ${error.message}`);
+                // Only mark the specific stage as FAILED, not necessarily active for all
+                this.uploadStage.status = 'FAILED'; 
+                this.uploadStage.message = '실패: ' + error.message;
+                this.overallStatus = 'FAILED';
+                this.isProcessing = false;
+            },
+            
+            viewExistingFile() {
+                if(this.existingFileId) window.open(`/history/${this.existingFileId}`, '_blank');
+            },
+
+            startSseConnection() {
+                if (!this.uploadId) return;
+                if (this.sseReconnectTimer) clearTimeout(this.sseReconnectTimer);
+                if (this.sseEventSource) this.sseEventSource.close();
+                this.isProcessing = true;
+                sessionStorage.setItem('currentUploadId', this.uploadId);
+                console.log(`Starting SSE for ${this.uploadId}`);
+                this.sseEventSource = new EventSource(`/progress/stream/${this.uploadId}`);
+                this.sseEventSource.addEventListener('connected', e => {
+                    console.log('SSE connected:', e.data);
+                    this.sseReconnectAttempts = 0;
+                });
+                this.sseEventSource.addEventListener('heartbeat', () => this.sseReconnectAttempts = 0);
+                this.sseEventSource.addEventListener('progress', e => this.handleProgressEvent(e));
+                this.sseEventSource.onerror = () => this.handleSseError();
+            },
+
+            handleSseError() {
+              if (this.sseEventSource) this.sseEventSource.close();
+              if (this.sseReconnectAttempts < this.maxSseReconnectAttempts) {
+                  this.sseReconnectAttempts++;
+                  const delay = 2000 * Math.pow(2, this.sseReconnectAttempts - 1);
+                  this.errorMessages.push(`SSE 연결이 끊어졌습니다. ${delay/1000}초 후 재연결합니다...`);
+                  this.sseReconnectTimer = setTimeout(() => this.startSseConnection(), delay);
+              } else {
+                  this.errorMessages.push('SSE 연결을 복구할 수 없습니다.');
+                  this.overallStatus = 'FAILED';
+                  this.isProcessing = false;
+              }
+            },
+
+            handleProgressEvent(event) {
+                const progress = JSON.parse(event.data);
+                if (progress.uploadId !== this.uploadId) return;
+                this.sseReconnectAttempts = 0;
+
+                const stageMap = {
+                    'UPLOAD': this.uploadStage, 'PARSE': this.parseStage,
+                    'VALIDATE': this.validateStage, 'LDAP_UPLOAD': this.ldapStage
+                };
+                const inProgressMap = {
+                    'PARSE': 'parsingInProgress', 'VALIDATE': 'validationInProgress', 'LDAP_UPLOAD': 'ldapInProgress'
+                };
+                const completedMap = {
+                    'PARSING_COMPLETED': 'parsingCompleted', 'VALIDATION_COMPLETED': 'validationCompleted', 'LDAP_SAVING_COMPLETED': 'ldapCompleted'
+                };
+
+                const targetStage = stageMap[progress.step];
+                if (targetStage) {
+                    targetStage.active = true; // Always true for steps display
+                    if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = true;
+                    
+                    targetStage.message = progress.message;
+                    targetStage.percentage = progress.percentage;
+                    targetStage.status = progress.status;
+                    targetStage.details = this.formatStageDetails(progress);
+                }
+
+                if (completedMap[progress.status]) {
+                    this[completedMap[progress.status]] = true;
+                    if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = false;
+                }
+                
+                if (progress.step === 'PAUSE') {
+                    if (completedMap[progress.stage]) this[completedMap[progress.stage]] = true;
+                    this.isProcessing = false;
+                    return;
+                }
+
+                if (progress.errorMessage) {
+                    this.errorMessages.push(`[${progress.step}] ${progress.errorMessage}`);
+                }
+
+                if (progress.step === 'FINALIZED' || progress.status === 'FAILED') {
+                    this.finalizeProcessing(progress);
+                }
+            },
+
+            finalizeProcessing(progress) {
+                this.overallStatus = progress.step === 'FINALIZED' ? 'FINALIZED' : 'FAILED';
+                this.overallMessage = progress.message;
+                this.isProcessing = false;
+                this.parsingInProgress = false;
+                this.validationInProgress = false;
+                this.ldapInProgress = false;
+                sessionStorage.removeItem('currentUploadId');
+                if (this.sseReconnectTimer) clearTimeout(this.sseReconnectTimer);
+                if (this.sseEventSource) this.sseEventSource.close();
+
+                const stages = [this.uploadStage, this.parseStage, this.validateStage, this.ldapStage];
+                if(this.overallStatus === 'FINALIZED') {
+                    stages.forEach(stage => {
+                        // Only update stages that were actually involved in processing.
+                        // For stages that were never "active" (e.g. manual mode steps not triggered), leave them as is.
+                        if (stage.status !== 'IDLE') { 
+                            stage.percentage = 100;
+                            stage.status = 'COMPLETED';
+                        }
+                    });
+                } else {
+                    stages.forEach(stage => {
+                        if (stage.status !== 'IDLE' && stage.status !== 'COMPLETED') stage.status = 'FAILED';
+                    });
+                }
+                showNotification(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
+            },
+            
+            async triggerManualStep(step) {
+                if (!this.uploadId) { showNotification('업로드된 파일이 없습니다.', 'warning'); return; }
+                this.isProcessing = true;
+                this.errorMessages = this.errorMessages.filter(e => !e.startsWith(`[${step}]`));
+
+                const stepNames = {'PARSE': '파싱', 'VALIDATE': '검증', 'LDAP_UPLOAD': 'LDAP 저장'};
+                const inProgressMap = {'PARSE': 'parsingInProgress', 'VALIDATE': 'validationInProgress', 'LDAP_UPLOAD': 'ldapInProgress'};
+                const stageMap = {
+                    'PARSE': this.parseStage, 'VALIDATE': this.validateStage, 'LDAP_UPLOAD': this.ldapStage
+                };
+
+                this[inProgressMap[step]] = true;
+                stageMap[step].status = 'IN_PROGRESS';
+                this.startSseConnection();
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                try {
+                    const endpoint = `/api/processing/${step.toLowerCase().replace('_', '-')}/${this.uploadId}`;
+                    const response = await fetch(endpoint, { method: 'POST' });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || '수동 처리 시작에 실패했습니다.');
+                    }
+                    showNotification(`${stepNames[step]} 단계가 시작되었습니다.`, 'info');
+                } catch (error) {
+                    this.errorMessages.push(`[${step}] ${error.message}`);
+                    this.isProcessing = false;
+                    this[inProgressMap[step]] = false;
+                    stageMap[step].status = 'FAILED';
+                }
+            },
+            
+            triggerParse() { this.triggerManualStep('PARSE'); },
+            triggerValidate() { this.triggerManualStep('VALIDATE'); },
+            triggerLdapUpload() { this.triggerManualStep('LDAP_UPLOAD'); },
+
+            formatStageDetails(progress) {
+                if (!progress) return '';
+                let html = '';
+                if (progress.status === 'COMPLETED' && progress.details) {
+                    const details = progress.details.split(',').map(d => d.trim());
+                    details.forEach(detail => {
+                        if (detail) {
+                            let badgeClass = 'badge-primary';
+                            if (detail.includes('CSCA')) badgeClass = 'badge-success';
+                            else if (detail.includes('DSC_NC')) badgeClass = 'badge-accent';
+                            else if (detail.includes('DSC')) badgeClass = 'badge-info';
+                            else if (detail.includes('CRL')) badgeClass = 'badge-warning';
+                            else if (detail.includes('유효')) badgeClass = 'badge-success';
+                            else if (detail.includes('무효') || detail.includes('실패')) badgeClass = 'badge-error';
+                            html += `<div><span class="badge badge-sm ${badgeClass}">${detail}</span></div>`;
+                        }
+                    });
+                } else if (progress.processedCount > 0 && progress.totalCount > 0) {
+                    const percentage = Math.round((progress.processedCount / progress.totalCount) * 100);
+                    html = `<div class="col-span-3 flex items-center gap-2">
+                              <span class="text-xs font-medium">진행률: ${percentage}%</span>
+                              <span class="text-xs text-gray-500">(${progress.processedCount} / ${progress.totalCount})</span>
+                            </div>`;
+                } else if (progress.details) {
+                    html = `<div class="col-span-3"><span class="text-xs opacity-70">${progress.details}</span></div>`;
+                }
+                return html;
+            },
+
+            destroySseConnection() {
+                if (this.sseReconnectTimer) clearTimeout(this.sseReconnectTimer);
+                if (this.sseEventSource) this.sseEventSource.close();
+                this.sseReconnectAttempts = 0;
+            }
+          };
+        }
+
+        // Global utility functions
+        function formatFileSize(bytes) {
+          if (bytes === 0) return '0 Bytes';
+          const k = 1024;
+          const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showNotification(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                console.warn('Toast container not found!');
+                alert(message);
+                return;
+            }
+            const toast = document.createElement('div');
+            const alertClass = {
+                success: 'alert-success', error: 'alert-error',
+                warning: 'alert-warning', info: 'alert-info'
+            }[type];
+            toast.className = `alert ${alertClass} shadow-lg transition-all duration-300 transform`;
+            toast.innerHTML = `<div><i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} mr-2"></i><span>${message}</span></div>`;
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => toast.style.opacity = '0', 4700);
+            setTimeout(() => toast.remove(), 5000);
+        }
+      </script>
+    </th:block>
+  </body>
+</html>

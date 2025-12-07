@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="scripts-content">
+    <!-- 알림 컨테이너 -->
+    <div id="notificationContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
+    <!-- Page-specific scripts (MUST come before Alpine.js) -->
+    <th:block layout:fragment="script-content">
+        <!-- Page scripts will be inserted here -->
+    </th:block>
+
+    <script
+            type="text/javascript"
+            th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
+    ></script>
+    <script
+            type="text/javascript"
+            th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
+    ></script>
+    <script>
+        htmx.logAll();
+    </script>
+
+    <!-- Alpine.js Global State -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            // Global app state
+            Alpine.store('app', {
+                ldapStatus: {
+                    connected: false,
+                    message: '연결 확인 중',
+                    class: 'bg-yellow-500 animate-pulse'
+                },
+                // Dark mode state
+                darkMode: localStorage.getItem('theme') === 'dark' || (window.matchMedia('(prefers-color-scheme: dark)').matches && !localStorage.getItem('theme')),
+
+                init() {
+                    // LDAP 상태 초기 확인
+                    this.checkLdapStatus();
+
+                    // 5분마다 LDAP 상태 확인
+                    setInterval(() => this.checkLdapStatus(), 300000);
+
+                    // Set initial theme based on stored preference or system preference
+                    this.applyTheme();
+                },
+
+                async checkLdapStatus() {
+                    try {
+                        const response = await fetch('/api/ldap/health'); // Corrected endpoint
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.ldapStatus = {
+                                connected: true,
+                                message: 'LDAP 연결됨',
+                                class: 'bg-green-500'
+                            };
+                        } else {
+                            this.ldapStatus = {
+                                connected: false,
+                                message: data.message || 'LDAP 오류',
+                                class: 'bg-red-500'
+                            };
+                        }
+                    } catch (error) {
+                        this.ldapStatus = {
+                            connected: false,
+                            message: '연결 확인 불가',
+                            class: 'bg-yellow-500 animate-pulse'
+                        };
+                    }
+                },
+                
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    this.applyTheme();
+                },
+
+                applyTheme() {
+                    const html = document.documentElement;
+                    if (this.darkMode) {
+                        html.setAttribute('data-theme', 'night');
+                        localStorage.setItem('theme', 'dark');
+                    } else {
+                        html.setAttribute('data-theme', 'winter');
+                        localStorage.setItem('theme', 'light');
+                    }
+                }
+            });
+
+            // Initialize app store
+            Alpine.store('app').init();
+        });
+
+        // 시스템 정보 모달 표시 (Alpine.js 이벤트)
+        function showSystemInfo() {
+            window.dispatchEvent(new CustomEvent('show-system-info'));
+        }
+
+        // 도움말 모달 표시 (Alpine.js 이벤트)
+        function showHelp() {
+            window.dispatchEvent(new CustomEvent('show-help'));
+        }
+
+        // 키보드 단축키 설정 (Alpine.js와 호환)
+        document.addEventListener('keydown', function(e) {
+            // Ctrl + H: 홈으로
+            if (e.ctrlKey && e.key == 'h') {
+                e.preventDefault();
+                window.location.href = '/';
+            }
+
+            // Ctrl + 1: 파일 업로드 (통합)
+            if (e.ctrlKey && e.key == '1') {
+                e.preventDefault();
+                window.location.href = '/file/upload';
+            }
+
+            // Ctrl + 2: 업로드 이력
+            if (e.ctrlKey && e.key == '2') {
+                e.preventDefault();
+                window.location.href = '/upload-history';
+            }
+        });
+
+        // 알림 시스템
+        function showNotification(message, type = 'info', duration = 50000) {
+            const colors = {
+                info: 'bg-blue-50 border-blue-200 text-blue-700',
+                success: 'bg-green-50 border-green-200 text-green-700',
+                warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+                error: 'bg-red-50 border-red-200 text-red-700'
+            };
+
+            const icons = {
+                info: 'fas fa-info-circle',
+                success: 'fas fa-check-circle',
+                warning: 'fas fa-exclamation-triangle',
+                error: 'fas fa-times-circle'
+            };
+
+            const notification = document.createElement('div')
+            notification.className = `p-4 rounded-lg border ${colors[type]} shadow-lg max-w-md animate-slideIn`;
+            notification.innerHTML = `
+            <div class="flex items-center">
+              <i class="${icons[type]} mr-2"></i>
+              <span class="flex-1 text-sm">${message}</span>
+              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `;
+
+            const container = document.getElementById('notificationContainer');
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.remove();
+                        }
+                    }, 300);
+                }
+            }, duration);
+        }
+
+    </script>
+
+    <!-- Page-specific scripts -->
+    <th:block layout:fragment="script-content">
+        <!-- Page scripts will be inserted here -->
+    </th:block>
+
+    <style>
+        /* Alpine.js x-cloak */
+        [x-cloak] {
+            display: none !important;
+        }
+
+        /* 애니메이션 정의 */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slideIn {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .animate-slideDown {
+            animation: slideDown 0.2s ease-out;
+        }
+
+        /* 키보드 단축키 스타일 */
+        kbd {
+            font-family: monospace;
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+
+        /* 네비게이션 호버 효과 개선 */
+        .nav-link {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(to right, #3b82f6, #1d4ed8);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover::before {
+            width: 100%;
+        }
+
+        /* 스크롤바 스타일 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 반응형 개선 */
+        @media (max-width: 768px) {
+            .container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .nav-brand h1 {
+                font-size: 1.125rem;
+            }
+
+            .mobile-menu-overlay {
+                background-color: rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        /* 포커스 스타일 개선 */
+        button:focus,
+        a:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+            border-radius: 0.375rem;
+        }
+
+        /* 로딩 상태 */
+        .loading {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                left: -100%;
+            }
+            100% {
+                left: 100%;
+            }
+        }
+
+        /* 알림 스타일 개선 */
+        .notification-enter {
+            animation: notificationEnter 0.3s ease-out;
+        }
+
+        @keyframes notificationEnter {
+            from {
+                opacity: 0;
+                transform: translateX(100%) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        /* 다크모드 지원 준비 */
+        @media (prefers-color-scheme: dark) {
+            .dark-mode-ready {
+                transition: background-color 0.3s ease, color 0.3s ease;
+            }
+        }
+    </style>
+</div>
+</body>
+</html>

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html
+  lang="ko"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <body>
+    <div layout:fragment="content">
+      <div class="container mx-auto px-4 py-8 max-w-5xl">
+
+        <!-- Success Alert -->
+        <div th:if="${success}" class="alert alert-success mb-4 shadow-lg" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span th:text="${success}">Success message</span>
+          <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
+        </div>
+
+        <!-- Error Alert -->
+        <div th:if="${error}" class="alert alert-error mb-4 shadow-lg" x-data="{ show: true }" x-show="show">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span th:text="${error}">Error message</span>
+          <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Upload Form Card -->
+          <div class="lg:col-span-2">
+            <div class="card bg-base-100 shadow-xl">
+              <div class="card-body">
+                <h2 class="card-title text-2xl">
+                  <i class="fas fa-file-code text-primary"></i>
+                  LDIF 파일 업로드
+                </h2>
+                <p class="text-sm text-base-content opacity-70 mb-4">
+                  LDIF (LDAP Data Interchange Format) 파일을 업로드합니다.
+                </p>
+
+                <form id="uploadForm" action="/ldif/upload" method="post" enctype="multipart/form-data">
+                  <!-- File Input -->
+                  <div class="form-control w-full">
+                    <label class="label">
+                      <span class="label-text font-semibold">
+                        <i class="fas fa-file-upload text-primary mr-1"></i>
+                        파일 선택
+                      </span>
+                    </label>
+                    <input
+                      id="fileInput"
+                      type="file"
+                      name="file"
+                      accept=".ldif"
+                      class="file-input file-input-bordered file-input-primary w-full"
+                      required
+                    />
+                    <label class="label">
+                      <span class="label-text-alt">최대 파일 크기: 100MB</span>
+                      <span id="fileInfo" class="label-text-alt font-semibold text-primary"></span>
+                    </label>
+                  </div>
+
+                  <!-- Expected Checksum (Optional) -->
+                  <div class="form-control w-full mt-4">
+                    <label class="label">
+                      <span class="label-text font-semibold">
+                        <i class="fas fa-shield-alt text-secondary mr-1"></i>
+                        예상 체크섬 (선택사항)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      name="expectedChecksum"
+                      placeholder="SHA-1 체크섬 (예: a1b2c3d4...)"
+                      class="input input-bordered w-full"
+                    />
+                    <label class="label">
+                      <span class="label-text-alt">ICAO PKD에서 제공하는 체크섬을 입력하면 파일 무결성을 검증합니다.</span>
+                    </label>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div id="progressSection" class="mt-4" style="display: none;">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span id="progressText" class="text-sm font-semibold">처리 중...</span>
+                    </div>
+                    <progress id="progressBar" class="progress progress-primary w-full" value="0" max="100"></progress>
+                  </div>
+
+                  <!-- Hidden Fields -->
+                  <input type="hidden" id="fileHashInput" name="fileHash" />
+                  <input type="hidden" id="forceUploadInput" name="forceUpload" value="false" />
+
+                  <!-- Action Buttons -->
+                  <div class="card-actions justify-end mt-6">
+                    <button type="button" onclick="window.location.href='/upload-history'" class="btn btn-outline gap-2">
+                      <i class="fas fa-history"></i>
+                      업로드 이력
+                    </button>
+                    <button type="button" id="uploadBtn" onclick="handleUpload()" class="btn btn-primary gap-2">
+                      <i class="fas fa-cloud-upload-alt"></i>
+                      업로드
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info Card -->
+          <div class="lg:col-span-1">
+            <div class="card bg-base-100 shadow-xl">
+              <div class="card-body">
+                <h3 class="card-title text-lg">
+                  <i class="fas fa-info-circle text-info"></i>
+                  업로드 프로세스
+                </h3>
+                <div class="space-y-3 mt-4">
+                  <div class="flex items-start gap-3">
+                    <div class="badge badge-primary badge-lg">1</div>
+                    <div class="flex-1">
+                      <p class="font-semibold text-sm">파일 선택</p>
+                      <p class="text-xs text-base-content opacity-70">.ldif 파일 선택</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <div class="badge badge-secondary badge-lg">2</div>
+                    <div class="flex-1">
+                      <p class="font-semibold text-sm">해시 계산</p>
+                      <p class="text-xs text-base-content opacity-70">SHA-256 해시 생성</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <div class="badge badge-accent badge-lg">3</div>
+                    <div class="flex-1">
+                      <p class="font-semibold text-sm">중복 검사</p>
+                      <p class="text-xs text-base-content opacity-70">기존 파일과 비교</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <div class="badge badge-success badge-lg">4</div>
+                    <div class="flex-1">
+                      <p class="font-semibold text-sm">업로드 완료</p>
+                      <p class="text-xs text-base-content opacity-70">서버 저장 및 검증</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="alert alert-info">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <div class="text-xs">
+                    <p class="font-semibold">지원 형식</p>
+                    <p>RFC 2849 표준 LDIF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Duplicate Warning Modal -->
+      <dialog id="duplicateModal" class="modal">
+        <div class="modal-box max-w-2xl">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+          </form>
+          <h3 class="font-bold text-lg text-warning mb-4">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            중복 파일 경고
+          </h3>
+
+          <div class="alert alert-warning mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <div>
+              <h4 class="font-bold">동일한 파일이 이미 업로드되었습니다</h4>
+              <div id="duplicateMessage" class="text-sm mt-1"></div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <tbody>
+                <tr>
+                  <th>파일명</th>
+                  <td id="dupFileName" class="font-mono text-xs">-</td>
+                </tr>
+                <tr>
+                  <th>업로드 ID</th>
+                  <td id="dupFileId" class="font-mono text-xs">-</td>
+                </tr>
+                <tr>
+                  <th>업로드 일시</th>
+                  <td id="dupUploadDate">-</td>
+                </tr>
+                <tr>
+                  <th>버전</th>
+                  <td id="dupVersion">-</td>
+                </tr>
+                <tr>
+                  <th>상태</th>
+                  <td id="dupStatus">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="modal-action">
+            <form method="dialog">
+              <button class="btn btn-outline">취소</button>
+            </form>
+            <button onclick="viewExistingFile()" class="btn btn-info gap-2">
+              <i class="fas fa-eye"></i>
+              기존 파일 보기
+            </button>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+
+      <!-- Progress Modal (SSE) -->
+      <dialog id="progressModal" class="modal">
+        <div class="modal-box max-w-2xl">
+          <h3 class="font-bold text-lg text-primary mb-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>
+            파일 처리 중
+          </h3>
+
+          <!-- Current Stage -->
+          <div class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm font-semibold" id="progressStage">파일 업로드 완료</span>
+              <span class="text-sm text-base-content/70" id="progressCount"></span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-base-300 rounded-full h-6 overflow-hidden">
+              <div
+                id="progressBar"
+                class="bg-primary h-full text-center text-white text-sm font-semibold leading-6 transition-all duration-300"
+                style="width: 0%"
+              >
+                0%
+              </div>
+            </div>
+          </div>
+
+          <!-- Message -->
+          <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle"></i>
+            <span id="progressMessage">처리 중...</span>
+          </div>
+
+          <!-- Details (if available) -->
+          <div id="progressDetails" class="text-sm text-base-content/70 mb-2 hidden">
+            <i class="fas fa-file-alt mr-1"></i>
+            <span></span>
+          </div>
+
+          <!-- Error Message (if failed) -->
+          <div id="progressError" class="alert alert-error mb-4 hidden">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span></span>
+          </div>
+
+          <!-- Processing Steps -->
+          <div class="collapse collapse-arrow bg-base-200">
+            <input type="checkbox" />
+            <div class="collapse-title text-sm font-semibold">
+              <i class="fas fa-list mr-1"></i>
+              처리 단계
+            </div>
+            <div class="collapse-content">
+              <ul class="steps steps-vertical text-xs">
+                <li class="step step-primary">파일 업로드 완료</li>
+                <li class="step">LDIF 파싱</li>
+                <li class="step">인증서 검증 (CSCA, DSC, CRL)</li>
+                <li class="step">LDAP 서버 저장</li>
+                <li class="step">처리 완료</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="modal-action">
+            <form method="dialog">
+              <button class="btn btn-ghost btn-sm" onclick="closeProgressModal(false)">
+                백그라운드로
+              </button>
+            </form>
+          </div>
+        </div>
+      </dialog>
+    </div>
+
+    <th:block layout:fragment="script-content">
+      <script>
+        let selectedFile = null;
+        let calculatedHash = null;
+        let existingFileId = null;
+
+        // File selection handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+          selectedFile = e.target.files[0];
+          if (selectedFile) {
+            const fileInfo = document.getElementById('fileInfo');
+            fileInfo.textContent = `${selectedFile.name} (${formatFileSize(selectedFile.size)})`;
+          }
+        });
+
+        // Main upload handler
+        async function handleUpload() {
+          if (!selectedFile) {
+            showToast('파일을 선택해주세요.', 'warning');
+            return;
+          }
+
+          // Validate file size
+          const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+          if (selectedFile.size > MAX_FILE_SIZE) {
+            showToast('파일 크기는 100MB 이하여야 합니다.', 'error');
+            return;
+          }
+
+          // Validate file extension
+          if (!selectedFile.name.toLowerCase().endsWith('.ldif')) {
+            showToast('LDIF 파일(.ldif)만 업로드할 수 있습니다.', 'error');
+            return;
+          }
+
+          try {
+            // Step 1: Calculate SHA-256 hash
+            showProgress('파일 해시 계산 중...', 30);
+            calculatedHash = await calculateSHA256(selectedFile);
+            document.getElementById('fileHashInput').value = calculatedHash;
+
+            // Step 2: Check duplicate
+            showProgress('중복 파일 검사 중...', 60);
+            const isDuplicate = await checkDuplicate();
+
+            if (isDuplicate) {
+              hideProgress();
+              return; // Modal shown, user needs to decide
+            }
+
+            // Step 3: Submit form via AJAX to capture uploadId
+            showProgress('파일 업로드 중...', 90);
+            await submitFormAjax();
+
+          } catch (error) {
+            console.error('Upload error:', error);
+            hideProgress();
+            showToast('업로드 중 오류가 발생했습니다: ' + error.message, 'error');
+          }
+        }
+
+        // Calculate SHA-256 hash
+        async function calculateSHA256(file) {
+          const buffer = await file.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Check duplicate via API
+        async function checkDuplicate() {
+          const response = await fetch('/ldif/api/check-duplicate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: selectedFile.name,
+              fileSize: selectedFile.size,
+              fileHash: calculatedHash
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('중복 검사 실패');
+          }
+
+          const result = await response.json();
+
+          if (result.isDuplicate) {
+            // Show duplicate modal
+            document.getElementById('duplicateMessage').textContent = result.message;
+            document.getElementById('dupFileName').textContent = result.existingFileName || '-';
+            document.getElementById('dupFileId').textContent = result.existingFileId || '-';
+            document.getElementById('dupUploadDate').textContent = result.existingUploadDate
+              ? new Date(result.existingUploadDate).toLocaleString('ko-KR')
+              : '-';
+            document.getElementById('dupVersion').textContent = result.existingVersion || '-';
+            document.getElementById('dupStatus').textContent = result.existingStatus || '-';
+
+            existingFileId = result.existingFileId;
+
+            document.getElementById('duplicateModal').showModal();
+            return true;
+          }
+
+          return false;
+        }
+
+        // View existing file in history
+        function viewExistingFile() {
+          if (existingFileId) {
+            window.location.href = `/upload-history?id=${existingFileId}`;
+          }
+        }
+
+        // Progress handlers
+        function showProgress(text, value) {
+          document.getElementById('progressSection').style.display = 'block';
+          document.getElementById('progressText').textContent = text;
+          document.getElementById('progressBar').value = value;
+          document.getElementById('uploadBtn').disabled = true;
+        }
+
+        function hideProgress() {
+          document.getElementById('progressSection').style.display = 'none';
+          document.getElementById('uploadBtn').disabled = false;
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+          if (bytes === 0) return '0 Bytes';
+          const k = 1024;
+          const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+          const toast = document.createElement('div');
+          const alertClass = type === 'success' ? 'alert-success' :
+                            type === 'error' ? 'alert-error' :
+                            type === 'warning' ? 'alert-warning' : 'alert-info';
+
+          toast.className = `alert ${alertClass} fixed top-4 right-4 w-auto max-w-sm shadow-lg z-50`;
+          toast.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>${message}</span>
+          `;
+
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Submit form via AJAX and start certificate validation
+        async function submitFormAjax() {
+          const formData = new FormData(document.getElementById('uploadForm'));
+
+          const response = await fetch('/ldif/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error('파일 업로드 실패');
+          }
+
+          // Parse HTML response to extract uploadId from redirect
+          const html = await response.text();
+          const match = html.match(/\/upload-history\?id=([a-f0-9-]+)/);
+          let uploadId = match ? match[1] : null;
+
+          if (!uploadId && response.redirected) {
+            const urlParams = new URL(response.url).searchParams;
+            uploadId = urlParams.get('id');
+          }
+
+          if (!uploadId) {
+            // Try to extract from HTML if it contains uploadId
+            const idMatch = html.match(/id["\']?\s*[:=]\s*["\']?([a-f0-9\-]+)["\']?/);
+            uploadId = idMatch ? idMatch[1] : null;
+          }
+
+          if (uploadId) {
+            hideProgress();
+            showToast('파일 업로드 완료. 인증서 검증을 시작합니다.', 'success');
+
+            // Start certificate validation
+            await triggerCertificateValidation(uploadId);
+          } else {
+            // Fallback: redirect after a short delay
+            hideProgress();
+            showToast('파일 업로드 완료', 'success');
+            setTimeout(() => {
+              window.location.href = '/upload-history';
+            }, 2000);
+          }
+        }
+
+        // Trigger certificate validation via API and start SSE progress
+        async function triggerCertificateValidation(uploadId) {
+          try {
+            // Start SSE progress modal (before API call)
+            startSSEProgress(uploadId);
+
+            // Call certificate validation API
+            const response = await fetch('/api/certificates/validate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                uploadId: uploadId,
+                parsedFileId: uploadId, // Use same ID for now
+                certificateCount: 0, // Will be determined during parsing
+                crlCount: 0 // Will be determined during parsing
+              })
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.message || '인증서 검증 API 호출 실패');
+            }
+
+            const result = await response.json();
+            console.log('Certificate validation initiated:', result);
+
+          } catch (error) {
+            console.error('Certificate validation error:', error);
+            closeProgressModal(false);
+            showToast('인증서 검증 중 오류: ' + error.message, 'error');
+          }
+        }
+
+        // ==================== SSE Progress Tracking ====================
+
+        let currentUploadId = null;
+        let sseEventSource = null;
+
+        /**
+         * SSE 연결 시작 (업로드 성공 후)
+         */
+        function startSSEProgress(uploadId) {
+          currentUploadId = uploadId;
+
+          // SSE Progress Modal 표시
+          const modal = document.getElementById('progressModal');
+          modal.showModal();
+
+          // SSE 연결
+          if (sseEventSource) {
+            sseEventSource.close();
+          }
+
+          sseEventSource = new EventSource('/progress/stream');
+
+          // 연결 성공
+          sseEventSource.addEventListener('connected', function(e) {
+            console.log('SSE connected:', e.data);
+          });
+
+          // 진행 상황 업데이트
+          sseEventSource.addEventListener('progress', function(e) {
+            try {
+              const progress = JSON.parse(e.data);
+
+              // 현재 uploadId와 일치하는 진행 상황만 처리
+              if (progress.uploadId === currentUploadId) {
+                updateProgressUI(progress);
+
+                // 완료 또는 실패 시 SSE 종료
+                if (progress.stage === 'COMPLETED') {
+                  setTimeout(() => {
+                    closeProgressModal(true);
+                    window.location.href = '/upload-history?id=' + currentUploadId + '&success=파일 처리 완료';
+                  }, 2000);
+                } else if (progress.stage === 'FAILED') {
+                  setTimeout(() => {
+                    closeProgressModal(false);
+                  }, 3000);
+                }
+              }
+            } catch (error) {
+              console.error('Failed to parse progress data:', error);
+            }
+          });
+
+          // 하트비트 (연결 유지)
+          sseEventSource.addEventListener('heartbeat', function(e) {
+            console.debug('SSE heartbeat:', e.data);
+          });
+
+          // 오류 처리
+          sseEventSource.onerror = function(error) {
+            console.error('SSE error:', error);
+            // 자동 재연결 (3초 후)
+            setTimeout(() => {
+              if (sseEventSource && sseEventSource.readyState === EventSource.CLOSED) {
+                console.log('Attempting SSE reconnection...');
+                startSSEProgress(currentUploadId);
+              }
+            }, 3000);
+          };
+        }
+
+        /**
+         * 진행 상황 UI 업데이트
+         */
+        function updateProgressUI(progress) {
+          // Stage 텍스트
+          document.getElementById('progressStage').textContent = progress.stageName || progress.stage;
+
+          // 진행률 바
+          const progressBar = document.getElementById('progressBar');
+          progressBar.style.width = progress.percentage + '%';
+          progressBar.textContent = progress.percentage + '%';
+
+          // 메시지
+          document.getElementById('progressMessage').textContent = progress.message;
+
+          // 처리 카운트 (있는 경우)
+          const countElement = document.getElementById('progressCount');
+          if (progress.totalCount > 0) {
+            countElement.textContent = `${progress.processedCount} / ${progress.totalCount}`;
+            countElement.classList.remove('hidden');
+          } else {
+            countElement.classList.add('hidden');
+          }
+
+          // 상세 정보 (있는 경우)
+          const detailsElement = document.getElementById('progressDetails');
+          if (progress.details) {
+            detailsElement.textContent = progress.details;
+            detailsElement.classList.remove('hidden');
+          } else {
+            detailsElement.classList.add('hidden');
+          }
+
+          // 에러 메시지 (실패 시)
+          const errorElement = document.getElementById('progressError');
+          if (progress.errorMessage) {
+            errorElement.textContent = progress.errorMessage;
+            errorElement.classList.remove('hidden');
+          } else {
+            errorElement.classList.add('hidden');
+          }
+
+          // 진행률 바 색상 변경
+          if (progress.stage === 'COMPLETED') {
+            progressBar.classList.remove('bg-primary', 'bg-error');
+            progressBar.classList.add('bg-success');
+          } else if (progress.stage === 'FAILED') {
+            progressBar.classList.remove('bg-primary', 'bg-success');
+            progressBar.classList.add('bg-error');
+          } else {
+            progressBar.classList.remove('bg-success', 'bg-error');
+            progressBar.classList.add('bg-primary');
+          }
+        }
+
+        /**
+         * Progress Modal 닫기
+         */
+        function closeProgressModal(success) {
+          const modal = document.getElementById('progressModal');
+          modal.close();
+
+          if (sseEventSource) {
+            sseEventSource.close();
+            sseEventSource = null;
+          }
+
+          currentUploadId = null;
+        }
+
+        // 페이지 언로드 시 SSE 연결 종료
+        window.addEventListener('beforeunload', function() {
+          if (sseEventSource) {
+            sseEventSource.close();
+          }
+        });
+      </script>
+    </th:block>
+  </body>
+</html>

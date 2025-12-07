@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<footer th:fragment="footer-content" class="bg-base-100 border-t border-base-300 mt-auto">
+    <div class="container mx-auto max-w-7xl px-4 py-6">
+        <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <div class="text-sm text-base-content">
+                <p>&copy; 2025 ICAO Master List & LDIF File Manager. 안전하고 효율적인 LDAP 데이터 관리.</p>
+            </div>
+            <div class="flex items-center space-x-4 text-sm text-base-content">
+                <div class="flex items-center">
+                    <i class="fas fa-shield-alt text-green-500 mr-1"></i>
+                    SSL 암호화 보안
+                </div>
+                <div class="flex items-center">
+                    <i class="fas fa-server mr-1"></i>
+                    <span id="serverStatus">서버 정상</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+</html>
