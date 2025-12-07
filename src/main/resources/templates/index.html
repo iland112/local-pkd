@@ -123,7 +123,7 @@
           </div>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="certificateStatistics.totalCertificates > 0">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" x-show="certificateStatistics.totalCertificates > 0">
           <div class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col items-center justify-center">
             <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-certificate text-blue-500 mr-3"></i>저장된 인증서 통계</h3>
             <div class="relative w-48 h-48">
@@ -146,16 +146,16 @@
               <div class="flex justify-between items-center p-2 rounded-md bg-opacity-50" :class="darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'"><span class="font-medium">총 CRL 수</span><span class="font-semibold" x-text="certificateStatistics.totalCrls"></span></div>
             </div>
           </div>
+          <div x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
+            <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-tags text-purple-500 mr-3"></i>인증서 유형별 통계</h3>
+            <div class="flex-grow flex items-center justify-center min-h-[250px]"><canvas x-ref="certificateTypePieChart"></canvas></div>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
-              <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-tags text-purple-500 mr-3"></i>인증서 유형별 통계</h3>
-              <div class="flex-grow flex items-center justify-center min-h-[250px]"><canvas x-ref="certificateTypePieChart"></canvas></div>
-            </div>
+        <div class="grid grid-cols-1 gap-6">
             <div x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0" class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
                 <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-globe-asia text-orange-500 mr-3"></i>국가별 인증서 통계</h3>
-                <div class="flex-grow flex items-center justify-center min-h-[250px]"><canvas x-ref="certificateCountryPieChart"></canvas></div>
+                <div class="flex-grow flex items-center justify-center min-h-[350px]"><canvas x-ref="certificateCountryBarChart"></canvas></div>
             </div>
         </div>
       </div>
@@ -178,8 +178,7 @@
               loadingRecent: false,
               certificateDoughnutChartInstance: null,
               certificateTypePieChartInstance: null,
-              certificateCountryPieChartInstance: null,
-              darkMode: localStorage.getItem('theme') === 'dark' || (window.matchMedia('(prefers-color-scheme: dark)').matches && !localStorage.getItem('theme')),
+              certificateCountryBarChartInstance: null, // 변경: PieChart -> BarChart
 
               init() {
                 this.applyTheme();
@@ -287,7 +286,7 @@
                       this.$nextTick(() => {
                           this.updateCertificateDoughnutChart();
                           this.updateCertificateTypePieChart();
-                          this.updateCertificateCountryPieChart();
+                          this.updateCertificateCountryBarChart(); // 변경: PieChart -> BarChart
                       });
                   } catch (error) { 
                       console.error('Error loading cert stats:', error); 
@@ -306,10 +305,13 @@
                     this.certificateTypePieChartInstance.options.plugins.legend.labels.color = legendColor;
                     this.certificateTypePieChartInstance.update();
                 }
-                if (this.certificateCountryPieChartInstance) {
-                    this.certificateCountryPieChartInstance.data.datasets[0].backgroundColor = Object.keys(this.certificateStatistics.certificatesByCountry).map((_, index) => this.getChartColor(index + 5));
-                    this.certificateCountryPieChartInstance.options.plugins.legend.labels.color = legendColor;
-                    this.certificateCountryPieChartInstance.update();
+                // 변경: certificateCountryPieChartInstance -> certificateCountryBarChartInstance
+                if (this.certificateCountryBarChartInstance) {
+                    this.certificateCountryBarChartInstance.data.datasets[0].backgroundColor = Object.keys(this.certificateStatistics.certificatesByCountry).map((_, index) => this.getChartColor(index + 5));
+                    // Bar chart의 축 색상 업데이트
+                    this.certificateCountryBarChartInstance.options.scales.x.ticks.color = legendColor;
+                    this.certificateCountryBarChartInstance.options.scales.y.ticks.color = legendColor;
+                    this.certificateCountryBarChartInstance.update();
                 }
               },
 
@@ -385,35 +387,56 @@
                 });
               },
 
-              updateCertificateCountryPieChart() {
-                const ctx = this.$refs.certificateCountryPieChart;
+              updateCertificateCountryBarChart() { // 변경: updateCertificateCountryPieChart -> updateCertificateCountryBarChart
+                const ctx = this.$refs.certificateCountryBarChart; // 변경: certificateCountryPieChart -> certificateCountryBarChart
                 if (!ctx) return;
                 const { certificatesByCountry } = this.certificateStatistics;
                 const labels = Object.keys(certificatesByCountry);
                 const dataValues = Object.values(certificatesByCountry);
                 const total = dataValues.reduce((a, b) => a + b, 0);
 
-                if (total === 0 && this.certificateCountryPieChartInstance) {
-                    this.certificateCountryPieChartInstance.destroy();
-                    this.certificateCountryPieChartInstance = null;
+                if (total === 0 && this.certificateCountryBarChartInstance) {
+                    this.certificateCountryBarChartInstance.destroy();
+                    this.certificateCountryBarChartInstance = null;
                     return;
                 } else if (total === 0) {
                     return;
                 }
 
-                if (this.certificateCountryPieChartInstance) this.certificateCountryPieChartInstance.destroy();
+                if (this.certificateCountryBarChartInstance) this.certificateCountryBarChartInstance.destroy();
 
-                this.certificateCountryPieChartInstance = new Chart(ctx, {
-                    type: 'pie',
+                this.certificateCountryBarChartInstance = new Chart(ctx, {
+                    type: 'bar', // 변경: pie -> bar
                     data: {
                         labels: labels,
-                        datasets: [{ data: dataValues, backgroundColor: labels.map((_, i) => this.getChartColor(i + 5)), borderWidth: 0 }]
+                        datasets: [{ 
+                            label: '인증서 수', // 라벨 추가
+                            data: dataValues, 
+                            backgroundColor: labels.map((_, i) => this.getChartColor(i + 5)), 
+                            borderColor: labels.map((_, i) => this.getChartColor(i + 5)),
+                            borderWidth: 1 
+                        }]
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: true, 
+                        maintainAspectRatio: false,
                         plugins: {
-                            legend: { position: 'right', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--bc') } },
-                            tooltip: { callbacks: { label: c => `${c.label}: ${c.parsed.toLocaleString()} (${(c.parsed/total*100).toFixed(1)}%)` } }
+                            legend: { display: false }, // 범례 숨김
+                            tooltip: { callbacks: { label: c => `${c.label}: ${c.raw.toLocaleString()}` } }
+                        },
+                        scales: { // x, y 축 설정 추가
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: getComputedStyle(document.documentElement).getPropertyValue('--bc'),
+                                    stepSize: 1
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: getComputedStyle(document.documentElement).getPropertyValue('--bc')
+                                }
+                            }
                         }
                     }
                 });
