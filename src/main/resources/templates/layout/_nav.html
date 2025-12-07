@@ -44,20 +44,14 @@
             </div>
 
             <!-- 우측 유틸리티 메뉴 -->
-            <div class="flex items-center space-x-3">
-                <!-- LDAP 상태 표시 (Alpine.js) -->
-                <div class="hidden md:flex items-center space-x-2">
-                    <div class="w-3 h-3 rounded-full" :class="$store.app.ldapStatus.class"></div>
-                    <span class="text-xs text-base-content" x-text="$store.app.ldapStatus.message"></span>
-                </div> 
-
+            <div class="flex items-center space-x-3 z-50">
                 <!-- 다크 모드 토글 버튼 -->
                 <button
-                  @click="$store.app.toggleDarkMode()"
+                  @click="toggleDarkMode()"
                   class="p-2 text-base-content hover:text-primary hover:bg-base-200 rounded-md transition-colors duration-200"
                   aria-label="다크 모드 토글"
                 >
-                  <i class="fas" :class="$store.app.darkMode ? 'fa-moon' : 'fa-sun'"></i>
+                  <i class="fas" :class="darkMode ? 'fa-moon' : 'fa-sun'"></i>
                 </button>
 
                 <!--  도구 드롭다운 -->
@@ -104,7 +98,7 @@
     </nav>
 
 <!-- Drawer Side Content for Mobile -->
-<div th:fragment="drawer-side-content" class="drawer-side">
+<div th:fragment="drawer-side-content" class="drawer-side z-50">
     <label for="main-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
     <ul class="menu p-4 w-80 min-h-full bg-base-200 text-base-content">
         <li>
@@ -139,9 +133,9 @@
             </a>
         </li>
         <li>
-            <button @click="$store.app.toggleDarkMode()">
-              <i class="fas" :class="$store.app.darkMode ? 'fa-moon' : 'fa-sun'"></i>
-              <span x-text="$store.app.darkMode ? '다크 모드' : '라이트 모드'"></span>
+            <button @click="toggleDarkMode()">
+              <i class="fas" :class="darkMode ? 'fa-moon' : 'fa-sun'"></i>
+              <span x-text="darkMode ? '다크 모드' : '라이트 모드'"></span>
             </button>
         </li>
     </ul>

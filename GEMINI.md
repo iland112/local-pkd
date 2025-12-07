@@ -227,26 +227,33 @@ CREATE TABLE certificate_revocation_list (
 
 ---
 
-## 📊 Current Status (2025-12-06)
+## 📊 Current Status (2025-12-07)
 
-The project is stable and production-ready. The most recent work (as of 2025-12-05) focused on major database refactoring, bug fixing, and adding a key statistics feature.
+The project is stable and production-ready. The most recent work (as of 2025-12-07) focused on refactoring the dashboard's frontend logic and enhancing its UI/UX.
 
 ### ✅ Recently Completed Tasks (Dec 2025)
 
-1.  **UI Bug Fix (upload.html)**: Fixed an issue where Alpine.js directives were displayed as plain text due to an invalid HTML comment placed within a `div` tag's attributes.
-2.  **Database Migration Consolidation**:
+1.  **Dashboard UI/UX Refactoring and Enhancement**:
+    *   **Centralized State Management**: Refactored the dashboard's frontend logic by consolidating all Alpine.js state and functions into a single `dashboardApp` component. This resolved multiple reactivity issues, including the dark mode toggle button not appearing.
+    *   **Global Scope**: Moved the `x-data` directive to the `<body>` tag in `layout/main.html` to create a global component scope, allowing shared state across all page fragments.
+    *   **Simplified Scripts**: Removed the global `Alpine.store` from `_scripts.html` to eliminate state management conflicts and simplify the overall logic.
+    *   **Enhanced Chart Visualization**: Re-implemented and stabilized the Chart.js integration, successfully displaying certificate statistics using doughnut and pie charts.
+    *   **Layout Fixes**: Removed redundant status text from the navigation bar and ensured all dashboard components load and display data correctly.
+
+2.  **UI Bug Fix (upload.html)**: Fixed an issue where Alpine.js directives were displayed as plain text due to an invalid HTML comment placed within a `div` tag's attributes.
+3.  **Database Migration Consolidation**:
     *   **Reduced 10 migration files (958 lines) into a single `V1__Initial_Schema.sql` (465 lines).**
     *   Eliminated all `ALTER` statements from the initial schema setup.
     *   Fixed numerous Hibernate schema validation errors by adding ~32 missing columns to `certificate` and `certificate_revocation_list` tables.
     *   Archived old migration scripts to `docs/migration-archive/`.
 
-2.  **Upload Statistics Feature**:
+4.  **Upload Statistics Feature**:
     *   Implemented a feature to show detailed **parsing and validation statistics** in the upload history view.
     *   Added new count methods to 4 repositories (`ParsedCertificate`, `CRL`, `MasterList`, `Certificate`).
     *   Enhanced `GetUploadHistoryUseCase` to gather and return statistics.
     *   Updated the frontend (`list.html`) to display the stats using DaisyUI components.
 
-3.  **Critical Bug Fixes**:
+5.  **Critical Bug Fixes**:
     *   **SSE `AsyncRequestNotUsableException`**: Gracefully handled exceptions that occurred when the SSE heartbeat tried to write to a connection already closed by the client.
     *   **Duplicate Certificate Handling**: Fixed a bug where duplicate certificates were not being added to the `ParsedFile`, preventing validation. Now, all certificates are included in the parsing results for validation, while only new ones are persisted as `Certificate` entities.
     *   **Audit Trail Support**: Changed the primary key of `parsed_certificate` to a composite key `(parsed_file_id, fingerprint_sha256)` to allow tracking the same certificate across multiple uploads, as requested by the user.

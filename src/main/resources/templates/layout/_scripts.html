@@ -18,115 +18,29 @@
             type="text/javascript"
             th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         htmx.logAll();
     </script>
 
-    <!-- Alpine.js Global State -->
+    <!-- Alpine.js Global State is now managed in the 'dashboardApp' component within each page's main content -->
     <script>
-        document.addEventListener('alpine:init', () => {
-            // Global app state
-            Alpine.store('app', {
-                ldapStatus: {
-                    connected: false,
-                    message: '연결 확인 중',
-                    class: 'bg-yellow-500 animate-pulse'
-                },
-                // Dark mode state
-                darkMode: localStorage.getItem('theme') === 'dark' || (window.matchMedia('(prefers-color-scheme: dark)').matches && !localStorage.getItem('theme')),
-
-                init() {
-                    // LDAP 상태 초기 확인
-                    this.checkLdapStatus();
-
-                    // 5분마다 LDAP 상태 확인
-                    setInterval(() => this.checkLdapStatus(), 300000);
-
-                    // Set initial theme based on stored preference or system preference
-                    this.applyTheme();
-                },
-
-                async checkLdapStatus() {
-                    try {
-                        const response = await fetch('/api/ldap/health'); // Corrected endpoint
-                        const data = await response.json();
-
-                        if (data.success) {
-                            this.ldapStatus = {
-                                connected: true,
-                                message: 'LDAP 연결됨',
-                                class: 'bg-green-500'
-                            };
-                        } else {
-                            this.ldapStatus = {
-                                connected: false,
-                                message: data.message || 'LDAP 오류',
-                                class: 'bg-red-500'
-                            };
-                        }
-                    } catch (error) {
-                        this.ldapStatus = {
-                            connected: false,
-                            message: '연결 확인 불가',
-                            class: 'bg-yellow-500 animate-pulse'
-                        };
-                    }
-                },
-                
-                toggleDarkMode() {
-                    this.darkMode = !this.darkMode;
-                    this.applyTheme();
-                },
-
-                applyTheme() {
-                    const html = document.documentElement;
-                    if (this.darkMode) {
-                        html.setAttribute('data-theme', 'night');
-                        localStorage.setItem('theme', 'dark');
-                    } else {
-                        html.setAttribute('data-theme', 'winter');
-                        localStorage.setItem('theme', 'light');
-                    }
-                }
-            });
-
-            // Initialize app store
-            Alpine.store('app').init();
-        });
-
-        // 시스템 정보 모달 표시 (Alpine.js 이벤트)
+        // 전역 Helper 함수들
         function showSystemInfo() {
             window.dispatchEvent(new CustomEvent('show-system-info'));
         }
 
-        // 도움말 모달 표시 (Alpine.js 이벤트)
         function showHelp() {
             window.dispatchEvent(new CustomEvent('show-help'));
         }
 
-        // 키보드 단축키 설정 (Alpine.js와 호환)
         document.addEventListener('keydown', function(e) {
-            // Ctrl + H: 홈으로
-            if (e.ctrlKey && e.key == 'h') {
-                e.preventDefault();
-                window.location.href = '/';
-            }
-
-            // Ctrl + 1: 파일 업로드 (통합)
-            if (e.ctrlKey && e.key == '1') {
-                e.preventDefault();
-                window.location.href = '/file/upload';
-            }
-
-            // Ctrl + 2: 업로드 이력
-            if (e.ctrlKey && e.key == '2') {
-                e.preventDefault();
-                window.location.href = '/upload-history';
-            }
+            if (e.ctrlKey && e.key == 'h') { e.preventDefault(); window.location.href = '/'; }
+            if (e.ctrlKey && e.key == '1') { e.preventDefault(); window.location.href = '/file/upload'; }
+            if (e.ctrlKey && e.key == '2') { e.preventDefault(); window.location.href = '/upload-history'; }
         });
 
-        // 알림 시스템
-        function showNotification(message, type = 'info', duration = 50000) {
+        function showNotification(message, type = 'info', duration = 5000) {
             const colors = {
                 info: 'bg-blue-50 border-blue-200 text-blue-700',
                 success: 'bg-green-50 border-green-200 text-green-700',
@@ -168,13 +82,7 @@
                 }
             }, duration);
         }
-
     </script>
-
-    <!-- Page-specific scripts -->
-    <th:block layout:fragment="script-content">
-        <!-- Page scripts will be inserted here -->
-    </th:block>
 
     <style>
         /* Alpine.js x-cloak */
