@@ -39,28 +39,28 @@
           <!-- Row 1: Connection Status (2 cards) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- PostgreSQL 데이터베이스 상태 -->
-            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4" :class="dbConnected ? 'border-green-500' : 'border-red-500'">
+            <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4" :class="$store.app.dbStatus.connected ? 'border-green-500' : 'border-red-500'">
               <div class="flex items-center justify-between mb-4">
                 <div class="flex-1">
                   <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                     PostgreSQL 상태
                   </h3>
                   <div class="flex items-baseline gap-2">
-                    <span class="text-2xl font-bold" :class="dbConnected ? 'text-green-600' : 'text-red-600'" x-text="dbConnected ? '연결됨' : '연결 안됨'"></span>
+                    <span class="text-2xl font-bold" :class="$store.app.dbStatus.connected ? 'text-green-600' : 'text-red-600'" x-text="$store.app.dbStatus.connected ? '연결됨' : '연결 안됨'"></span>
                   </div>
-                  <p class="text-xs text-gray-500 mt-1" x-text="dbMessage"></p>
+                  <p class="text-xs text-gray-500 mt-1" x-text="$store.app.dbStatus.message"></p>
                 </div>
                 <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-database text-4xl" :class="dbConnected ? 'text-green-500' : 'text-red-500'"></i>
+                  <i class="fas fa-database text-4xl" :class="$store.app.dbStatus.connected ? 'text-green-500' : 'text-red-500'"></i>
                 </div>
               </div>
               <button
-                @click="testDatabaseConnection()"
-                :disabled="dbTesting"
+                @click="$store.app.testDatabaseConnection()"
+                :disabled="$store.app.dbTesting"
                 class="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
               >
-                <i class="fas mr-1" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
-                <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
+                <i class="fas mr-1" :class="$store.app.dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
+                <span x-text="$store.app.dbTesting ? '테스트 중...' : '연결 테스트'"></span>
               </button>
             </div>
             <!-- LDAP 연결 상태 -->
@@ -252,12 +252,11 @@
                       <p class="font-semibold text-gray-900 truncate" x-text="item.filename"></p>
                       <p class="text-xs text-gray-500 mt-0.5" x-text="formatDateTime(item.uploadedAt)"></p>
                     </div>
-                    <span class="badge ml-3 flex-shrink-0" :class="{
+                    <span class="badge badge-lg ml-3 flex-shrink-0" :class="{
                       'badge-success': item.status === 'COMPLETED',
                       'badge-error': item.status === 'FAILED',
                       'badge-warning': item.status !== 'COMPLETED' && item.status !== 'FAILED'
-                    }" x-text="item.statusDisplay"></span>
-                  </div>
+                    }" x-text="item.statusDisplay"></span>                  </div>
                 </template>
               </div>
 
@@ -305,26 +304,43 @@
             ldapStatus: {
               connected: false,
               message: '확인 중...',
+              class: 'bg-yellow-500 animate-pulse'
             },
             ldapTesting: false,
+            dbStatus: {
+              connected: false,
+              message: '확인 중...',
+            },
+            dbTesting: false,
+  
+            init() {
+              this.checkLdapStatus();
+              this.checkDatabaseStatus();
+              setInterval(() => {
+                this.checkLdapStatus();
+                this.checkDatabaseStatus();
+              }, 300000);
+            },
   
             async checkLdapStatus() {
               try {
-                const response = await fetch('/api/ldap/health'); // TODO: 이 API 엔드포인트 구현 필요
+                const response = await fetch('/api/ldap/health');
                 const data = await response.json();
                 this.ldapStatus.connected = data.success;
                 this.ldapStatus.message = data.message || '연결 실패';
+                this.ldapStatus.class = data.success ? 'bg-green-500' : 'bg-red-500';
               } catch (error) {
                 console.error('LDAP status check failed:', error);
                 this.ldapStatus.connected = false;
                 this.ldapStatus.message = '연결 확인 불가';
+                this.ldapStatus.class = 'bg-red-500';
               }
             },
   
             async testLdapConnection() {
               this.ldapTesting = true;
               try {
-                const response = await fetch('/api/ldap/health'); // TODO: 이 API 엔드포인트 구현 필요
+                const response = await fetch('/api/ldap/health');
                 const data = await response.json();
                 showNotification(data.message, data.success ? 'success' : 'error');
                 await this.checkLdapStatus();
@@ -333,6 +349,39 @@
               } finally {
                 this.ldapTesting = false;
               }
+            },
+  
+            async checkDatabaseStatus() {
+                try {
+                    const response = await fetch('/api/database-health');
+                    const data = await response.json();
+    
+                    this.dbStatus.connected = data.success;
+                    if (data.success) {
+                        this.dbStatus.message = `${data.database} ${data.version}`;
+                    } else {
+                        this.dbStatus.message = data.message || '연결 실패';
+                    }
+                } catch (error) {
+                    console.error('Database status check failed:', error);
+                    this.dbStatus.connected = false;
+                    this.dbStatus.message = '연결 확인 불가';
+                }
+            },
+  
+            async testDatabaseConnection() {
+                this.dbTesting = true;
+                try {
+                    const response = await fetch('/api/database-health');
+                    const data = await response.json();
+    
+                    showNotification(data.message, data.success ? 'success' : 'error');
+                    await this.checkDatabaseStatus();
+                } catch (error) {
+                    showNotification('데이터베이스 연결 테스트에 실패했습니다.', 'error');
+                } finally {
+                    this.dbTesting = false;
+                }
             }
           });
         });
@@ -342,9 +391,6 @@
               // 상태 데이터
               currentDate: '',
               currentTime: '',
-              dbConnected: false,
-              dbMessage: '확인 중...',
-              dbTesting: false,
               statistics: {
                 totalCount: 0,
                 successCount: 0,
@@ -357,8 +403,8 @@
                   invalidCertificates: 0,
                   totalCrls: 0,
                   lastUpdated: null,
-                  certificatesByType: {}, // 새로 추가
-                  certificatesByCountry: {} // 새로 추가
+                  certificatesByType: {},
+                  certificatesByCountry: {}
               },
               recentActivity: [],
               loadingRecent: false,
@@ -366,20 +412,14 @@
               // 초기화
               init() {
                 this.updateDateTime();
-                this.checkDatabaseStatus();
-                Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
+                Alpine.store('app').checkLdapStatus();
+                Alpine.store('app').checkDatabaseStatus();
                 this.loadStatistics();
                 this.loadRecentActivity();
-                this.loadCertificateStatistics(); // 새로 추가
+                this.loadCertificateStatistics();
   
                 // 1분마다 시간 업데이트
                 setInterval(() => this.updateDateTime(), 60000);
-  
-                // 5분마다 데이터베이스 상태 체크
-                setInterval(() => {
-                  this.checkDatabaseStatus();
-                  Alpine.store('app').checkLdapStatus(); // <-- Alpine store의 LDAP 상태 확인 호출
-                }, 300000);
               },
   
               // 날짜/시간 업데이트
@@ -392,41 +432,6 @@
                   weekday: 'short'
                 });
                 this.currentTime = now.toLocaleTimeString('ko-KR');
-              },
-  
-              // PostgreSQL 데이터베이스 상태 확인
-              async checkDatabaseStatus() {
-                try {
-                  const response = await fetch('/api/database-health');
-                  const data = await response.json();
-  
-                  this.dbConnected = data.success;
-                  if (data.success) {
-                    this.dbMessage = `${data.database} ${data.version}`;
-                  } else {
-                    this.dbMessage = data.message || '연결 실패';
-                  }
-                } catch (error) {
-                  console.error('Database status check failed:', error);
-                  this.dbConnected = false;
-                  this.dbMessage = '연결 확인 불가';
-                }
-              },
-  
-              // PostgreSQL 데이터베이스 연결 테스트
-              async testDatabaseConnection() {
-                this.dbTesting = true;
-                try {
-                  const response = await fetch('/api/database-health');
-                  const data = await response.json();
-  
-                  showNotification(data.message, data.success ? 'success' : 'error');
-                  this.checkDatabaseStatus();
-                } catch (error) {
-                  showNotification('연결 테스트에 실패했습니다.', 'error');
-                } finally {
-                  this.dbTesting = false;
-                }
               },
   
               // 통계 로드
@@ -447,10 +452,10 @@
                 }
               },
   
-              // 저장된 인증서 통계 로드 (새로 추가)
+              // 저장된 인증서 통계 로드
               async loadCertificateStatistics() {
                   try {
-                      const response = await fetch('/api/certificates/statistics'); // TODO: 이 API 엔드포인트 구현 필요
+                      const response = await fetch('/api/certificates/statistics');
                       if (response.ok) {
                           const data = await response.json();
                           this.certificateStatistics = {
@@ -459,11 +464,11 @@
                               invalidCertificates: data.invalidCertificates || 0,
                               totalCrls: data.totalCrls || 0,
                               lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null,
-                              certificatesByType: data.certificatesByType || {}, // 새로 할당
-                              certificatesByCountry: data.certificatesByCountry || {} // 새로 할당
+                              certificatesByType: data.certificatesByType || {},
+                              certificatesByCountry: data.certificatesByCountry || {}
                           };
                       } else {
-                          console.warn('Failed to load certificate statistics, API might not be implemented yet.');
+                          console.warn('Failed to load certificate statistics.');
                       }
                   } catch (error) {
                       console.error('Error loading certificate statistics:', error);
@@ -573,93 +578,7 @@
           });
       </script>
   
-      <style>
-        /* 애니메이션 */
-        @keyframes slideIn {
-            from {
-              opacity: 0;
-              transform: translateX(100%);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-  
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-  
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-  
-          .animate-spin {
-            animation: spin 1s linear infinite;
-          }
-  
-          /* 카드 호버 효과 */
-          .hover\:shadow-xl:hover {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-          }
-  
-          /* 전환 효과 */
-          .transition-all {
-            transition: all 0.3s ease;
-          }
-  
-          .transition-colors {
-            transition: color 0.2s ease, background-color 0.2s ease;
-          }
-  
-          .transition-shadow {
-            transition: box-shadow 0.3s ease;
-          }
-  
-          /* Badge 스타일 */
-          .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            line-height: 1;
-            border-radius: 0.375rem;
-          }
-  
-          .badge-success {
-            background-color: rgb(220 252 231);
-            color: rgb(22 163 74);
-          }
-  
-          .badge-error {
-            background-color: rgb(254 226 226);
-            color: rgb(220 38 38);
-          }
-  
-          .badge-warning {
-            background-color: rgb(254 249 195);
-            color: rgb(202 138 4);
-          }
-  
-          /* 반응형 */
-          @media (max-width: 768px) {
-            .grid {
-              grid-template-columns: 1fr;
-            }
-  
-            .text-3xl {
-              font-size: 1.5rem;
-            }
-          }
-  
-          /* 포커스 스타일 */
-          button:focus,
-          a:focus {
-            outline: 2px solid #3b82f6;
-            outline-offset: 2px;
-          }
-      </style>
+
     </th:block>
   </body>
 </html>

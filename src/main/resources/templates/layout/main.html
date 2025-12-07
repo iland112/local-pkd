@@ -10,6 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title th:text="${pageTitle} ?: 'ICAO PKD Download File Manager'">ICAO PKD Download File Manager</title>
     <link rel="stylesheet" th:href="@{/css/application.css}" />
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}" />
     <link rel="stylesheet" th:href="@{/webjars/font-awesome/css/all.min.css}" />
   </head>
   <body class="bg-base-200">
@@ -277,18 +278,30 @@
               message: '연결 확인 중',
               class: 'bg-yellow-500 animate-pulse'
             },
+            ldapTesting: false, // LDAP 테스트 상태 추가
+
+            dbStatus: { // DB 상태 추가
+              connected: false,
+              message: '확인 중...',
+            },
+            dbTesting: false, // DB 테스트 상태 추가
 
             init() {
               // LDAP 상태 초기 확인
               this.checkLdapStatus();
+              // DB 상태 초기 확인
+              this.checkDatabaseStatus();
 
-              // 5분마다 LDAP 상태 확인
-              setInterval(() => this.checkLdapStatus(), 300000);
+              // 5분마다 LDAP 및 DB 상태 확인
+              setInterval(() => {
+                this.checkLdapStatus();
+                this.checkDatabaseStatus();
+              }, 300000);
             },
 
             async checkLdapStatus() {
               try {
-                const response = await fetch('/ldap-test-connection');
+                const response = await fetch('/api/ldap/health');
                 const data = await response.json();
 
                 if (data.success) {
@@ -300,16 +313,75 @@
                 } else {
                   this.ldapStatus = {
                     connected: false,
-                    message: 'LDAP 오류',
+                    message: data.message || 'LDAP 오류',
                     class: 'bg-red-500'
                   };
                 }
               } catch (error) {
                 this.ldapStatus = {
                   connected: false,
-                  message: '연결 확인 중',
+                  message: '연결 확인 불가',
                   class: 'bg-yellow-500 animate-pulse'
                 };
+              }
+            },
+
+            async testLdapConnection() {
+              this.ldapTesting = true;
+              try {
+                const response = await fetch('/api/ldap/health');
+                const data = await response.json();
+                showNotification(data.message, data.success ? 'success' : 'error');
+                await this.checkLdapStatus();
+              } catch (error) {
+                showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
+              } finally {
+                this.ldapTesting = false;
+              }
+            },
+
+            // PostgreSQL 데이터베이스 상태 확인
+            async checkDatabaseStatus() {
+              try {
+                const response = await fetch('/api/database-health');
+                const data = await response.json();
+
+                if (data.success) {
+                  this.dbStatus = {
+                    connected: true,
+                    message: `${data.database} ${data.version}`,
+                    class: 'border-green-500' // 이 클래스는 index.html에서 사용될 것이므로 여기서는 둠
+                  };
+                } else {
+                  this.dbStatus = {
+                    connected: false,
+                    message: data.message || '연결 실패',
+                    class: 'border-red-500' // 이 클래스는 index.html에서 사용될 것이므로 여기서는 둠
+                  };
+                }
+              } catch (error) {
+                console.error('Database status check failed:', error);
+                this.dbStatus = {
+                  connected: false,
+                  message: '연결 확인 불가',
+                  class: 'border-red-500'
+                };
+              }
+            },
+
+            // PostgreSQL 데이터베이스 연결 테스트
+            async testDatabaseConnection() {
+              this.dbTesting = true;
+              try {
+                const response = await fetch('/api/database-health');
+                const data = await response.json();
+
+                showNotification(data.message, data.success ? 'success' : 'error');
+                await this.checkDatabaseStatus();
+              } catch (error) {
+                showNotification('데이터베이스 연결 테스트에 실패했습니다.', 'error');
+              } finally {
+                this.dbTesting = false;
               }
             }
           });
