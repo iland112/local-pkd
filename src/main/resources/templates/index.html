@@ -5,473 +5,654 @@
   xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
   layout:decorate="~{layout/main}"
 >
-  <div layout:fragment="content" class="bg-base-200">
-    <div class="container mx-auto px-4 py-6 max-w-7xl">
-      <!-- 헤더 섹션 -->
-      <div class="mb-8">
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-6 text-white">
-          <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-3xl font-bold mb-2">
-                ICAO PKD Local Manager
-              </h1>
-              <p class="text-blue-100 text-lg">
-                ICAO Public Key Directory 로컬 평가 및 관리 시스템
-              </p>
-            </div>
-            <div class="text-right">
-              <div class="text-blue-100 text-sm">
-                <i class="fas fa-calendar-alt mr-2"></i>
-                <span x-text="currentDate"></span>
+  <body>
+    <div layout:fragment="content">
+      <div class="container mx-auto px-4 py-6 max-w-7xl" x-data="dashboardApp()">
+        <!-- 헤더 섹션 -->
+        <div class="mb-8">
+          <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+              <div>
+                <h1 class="text-3xl font-bold mb-2">
+                  ICAO PKD Local Manager
+                </h1>
+                <p class="text-blue-100 text-lg">
+                  ICAO Public Key Directory 로컬 평가 및 관리 시스템
+                </p>
               </div>
-              <div class="text-blue-100 text-sm mt-1">
-                <i class="fas fa-clock mr-2"></i>
-                <span x-text="currentTime"></span>
+              <div class="text-right">
+                <div class="text-blue-100 text-sm">
+                  <i class="fas fa-calendar-alt mr-2"></i>
+                  <span x-text="currentDate"></span>
+                </div>
+                <div class="text-blue-100 text-sm mt-1">
+                  <i class="fas fa-clock mr-2"></i>
+                  <span x-text="currentTime"></span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Dashboard Grid Layout -->
-      <div class="grid grid-cols-1 gap-6 md:gap-8">
-        <!-- Row 1: Connection Status (2 cards) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- PostgreSQL 데이터베이스 상태 -->
-          <div class="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4" :class="dbStatus.connected ? 'border-green-500' : 'border-red-500'">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex-1">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  PostgreSQL 상태
+        <!-- Dashboard Grid Layout -->
+        <div class="grid grid-cols-1 gap-6 md:gap-8">
+          <!-- Row 1: Connection Status (2 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- PostgreSQL 데이터베이스 상태 -->
+            <div class="rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border border-l-4"
+                 :class="[
+                    $store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200',
+                    dbConnected ? 'border-l-green-500' : 'border-l-red-500'
+                 ]">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    PostgreSQL 상태
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-2xl font-bold" :class="dbConnected ? 'text-green-600' : 'text-red-600'" x-text="dbConnected ? '연결됨' : '연결 안됨'"></span>
+                  </div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'" x-text="dbMessage"></p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-database text-4xl" :class="dbConnected ? 'text-green-500' : 'text-red-500'"></i>
+                </div>
+              </div>
+              <button
+                @click="testDatabaseConnection()"
+                :disabled="dbTesting"
+                class="w-full px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                :class="$store.theme.darkMode ? 'bg-indigo-900 text-indigo-300 border border-indigo-700 hover:bg-indigo-800' : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'"
+              >
+                <i class="fas mr-1" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
+                <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
+              </button>
+            </div>
+            <!-- LDAP 연결 상태 -->
+            <div class="rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border border-l-4"
+                 :class="[
+                    $store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200',
+                    $store.app.ldapStatus.connected ? 'border-l-green-500' : 'border-l-red-500'
+                 ]">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    LDAP 상태
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-2xl font-bold" :class="$store.app.ldapStatus.connected ? 'text-green-600' : 'text-red-600'" x-text="$store.app.ldapStatus.connected ? '연결됨' : '연결 안됨'"></span>
+                  </div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'" x-text="$store.app.ldapStatus.message"></p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-network-wired text-4xl" :class="$store.app.ldapStatus.connected ? 'text-green-500' : 'text-red-500'"></i>
+                </div>
+              </div>
+              <button
+                @click="$store.app.testLdapConnection()"
+                :disabled="$store.app.ldapTesting"
+                class="w-full px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                :class="$store.theme.darkMode ? 'bg-orange-900 text-orange-300 border border-orange-700 hover:bg-orange-800' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'"
+              >
+                <i class="fas mr-1" :class="$store.app.ldapTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
+                <span x-text="$store.app.ldapTesting ? '테스트 중...' : '연결 테스트'"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 2: Upload Statistics (3 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 총 업로드 -->
+            <div class="border border-l-4 border-l-indigo-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    총 업로드
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-indigo-600" x-text="statistics.totalCount"></span>
+                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
+                  </div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">전체 파일 수</p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-upload text-4xl text-indigo-500"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- 성공률 -->
+            <div class="border border-l-4 border-l-green-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    성공률
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-green-600" x-text="statistics.successRate.toFixed(1) + '%'"></span>
+                  </div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    <span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span> 파일
+                  </p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-check-circle text-4xl text-green-500"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- 실패 수 -->
+            <div class="border border-l-4 border-l-red-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    실패
+                  </h3>
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-red-600" x-text="statistics.failedCount"></span>
+                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
+                  </div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">실패한 파일 수</p>
+                </div>
+                <div class="flex-shrink-0 ml-3">
+                  <i class="fas fa-times-circle text-4xl text-red-500"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: Certificate Statistics as Pie Charts (2 columns) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="certificateStatistics.totalCertificates > 0">
+            <!-- Stored Certificate Statistics Pie Chart -->
+            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                <i class="fas fa-certificate text-blue-500 mr-3"></i>
+                인증서 상태 통계
+              </h3>
+              <div class="relative h-64 md:h-72">
+                  <canvas id="certificateStatusPieChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Certificate Type Statistics Pie Chart -->
+            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                <i class="fas fa-tags text-purple-500 mr-3"></i>
+                인증서 유형별 통계
+              </h3>
+              <div class="relative h-64 md:h-72">
+                  <canvas id="certificateTypePieChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 4: Certificate by Country Statistics as Bar Chart (full width) -->
+          <div class="grid grid-cols-1" x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0">
+            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                <i class="fas fa-globe-asia text-orange-500 mr-3"></i>
+                국가별 인증서 통계
+              </h3>
+              <div class="relative h-80">
+                <canvas id="certificateCountryBarChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 5: Recent Upload Activity (1 card) -->
+          <div class="grid grid-cols-1">
+            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                  <i class="fas fa-history text-indigo-500 mr-3"></i>
+                  최근 업로드 이력
                 </h3>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-2xl font-bold" :class="dbStatus.connected ? 'text-green-600' : 'text-red-600'" x-text="dbStatus.connected ? '연결됨' : '연결 안됨'"></span>
-                </div>
-                <p class="text-xs text-gray-500 mt-1" x-text="dbStatus.message"></p>
+                <button
+                  @click="loadRecentActivity()"
+                  :disabled="loadingRecent"
+                  class="p-2 rounded-md transition-colors disabled:opacity-50"
+                  :class="$store.theme.darkMode ? 'text-gray-400 hover:text-indigo-400 hover:bg-base-300' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'"
+                >
+                  <i class="fas" :class="loadingRecent ? 'fa-spinner animate-spin' : 'fa-sync-alt'"></i>
+                </button>
               </div>
-              <div class="flex-shrink-0 ml-3">
-                <i class="fas fa-database text-4xl" :class="dbStatus.connected ? 'text-green-500' : 'text-red-500'"></i>
-              </div>
-            </div>
-            <button @click="checkDatabaseStatus()" :disabled="dbTesting" class="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50">
-              <i class="fas mr-1" :class="dbTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
-              <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
-            </button>
-          </div>
-          <!-- LDAP 연결 상태 -->
-          <div class="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4" :class="ldapStatus.connected ? 'border-green-500' : 'border-red-500'">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex-1">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  LDAP 상태
-                </h3>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-2xl font-bold" :class="ldapStatus.connected ? 'text-green-600' : 'text-red-600'" x-text="ldapStatus.connected ? '연결됨' : '연결 안됨'"></span>
-                </div>
-                <p class="text-xs text-gray-500 mt-1" x-text="ldapStatus.message"></p>
-              </div>
-              <div class="flex-shrink-0 ml-3">
-                <i class="fas fa-network-wired text-4xl" :class="ldapStatus.connected ? 'text-green-500' : 'text-red-500'"></i>
-              </div>
-            </div>
-            <button @click="checkLdapStatus()" :disabled="ldapTesting" class="w-full bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 px-3 py-2 rounded-md text-xs font-medium transition-colors disabled:opacity-50">
-              <i class="fas mr-1" :class="ldapTesting ? 'fa-spinner animate-spin' : 'fa-plug'"></i>
-              <span x-text="ldapTesting ? '테스트 중...' : '연결 테스트'"></span>
-            </button>
-          </div>
-        </div>
 
-        <!-- Other cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-indigo-500">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">총 업로드</h3>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-3xl font-bold text-indigo-600" x-text="statistics.totalCount"></span>
-                  <span class="text-sm text-gray-500">files</span>
-                </div>
-                <p class="text-xs text-gray-500 mt-1">전체 파일 수</p>
+              <div x-show="recentActivity.length === 0 && !loadingRecent" class="text-center py-12" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-500'">
+                <i class="fas fa-inbox text-5xl mb-4" :class="$store.theme.darkMode ? 'text-gray-700' : 'text-gray-300'"></i>
+                <p class="font-medium">최근 업로드 이력이 없습니다.</p>
+                <p class="text-sm mt-2">파일을 업로드하여 시작하세요.</p>
               </div>
-              <div class="flex-shrink-0 ml-3"><i class="fas fa-upload text-4xl text-indigo-500"></i></div>
-            </div>
-          </div>
-          <div class="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-green-500">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">성공률</h3>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-3xl font-bold text-green-600" x-text="statistics.successRate ? statistics.successRate.toFixed(1) + '%' : '0.0%'"></span>
-                </div>
-                <p class="text-xs text-gray-500 mt-1"><span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span> 파일</p>
-              </div>
-              <div class="flex-shrink-0 ml-3"><i class="fas fa-check-circle text-4xl text-green-500"></i></div>
-            </div>
-          </div>
-          <div class="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border-l-4 border-red-500">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">실패</h3>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-3xl font-bold text-red-600" x-text="statistics.failedCount"></span>
-                  <span class="text-sm text-gray-500">files</span>
-                </div>
-                <p class="text-xs text-gray-500 mt-1">실패한 파일 수</p>
-              </div>
-              <div class="flex-shrink-0 ml-3"><i class="fas fa-times-circle text-4xl text-red-500"></i></div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" x-show="certificateStatistics.totalCertificates > 0">
-          <div class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col items-center justify-center">
-            <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-certificate text-blue-500 mr-3"></i>저장된 인증서 통계</h3>
-            <div class="relative w-48 h-48">
-              <canvas x-ref="certificateDoughnutChart"></canvas>
-              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div class="text-center">
-                  <span class="text-3xl font-bold text-base-content" x-text="certificateStatistics.totalCertificates"></span>
-                  <span class="text-xs block text-base-content">TOTAL</span>
-                </div>
-              </div>
-            </div>
-            <div class="mt-4 text-xs text-base-content text-center">마지막 업데이트: <span x-text="formatDateTime(certificateStatistics.lastUpdated)"></span></div>
-          </div>
-          <div class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
-            <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-list text-green-500 mr-3"></i>상세 통계</h3>
-            <div class="space-y-3 text-sm">
-              <div class="flex justify-between items-center p-2 rounded-md bg-opacity-50" :class="darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'"><span class="font-medium">총 인증서</span><span class="font-semibold" x-text="certificateStatistics.totalCertificates"></span></div>
-              <div class="flex justify-between items-center p-2 rounded-md bg-opacity-50" :class="darkMode ? 'bg-green-900 text-green-200' : 'bg-green-100 text-green-800'"><span class="font-medium">유효 인증서</span><span class="font-semibold" x-text="certificateStatistics.validCertificates"></span></div>
-              <div class="flex justify-between items-center p-2 rounded-md bg-opacity-50" :class="darkMode ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-800'"><span class="font-medium">무효 인증서</span><span class="font-semibold" x-text="certificateStatistics.invalidCertificates"></span></div>
-              <div class="flex justify-between items-center p-2 rounded-md bg-opacity-50" :class="darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'"><span class="font-medium">총 CRL 수</span><span class="font-semibold" x-text="certificateStatistics.totalCrls"></span></div>
-            </div>
-          </div>
-          <div x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
-            <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-tags text-purple-500 mr-3"></i>인증서 유형별 통계</h3>
-            <div class="flex-grow flex items-center justify-center min-h-[250px]"><canvas x-ref="certificateTypePieChart"></canvas></div>
-          </div>
-        </div>
 
-        <div class="grid grid-cols-1 gap-6">
-            <div x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0" class="bg-base-100 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
-                <h3 class="text-lg font-bold text-base-content mb-4 flex items-center"><i class="fas fa-globe-asia text-orange-500 mr-3"></i>국가별 인증서 통계</h3>
-                <div class="flex-grow flex items-center justify-center min-h-[350px]"><canvas x-ref="certificateCountryBarChart"></canvas></div>
+              <div x-show="loadingRecent" class="text-center py-12">
+                <i class="fas fa-spinner animate-spin text-5xl text-indigo-500 mb-4"></i>
+                <p :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">로딩 중...</p>
+              </div>
+
+              <div x-show="recentActivity.length > 0 && !loadingRecent" class="space-y-3">
+                <template x-for="item in recentActivity" :key="item.id">
+                  <div class="flex items-center p-4 rounded-lg hover:shadow-md transition-all duration-200 cursor-pointer" :class="$store.theme.darkMode ? 'bg-base-200 hover:bg-base-300' : 'bg-gray-50 hover:bg-indigo-50'">
+                    <i class="fas fa-file text-indigo-500 mr-4 text-lg"></i>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-semibold truncate" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-900'" x-text="item.filename"></p>
+                      <p class="text-xs mt-0.5" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'" x-text="formatDateTime(item.uploadedAt)"></p>
+                    </div>
+                    <span class="badge ml-3 flex-shrink-0" :class="{
+                      'badge-success': item.status === 'COMPLETED',
+                      'badge-error': item.status === 'FAILED',
+                      'badge-warning': item.status !== 'COMPLETED' && item.status !== 'FAILED'
+                    }" x-text="item.statusDisplay"></span>
+                  </div>
+                </template>
+              </div>
+
+              <div x-show="recentActivity.length > 0" class="mt-6 text-center">
+                <a href="/upload-history" class="inline-flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-semibold hover:underline" :class="$store.theme.darkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
+                  전체 이력 보기 <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+              </div>
             </div>
+          </div>
+          
+          <!-- Row 6: System Information (1 card) -->
+          <div class="grid grid-cols-1">
+            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                <i class="fas fa-info-circle text-indigo-500 mr-3"></i>
+                시스템 정보
+              </h3>
+              <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center p-2 rounded-md" :class="$store.theme.darkMode ? 'bg-gray-700' : 'bg-gray-50'">
+                  <span class="font-medium" :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'">버전</span>
+                  <span class="font-semibold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">v1.0.0</span>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-md" :class="$store.theme.darkMode ? 'bg-gray-700' : 'bg-gray-50'">
+                  <span class="font-medium" :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'">최대 파일 크기</span>
+                  <span class="font-semibold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">100MB</span>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-md" :class="$store.theme.darkMode ? 'bg-gray-700' : 'bg-gray-50'">
+                  <span class="font-medium" :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'">지원 형식</span>
+                  <span class="font-semibold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">LDIF, ML</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
-  </div>
-
-  <th:block layout:fragment="script-content">
+    
+    <th:block layout:fragment="script-content">
       <script>
+        // Alpine.js Global Store for application-wide state
+        document.addEventListener('alpine:init', () => {
+          Alpine.store('app', {
+            ldapStatus: {
+              connected: false,
+              message: '확인 중...',
+            },
+            ldapTesting: false,
+  
+            async checkLdapStatus() {
+              try {
+                const response = await fetch('/api/ldap/health'); 
+                const data = await response.json();
+                this.ldapStatus.connected = data.success;
+                this.ldapStatus.message = data.message || '연결 실패';
+              } catch (error) {
+                console.error('LDAP status check failed:', error);
+                this.ldapStatus.connected = false;
+                this.ldapStatus.message = '연결 확인 불가';
+              }
+            },
+  
+            async testLdapConnection() {
+              this.ldapTesting = true;
+              try {
+                const response = await fetch('/api/ldap/health');
+                const data = await response.json();
+                showNotification(data.message, data.success ? 'success' : 'error');
+                await this.checkLdapStatus();
+              } catch (error) {
+                showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
+              } finally {
+                this.ldapTesting = false;
+              }
+            }
+          });
+        });
+  
         function dashboardApp() {
             return {
+              // 상태 데이터
               currentDate: '',
               currentTime: '',
-              dbStatus: { connected: false, message: '확인 중...' },
+              dbConnected: false,
+              dbMessage: '확인 중...',
               dbTesting: false,
-              ldapStatus: { connected: false, message: '확인 중...' },
-              ldapTesting: false,
-              statistics: { totalCount: 0, successCount: 0, failedCount: 0, successRate: 0 },
-              certificateStatistics: { totalCertificates: 0, validCertificates: 0, invalidCertificates: 0, totalCrls: 0, lastUpdated: null, certificatesByType: {}, certificatesByCountry: {} },
+              statistics: {
+                totalCount: 0,
+                successCount: 0,
+                failedCount: 0,
+                successRate: 0
+              },
+              certificateStatistics: {
+                  totalCertificates: 0,
+                  validCertificates: 0,
+                  invalidCertificates: 0,
+                  totalCrls: 0,
+                  lastUpdated: null,
+                  certificatesByType: {},
+                  certificatesByCountry: {}
+              },
               recentActivity: [],
               loadingRecent: false,
-              certificateDoughnutChartInstance: null,
-              certificateTypePieChartInstance: null,
-              certificateCountryBarChartInstance: null, // 변경: PieChart -> BarChart
-
+  
+              // 초기화
               init() {
-                this.applyTheme();
                 this.updateDateTime();
                 this.checkDatabaseStatus();
-                this.checkLdapStatus();
+                Alpine.store('app').checkLdapStatus();
                 this.loadStatistics();
                 this.loadRecentActivity();
                 this.loadCertificateStatistics();
+  
                 setInterval(() => this.updateDateTime(), 60000);
                 setInterval(() => {
-                    this.checkDatabaseStatus();
-                    this.checkLdapStatus();
-                    this.loadStatistics();
-                    this.loadCertificateStatistics();
-                    this.loadRecentActivity();
-                }, 300000); 
-              },
-              
-              toggleDarkMode() {
-                  this.darkMode = !this.darkMode;
-                  this.applyTheme();
-                  this.updateAllChartsColors();
-              },
+                  this.checkDatabaseStatus();
+                  Alpine.store('app').checkLdapStatus();
+                }, 300000);
 
-              applyTheme() {
-                  const html = document.documentElement;
-                  if (this.darkMode) {
-                      html.setAttribute('data-theme', 'night');
-                      localStorage.setItem('theme', 'dark');
-                  } else {
-                      html.setAttribute('data-theme', 'winter');
-                      localStorage.setItem('theme', 'light');
-                  }
+                this.$watch('$store.theme.darkMode', () => {
+                    this.updateAllChartColors();
+                });
               },
-
+  
+              // 날짜/시간 업데이트
               updateDateTime() {
                 const now = new Date();
-                this.currentDate = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+                this.currentDate = now.toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'short'
+                });
                 this.currentTime = now.toLocaleTimeString('ko-KR');
               },
-
+  
+              // DB 상태 확인
               async checkDatabaseStatus() {
+                try {
+                  const response = await fetch('/api/database-health');
+                  const data = await response.json();
+                  this.dbConnected = data.success;
+                  this.dbMessage = data.success ? `${data.database} ${data.version}` : (data.message || '연결 실패');
+                } catch (error) {
+                  console.error('Database status check failed:', error);
+                  this.dbConnected = false;
+                  this.dbMessage = '연결 확인 불가';
+                }
+              },
+  
+              async testDatabaseConnection() {
                 this.dbTesting = true;
                 try {
-                    const response = await fetch('/api/database-health');
-                    const data = await response.json();
-                    console.log('DB Health Response:', data);
-                    this.dbStatus.connected = data.success;
-                    this.dbStatus.message = data.success ? `${data.database} ${data.version}` : (data.message || '연결 실패');
+                  const response = await fetch('/api/database-health');
+                  const data = await response.json();
+                  showNotification(data.message, data.success ? 'success' : 'error');
+                  this.checkDatabaseStatus();
                 } catch (error) {
-                    this.dbStatus.connected = false;
-                    this.dbStatus.message = '연결 확인 불가';
-                    console.error('Database health check failed:', error);
+                  showNotification('연결 테스트에 실패했습니다.', 'error');
                 } finally {
-                    this.dbTesting = false;
+                  this.dbTesting = false;
                 }
               },
-
-              async checkLdapStatus() {
-                this.ldapTesting = true;
-                try {
-                    const response = await fetch('/api/ldap/health');
-                    const data = await response.json();
-                    console.log('LDAP Health Response:', data);
-                    this.ldapStatus.connected = data.success;
-                    this.ldapStatus.message = data.message || '연결 실패';
-                } catch (error) {
-                    this.ldapStatus.connected = false;
-                    this.ldapStatus.message = '연결 확인 불가';
-                    console.error('LDAP health check failed:', error);
-                } finally {
-                    this.ldapTesting = false;
-                }
-              },
-
+  
+              // 통계 로드
               async loadStatistics() {
                 try {
                   const response = await fetch('/upload-history/statistics');
-                  if (!response.ok) {
-                    console.error('Failed to load statistics: ', response.status, response.statusText);
-                    this.statistics = { totalCount: 0, successCount: 0, failedCount: 0, successRate: 0 };
-                    return;
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.statistics = {
+                      totalCount: data.totalCount || 0,
+                      successCount: data.successCount || 0,
+                      failedCount: data.failedCount || 0,
+                      successRate: data.successRate || 0
+                    };
                   }
-                  const data = await response.json();
-                  console.log('Upload Statistics Response:', data);
-                  this.statistics = data;
-                } catch (error) { 
-                    console.error('Error loading statistics:', error); 
-                    this.statistics = { totalCount: 0, successCount: 0, failedCount: 0, successRate: 0 };
+                } catch (error) {
+                  console.error('Failed to load statistics:', error);
                 }
               },
-              
+  
+              // 인증서 통계 로드
               async loadCertificateStatistics() {
                   try {
-                      const response = await fetch('/api/certificates/statistics');
-                      if (!response.ok) {
-                        console.error('Failed to load certificate statistics: ', response.status, response.statusText);
-                        this.certificateStatistics = { totalCertificates: 0, validCertificates: 0, invalidCertificates: 0, totalCrls: 0, lastUpdated: null, certificatesByType: {}, certificatesByCountry: {} };
-                        return;
+                      const response = await fetch('/api/certificates/statistics'); 
+                      if (response.ok) {
+                          const data = await response.json();
+                          this.certificateStatistics = {
+                              totalCertificates: data.totalCertificates || 0,
+                              validCertificates: data.validCertificates || 0,
+                              invalidCertificates: data.invalidCertificates || 0,
+                              totalCrls: data.totalCrls || 0,
+                              lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null,
+                              certificatesByType: data.certificatesByType || {},
+                              certificatesByCountry: data.certificatesByCountry || {}
+                          };
+                          this.$nextTick(() => {
+                              this.createCertificateStatusPieChart();
+                              this.createCertificateTypePieChart();
+                              this.createCertificateCountryBarChart();
+                          });
+                      } else {
+                          console.warn('Failed to load certificate statistics, API might not be implemented yet.');
                       }
-                      const data = await response.json();
-                      console.log('Certificate Statistics Response:', data);
-                      this.certificateStatistics = data;
-                      this.$nextTick(() => {
-                          this.updateCertificateDoughnutChart();
-                          this.updateCertificateTypePieChart();
-                          this.updateCertificateCountryBarChart(); // 변경: PieChart -> BarChart
-                      });
-                  } catch (error) { 
-                      console.error('Error loading cert stats:', error); 
-                      this.certificateStatistics = { totalCertificates: 0, validCertificates: 0, invalidCertificates: 0, totalCrls: 0, lastUpdated: null, certificatesByType: {}, certificatesByCountry: {} };
+                  } catch (error) {
+                      console.error('Error loading certificate statistics:', error);
                   }
               },
-
-              updateAllChartsColors() {
-                const legendColor = getComputedStyle(document.documentElement).getPropertyValue('--bc');
-                if (this.certificateDoughnutChartInstance) {
-                    this.certificateDoughnutChartInstance.data.datasets[0].backgroundColor = [ this.darkMode ? '#10B981' : '#34D399', this.darkMode ? '#EF4444' : '#F87171' ];
-                    this.certificateDoughnutChartInstance.update();
-                }
-                if (this.certificateTypePieChartInstance) {
-                    this.certificateTypePieChartInstance.data.datasets[0].backgroundColor = Object.keys(this.certificateStatistics.certificatesByType).map((_, index) => this.getChartColor(index));
-                    this.certificateTypePieChartInstance.options.plugins.legend.labels.color = legendColor;
-                    this.certificateTypePieChartInstance.update();
-                }
-                // 변경: certificateCountryPieChartInstance -> certificateCountryBarChartInstance
-                if (this.certificateCountryBarChartInstance) {
-                    this.certificateCountryBarChartInstance.data.datasets[0].backgroundColor = Object.keys(this.certificateStatistics.certificatesByCountry).map((_, index) => this.getChartColor(index + 5));
-                    // Bar chart의 축 색상 업데이트
-                    this.certificateCountryBarChartInstance.options.scales.x.ticks.color = legendColor;
-                    this.certificateCountryBarChartInstance.options.scales.y.ticks.color = legendColor;
-                    this.certificateCountryBarChartInstance.update();
-                }
-              },
-
-              getChartColor(index) {
-                const lightColors = ['#34D399', '#60A5FA', '#FBBF24', '#F87171', '#A78BFA', '#F472B6', '#6EE7B7', '#93C5FD', '#FCD34D', '#EF4444',
-                    '#8B5CF6', '#EC4899', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444', '#A855F7', '#DB2777'
-                ];
-                const darkColors = ['#10B981', '#2563EB', '#D97706', '#DC2626', '#7C3AED', '#E879F9', '#059669', '#3B82F6', '#FBBF24', '#EF4444',
-                    '#6D28D9', '#E879F9', '#15803D', '#1D4ED8', '#B45309', '#B91C1C', '#9333EA', '#BE185D'
-                ];
-                const colors = this.darkMode ? darkColors : lightColors;
-                return colors[index % colors.length];
-              },
-
-              updateCertificateDoughnutChart() {
-                const ctx = this.$refs.certificateDoughnutChart;
-                if (!ctx) return;
-                const { validCertificates, invalidCertificates, totalCertificates } = this.certificateStatistics;
-                
-                if (totalCertificates === 0 && this.certificateDoughnutChartInstance) {
-                    this.certificateDoughnutChartInstance.destroy();
-                    this.certificateDoughnutChartInstance = null;
-                    return;
-                } else if (totalCertificates === 0) {
-                    return;
-                }
-
-                if (this.certificateDoughnutChartInstance) this.certificateDoughnutChartInstance.destroy();
-                this.certificateDoughnutChartInstance = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['유효', '무효'],
-                        datasets: [{ data: [validCertificates, invalidCertificates], backgroundColor: [ this.darkMode ? '#10B981' : '#34D399', this.darkMode ? '#EF4444' : '#F87171' ], borderWidth: 0 }]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false, cutout: '80%',
-                        plugins: { legend: { display: false } }
-                    }
-                });
-              },
-
-              updateCertificateTypePieChart() {
-                const ctx = this.$refs.certificateTypePieChart;
-                if (!ctx) return;
-                const { certificatesByType } = this.certificateStatistics;
-                const labels = Object.keys(certificatesByType);
-                const dataValues = Object.values(certificatesByType);
-                const total = dataValues.reduce((a, b) => a + b, 0);
-
-                if (total === 0 && this.certificateTypePieChartInstance) {
-                    this.certificateTypePieChartInstance.destroy();
-                    this.certificateTypePieChartInstance = null;
-                    return;
-                } else if (total === 0) {
-                    return;
-                }
-
-                if (this.certificateTypePieChartInstance) this.certificateTypePieChartInstance.destroy();
-                
-                this.certificateTypePieChartInstance = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: labels,
-                        datasets: [{ data: dataValues, backgroundColor: labels.map((_, i) => this.getChartColor(i)), borderWidth: 0 }]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'right', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--bc') } },
-                            tooltip: { callbacks: { label: c => `${c.label}: ${c.parsed.toLocaleString()} (${(c.parsed/total*100).toFixed(1)}%)` } }
-                        }
-                    }
-                });
-              },
-
-              updateCertificateCountryBarChart() { // 변경: updateCertificateCountryPieChart -> updateCertificateCountryBarChart
-                const ctx = this.$refs.certificateCountryBarChart; // 변경: certificateCountryPieChart -> certificateCountryBarChart
-                if (!ctx) return;
-                const { certificatesByCountry } = this.certificateStatistics;
-                const labels = Object.keys(certificatesByCountry);
-                const dataValues = Object.values(certificatesByCountry);
-                const total = dataValues.reduce((a, b) => a + b, 0);
-
-                if (total === 0 && this.certificateCountryBarChartInstance) {
-                    this.certificateCountryBarChartInstance.destroy();
-                    this.certificateCountryBarChartInstance = null;
-                    return;
-                } else if (total === 0) {
-                    return;
-                }
-
-                if (this.certificateCountryBarChartInstance) this.certificateCountryBarChartInstance.destroy();
-
-                this.certificateCountryBarChartInstance = new Chart(ctx, {
-                    type: 'bar', // 변경: pie -> bar
-                    data: {
-                        labels: labels,
-                        datasets: [{ 
-                            label: '인증서 수', // 라벨 추가
-                            data: dataValues, 
-                            backgroundColor: labels.map((_, i) => this.getChartColor(i + 5)), 
-                            borderColor: labels.map((_, i) => this.getChartColor(i + 5)),
-                            borderWidth: 1 
-                        }]
-                    },
-                    options: {
-                        responsive: true, 
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false }, // 범례 숨김
-                            tooltip: { callbacks: { label: c => `${c.label}: ${c.raw.toLocaleString()}` } }
-                        },
-                        scales: { // x, y 축 설정 추가
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    color: getComputedStyle(document.documentElement).getPropertyValue('--bc'),
-                                    stepSize: 1
-                                }
-                            },
-                            x: {
-                                ticks: {
-                                    color: getComputedStyle(document.documentElement).getPropertyValue('--bc')
-                                }
-                            }
-                        }
-                    }
-                });
-              },
-              
+  
+              // 최근 활동 로드
               async loadRecentActivity() {
                 this.loadingRecent = true;
                 try {
                   const response = await fetch('/upload-history/recent?limit=5');
-                  if (!response.ok) {
-                    console.error('Failed to load recent activity: ', response.status, response.statusText);
-                    this.recentActivity = [];
-                    return;
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.recentActivity = data.map(item => ({
+                      ...item,
+                      statusDisplay: this.getStatusDisplay(item.status)
+                    }));
                   }
-                  const data = await response.json();
-                  this.recentActivity = data.map(item => ({
-                    ...item,
-                    statusDisplay: this.getStatusDisplay(item.status)
-                  }));
-                } catch (error) { 
-                    console.error('Error loading recent activity:', error); 
-                    this.recentActivity = [];
-                } finally { this.loadingRecent = false; }
+                } catch (error) {
+                  console.error('Failed to load recent activity:', error);
+                } finally {
+                  this.loadingRecent = false;
+                }
               },
-
+  
+              // 상태 표시명 가져오기
               getStatusDisplay(status) {
-                const statusMap = {
-                  'RECEIVED': '수신됨', 'VALIDATING': '검증 중', 'VALIDATED': '검증 완료', 'PARSING': '파싱 중', 'PARSED': '파싱 완료',
-                  'UPLOADING_TO_LDAP': 'LDAP 업로드 중', 'COMPLETED': '완료', 'FAILED': '실패'
-                };
+                const statusMap = {'RECEIVED': '수신됨','VALIDATING': '검증 중','VALIDATED': '검증 완료','PARSING': '파싱 중','PARSED': '파싱 완료','UPLOADING_TO_LDAP': 'LDAP 업로드 중','COMPLETED': '완료','FAILED': '실패'};
                 return statusMap[status] || status;
               },
-              formatDateTime(dateString) { if (!dateString) return ''; return new Date(dateString).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  
+              // 날짜 포맷팅
+              formatDateTime(dateString) {
+                if (!dateString) return '';
+                const date = new Date(dateString);
+                return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+              },
+
+              // Chart.js Helpers
+              getChartFontColor() {
+                return this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
+              },
+
+              updateAllChartColors() {
+                  const charts = [this.certificateStatusPieChartInstance, this.certificateTypePieChartInstance, this.certificateCountryBarChartInstance];
+                  charts.forEach(chart => this.updateChartColors(chart));
+              },
+
+              updateChartColors(chart) {
+                  if (!chart) return;
+                  const newFontColor = this.getChartFontColor();
+                  chart.options.plugins.legend.labels.color = newFontColor;
+                  if (chart.config.type === 'bar') {
+                      chart.options.scales.x.ticks.color = newFontColor;
+                      chart.options.scales.y.ticks.color = newFontColor;
+                      chart.options.scales.x.title.color = newFontColor;
+                      chart.options.scales.y.title.color = newFontColor;
+                      chart.options.scales.x.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      chart.options.scales.y.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? '#6366F1' : '#4F46E5';
+                      chart.data.datasets[0].borderColor = this.$store.theme.darkMode ? '#4338CA' : '#3730A3';
+                  } else if(chart.config.type === 'pie') {
+                      if(chart.canvas.id === 'certificateStatusPieChart') {
+                          chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'];
+                      } else {
+                          chart.data.datasets[0].backgroundColor = this.getPieChartBackgroundColors(this.$store.theme.darkMode);
+                      }
+                  }
+                  chart.update();
+              },
+              
+              getPieChartBackgroundColors(darkMode = false) {
+                const baseColorsLight = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#8B5CF6', '#F472B6', '#FCD34D', '#34D399'];
+                const baseColorsDark = ['#818CF8', '#F472B6', '#FBBF24', '#34D399', '#F87171', '#60A5FA', '#A78BFA', '#FDCED5', '#FDE047', '#6EE7B7'];
+                return darkMode ? baseColorsDark : baseColorsLight;
+              },
+
+              createOrUpdateChart(canvasId, type, data, options) {
+                  const ctx = document.getElementById(canvasId).getContext('2d');
+                  const existingChart = Chart.getChart(ctx);
+                  if (existingChart) {
+                      existingChart.destroy();
+                  }
+                  return new Chart(ctx, { type, data, options });
+              },
+
+              // Create Pie Chart for Certificate Status (Valid/Invalid)
+              createCertificateStatusPieChart() {
+                const data = {
+                    labels: ['유효', '무효'],
+                    datasets: [{
+                        data: [this.certificateStatistics.validCertificates, this.certificateStatistics.invalidCertificates],
+                        backgroundColor: this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'],
+                        hoverOffset: 4
+                    }]
+                };
+                const options = this.getPieChartOptions();
+                this.certificateStatusPieChartInstance = this.createOrUpdateChart('certificateStatusPieChart', 'pie', data, options);
+              },
+
+              // Create Pie Chart for Certificate Type Statistics
+              createCertificateTypePieChart() {
+                const labels = Object.keys(this.certificateStatistics.certificatesByType);
+                const dataValues = Object.values(this.certificateStatistics.certificatesByType);
+                const data = {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: this.getPieChartBackgroundColors(this.$store.theme.darkMode),
+                        hoverOffset: 4
+                    }]
+                };
+                const options = this.getPieChartOptions();
+                this.certificateTypePieChartInstance = this.createOrUpdateChart('certificateTypePieChart', 'pie', data, options);
+              },
+
+              // Create Bar Chart for Certificate by Country Statistics
+              createCertificateCountryBarChart() {
+                const labels = Object.keys(this.certificateStatistics.certificatesByCountry);
+                const dataValues = Object.values(this.certificateStatistics.certificatesByCountry);
+                const data = {
+                    labels: labels,
+                    datasets: [{
+                        label: '인증서 수',
+                        data: dataValues,
+                        backgroundColor: this.$store.theme.darkMode ? '#6366F1' : '#4F46E5',
+                        borderColor: this.$store.theme.darkMode ? '#4338CA' : '#3730A3',
+                        borderWidth: 1
+                    }]
+                };
+                const options = this.getBarChartOptions();
+                this.certificateCountryBarChartInstance = this.createOrUpdateChart('certificateCountryBarChart', 'bar', data, options);
+              },
+
+              getPieChartOptions() {
+                return {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: this.getChartFontColor() }},
+                        tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed.toLocaleString()}개` }}
+                    }
+                };
+              },
+
+              getBarChartOptions() {
+                return {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }}
+                    },
+                    scales: {
+                        x: { title: { display: true, text: '국가', color: this.getChartFontColor() }, ticks: { color: this.getChartFontColor() }, grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } },
+                        y: { beginAtZero: true, title: { display: true, text: '인증서 수', color: this.getChartFontColor() }, ticks: { color: this.getChartFontColor() }, grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } }
+                    }
+                };
+              }
             }
           }
+  
+          // 알림 표시 함수 (전역)
+          function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            if(!container) return;
+
+            const notification = document.createElement('div')
+            notification.className = `p-4 rounded-lg shadow-lg max-w-md animate-slideIn alert alert-${type}`;
+            notification.innerHTML = `
+            <div class="flex items-center">
+              <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-2"></i>
+              <span class="flex-1 text-sm">${message}</span>
+              <button onclick="this.parentElement.parentElement.remove()" class="ml-2 hover:opacity-75">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `;
+
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.remove();
+                        }
+                    }, 300);
+                }
+            }, 5000);
+          }
+  
+          // 키보드 단축키
+          document.addEventListener('keydown', function(e) {
+            // Ctrl+1: File Upload (Unified)
+            if (e.ctrlKey && e.key === '1') {
+              e.preventDefault();
+              window.location.href = '/file/upload';
+            }
+            // Ctrl+2: Upload History
+            if (e.ctrlKey && e.key === '2') {
+              e.preventDefault();
+              window.location.href = '/upload-history';
+            }
+          });
       </script>
-  </th:block>
+    </th:block>
+  </body>
 </html>

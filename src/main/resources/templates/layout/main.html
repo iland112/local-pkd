@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html
-  data-theme="winter"
+  x-data
+  :data-theme="$store.theme.darkMode ? 'dark' : 'winter'"
   th:lang="|${#locale.language}-${#locale.country}|"
   xmlns:th="http://www.thymeleaf.org"
   xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
 >
 <head th:replace="~{layout/_head :: head-content}"></head>
-<body x-data="dashboardApp()">
+<body x-data="dashboardApp()" x-init="$store.theme.init()">
   <div class="drawer">
     <input id="main-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col">

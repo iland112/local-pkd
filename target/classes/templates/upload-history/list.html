@@ -24,7 +24,7 @@
         </div>
 
         <!-- Page Header (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <div class="flex justify-between items-center">
               <h1 class="card-title text-3xl">
@@ -79,7 +79,7 @@
         </div>
 
         <!-- Search & Filter (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <h2 class="card-title">
               <i class="fas fa-filter text-primary"></i>
@@ -163,7 +163,7 @@
         </div>
 
         <!-- Results Table (DaisyUI) -->
-        <div class="card bg-base-100 shadow-xl">
+        <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body p-0">
             <div class="overflow-x-auto">
               <table class="table table-zebra w-full">
@@ -208,37 +208,37 @@
                     <!-- 파싱 상태 -->
                     <td class="text-center">
                       <div th:class="${'badge badge-sm ' +
-                        (history.status.toString().contains('COMPLETED') ? 'badge-success' :
-                         history.status.toString().contains('FAILED') ? 'badge-error' :
-                         history.status.toString().contains('PARSING') ? 'badge-info' : 'badge-ghost')}">
+                        ((history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED') ? 'badge-success' :
+                         (history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED') ? 'badge-error' :
+                         (history.status == 'PARSING' ? 'badge-info' : 'badge-ghost'))}">
                         <i th:class="${'fas text-xs ' +
-                          (history.status.toString().contains('COMPLETED') ? 'fa-check' :
-                           history.status.toString().contains('FAILED') ? 'fa-times' :
-                           history.status.toString().contains('PARSING') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                          ((history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED') ? 'fa-check' :
+                           (history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED') ? 'fa-times' :
+                           (history.status == 'PARSING' ? 'fa-spinner fa-spin' : 'fa-minus'))}"></i>
                       </div>
                     </td>
                     <!-- 검증 상태 -->
                     <td class="text-center">
                       <div th:class="${'badge badge-sm ' +
-                        (history.status.toString() == 'COMPLETED' or history.status.toString().contains('LDAP_SAVING') ? 'badge-success' :
-                         history.status.toString().contains('FAILED') ? 'badge-error' :
-                         history.status.toString().contains('VALIDATION') ? 'badge-info' : 'badge-ghost')}">
+                        (history.status == 'VALIDATED' or history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED' ? 'badge-success' :
+                         history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED' ? 'badge-error' :
+                         history.status == 'VALIDATING' ? 'badge-info' : 'badge-ghost')}">
                         <i th:class="${'fas text-xs ' +
-                          (history.status.toString() == 'COMPLETED' or history.status.toString().contains('LDAP_SAVING') ? 'fa-check' :
-                           history.status.toString().contains('FAILED') ? 'fa-times' :
-                           history.status.toString().contains('VALIDATION') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                          (history.status == 'VALIDATED' or history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED' ? 'fa-check' :
+                           history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED' ? 'fa-times' :
+                           history.status == 'VALIDATING' ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
                       </div>
                     </td>
                     <!-- LDAP 상태 -->
                     <td class="text-center">
                       <div th:class="${'badge badge-sm ' +
-                        (history.status.toString() == 'COMPLETED' ? 'badge-success' :
-                         history.status.toString().contains('FAILED') ? 'badge-error' :
-                         history.status.toString().contains('LDAP') ? 'badge-info' : 'badge-ghost')}">
+                        ((history.status == 'COMPLETED') ? 'badge-success' :
+                         (history.status == 'FAILED') ? 'badge-error' :
+                         (history.status == 'UPLOADING_TO_LDAP' ? 'badge-info' : 'badge-ghost'))}">
                         <i th:class="${'fas text-xs ' +
-                          (history.status.toString() == 'COMPLETED' ? 'fa-check' :
-                           history.status.toString().contains('FAILED') ? 'fa-times' :
-                           history.status.toString().contains('LDAP') ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                          ((history.status == 'COMPLETED') ? 'fa-check' :
+                           (history.status == 'FAILED') ? 'fa-times' :
+                           (history.status == 'UPLOADING_TO_LDAP' ? 'fa-spinner fa-spin' : 'fa-minus'))}"></i>
                       </div>
                     </td>
                     <td class="text-center text-sm" th:text="${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm')}">
@@ -251,22 +251,22 @@
                                  data-filename=${history.fileName},
                                  data-format=${history.fileFormat},
                                  data-size=${history.fileSizeDisplay},
-                                 data-status=${history.status},
+                                 data-status=${history.status.displayName},
                                  data-time=${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm:ss')},
                                  data-hash=${history.fileHash},
                                  data-expected=${history.expectedChecksum},
                                  data-calculated=${history.calculatedChecksum},
                                  data-error=${history.errorMessage},
-                                 data-parsed-total=${history.parsedCertificateCount},
-                                 data-parsed-csca=${history.parsedCscaCount},
-                                 data-parsed-dsc=${history.parsedDscCount},
-                                 data-parsed-dsc-nc=${history.parsedDscNcCount},
-                                 data-parsed-crl=${history.parsedCrlCount},
-                                 data-parsed-ml=${history.parsedMasterListCount},
-                                 data-validated-total=${history.validatedCertificateCount},
-                                 data-valid-count=${history.validCertificateCount},
-                                 data-invalid-count=${history.invalidCertificateCount},
-                                 data-expired-count=${history.expiredCertificateCount}"
+                                 data-parsed-total=${history.parsingStats.certificateCount},
+                                 data-parsed-csca=${history.parsingStats.cscaCount},
+                                 data-parsed-dsc=${history.parsingStats.dscCount},
+                                 data-parsed-dsc-nc=${history.parsingStats.dscNcCount},
+                                 data-parsed-crl=${history.parsingStats.crlCount},
+                                 data-parsed-ml=${history.parsingStats.masterListCount},
+                                 data-validated-total=${history.validationStats.totalCount},
+                                 data-valid-count=${history.validationStats.validCount},
+                                 data-invalid-count=${history.validationStats.invalidCount},
+                                 data-expired-count=${history.validationStats.expiredCount}"
                         onclick="showDetailFromBtn(this)"
                       >
                         <i class="fas fa-eye"></i>
@@ -295,37 +295,31 @@
 
               <div class="join">
                 <a
-                  th:if="${historyPage.hasPrevious()}"
+                  th:if="${currentPage > 0}"
                   th:href="@{/upload-history(page=${currentPage - 1}, size=${size}, search=${search}, status=${status}, format=${format})}"
                   class="join-item btn btn-sm"
                 >
                   «
                 </a>
-                <button th:unless="${historyPage.hasPrevious()}" class="join-item btn btn-sm btn-disabled">«</button>
+                <button th:if="${currentPage == 0}" class="join-item btn btn-sm btn-disabled">«</button>
 
-                <!-- Page numbers -->
-                <th:block th:each="i : ${#numbers.sequence(0, totalPages - 1)}">
-                  <a
-                    th:href="@{/upload-history(page=${i}, size=${size}, search=${search}, status=${status}, format=${format})}"
-                    th:class="${currentPage == i} ? 'join-item btn btn-sm btn-active' : 'join-item btn btn-sm'"
-                  >
-                    <span th:text="${i + 1}">1</span>
-                  </a>
-                </th:block>
+                <button class="join-item btn btn-sm btn-active">
+                  페이지 <span th:text="${currentPage + 1}">1</span> / <span th:text="${totalPages}">10</span>
+                </button>
 
                 <a
-                  th:if="${historyPage.hasNext()}"
+                  th:if="${currentPage < totalPages - 1}"
                   th:href="@{/upload-history(page=${currentPage + 1}, size=${size}, search=${search}, status=${status}, format=${format})}"
                   class="join-item btn btn-sm"
                 >
                   »
                 </a>
-                <button th:unless="${historyPage.hasNext()}" class="join-item btn btn-sm btn-disabled">»</button>
+                <button th:if="${currentPage >= totalPages - 1}" class="join-item btn btn-sm btn-disabled">»</button>
               </div>
 
               <div class="flex items-center gap-2">
-                <span class="text-sm whitespace-nowrap min-w-[4rem]">페이지당</span>
-                <select class="select select-bordered min-w-[4rem] text-center" onchange="changePageSize(this.value)">
+                <span class="text-sm">페이지당</span>
+                <select class="select select-bordered select-sm" onchange="changePageSize(this.value)">
                   <option value="10" th:selected="${size == 10}">10</option>
                   <option value="20" th:selected="${size == 20}">20</option>
                   <option value="50" th:selected="${size == 50}">50</option>
@@ -339,7 +333,7 @@
 
       <!-- Detail Modal (DaisyUI Modal) -->
       <dialog id="detailModal" class="modal">
-        <div class="modal-box max-w-3xl">
+        <div class="modal-box max-w-3xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>
@@ -450,11 +444,6 @@
                   <div class="stat">
                     <div class="stat-title">인증서</div>
                     <div class="stat-value text-sm" id="detail-parsed-total">-</div>
-                    <div class="stat-desc">
-                      CSCA: <span id="detail-parsed-csca">-</span> /
-                      DSC: <span id="detail-parsed-dsc">-</span> /
-                      DSC_NC: <span id="detail-parsed-dsc-nc">-</span>
-                    </div>
                   </div>
                   <div class="stat">
                     <div class="stat-title">CRL</div>

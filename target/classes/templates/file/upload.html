@@ -23,7 +23,7 @@
 
         <!-- Error Alert -->
         <div th:if="${error}" class="alert alert-error mb-4 shadow-lg" x-data="{ show: true }" x-show="show">
-          <svg xmlns="http://www.w3.00/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span th:text="${error}">Error message</span>
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
@@ -31,8 +31,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-stretch">
           <!-- Left Column: Upload Form -->
           <div id="uploadFunctionCard" class="col-span-1 lg:col-span-3">
-            <div class="card bg-base-100 shadow-xl h-full"> <!-- sticky top-8 제거 -->
-              <div class="card-body flex flex-col"> <!-- flex flex-col 추가 -->
+            <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+              <div class="card-body flex flex-col">
                 <h2 class="card-title text-2xl">
                   <i class="fas fa-cloud-upload-alt text-primary"></i>
                   <span>파일 업로드</span>
@@ -42,19 +42,19 @@
                 </p>
 
                 <!-- Processing Mode Selector Fragment -->
-                <div class="mb-6 pb-6 border-b border-base-300">
+                <div class="mb-6 pb-6 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
                   <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}" />
                 </div>
 
                 <!-- Upload Form -->
-                <form id="uploadForm" @submit.prevent="handleUpload()" class="flex flex-col flex-grow"> <!-- flex flex-col flex-grow 추가 -->
+                <form id="uploadForm" @submit.prevent="handleUpload()" class="flex flex-col flex-grow">
                   <!-- Drag and Drop File Input -->
                   <div
                     class="form-control w-full flex-grow"
                     @dragover.prevent="isDragging = true"
                     @dragleave.prevent="isDragging = false"
                     @drop.prevent="handleFileDrop($event)"
-                  > <!-- flex-grow 추가 -->
+                  >
                     <label class="label">
                       <span class="label-text font-semibold">
                         <i class="fas fa-file-upload text-primary mr-1"></i>
@@ -67,7 +67,7 @@
                       :class="{
                         'border-primary bg-primary bg-opacity-10': isDragging,
                         'border-base-300 hover:border-primary hover:bg-base-200': !isDragging && !selectedFile,
-                        'border-success bg-success bg-opacity-10': selectedFile
+                        'border-info bg-info bg-opacity-30': selectedFile
                       }"
                       @click="$refs.fileInput.click()"
                     >
@@ -82,11 +82,11 @@
                         @change="handleFileSelection($event)"
                       />
                       <div class="flex flex-col items-center justify-center space-y-2">
-                        <i class="fas fa-cloud-upload-alt text-4xl" :class="selectedFile ? 'text-success' : 'text-base-content opacity-50'"></i>
+                        <i class="fas fa-cloud-upload-alt text-4xl" :class="selectedFile ? 'text-info-content' : 'text-base-content opacity-50'"></i>
                         <p x-show="!selectedFile" class="text-base-content opacity-70">
                           파일을 여기로 드래그하거나 클릭하여 선택하세요.
                         </p>
-                        <p x-show="selectedFile" class="font-semibold text-success" x-text="fileInfo"></p>
+                        <p x-show="selectedFile" class="font-semibold text-base-content" x-text="fileInfo"></p>
                         <p class="text-xs text-base-content opacity-50">
                           (LDIF, ML 파일 지원 / 최대 100MB)
                         </p>
@@ -129,25 +129,28 @@
                  x-transition:enter-start="opacity-0 transform -translate-y-2"
                  x-transition:enter-end="opacity-100 transform translate-y-0"
             >
-              <div class="card bg-base-100 shadow-xl h-full">
-                <div class="card-body flex flex-col"> <!-- flex flex-col 추가 -->
-                  <h3 class="card-title text-lg mb-4 flex items-center">
-                    <i class="fas fa-tasks text-info"></i>
-                    처리 진행 상황 <span x-show="uploadId" class="font-mono text-sm">(<span x-text="uploadId"></span>)</span>
+              <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+                <div class="card-body flex flex-col">
+                  <h3 class="card-title text-lg mb-4 flex flex-col items-start">
+                    <div class="flex items-center">
+                      <i class="fas fa-tasks text-info mr-2"></i>
+                      <span>처리 진행 상황</span>
+                    </div>
+                    <span x-show="fileName" class="font-mono text-sm ml-6 opacity-70"> 파일명:(<span x-text="fileName"></span>)</span>
                   </h3>
                   
                   <!-- Stage Progress Steps -->
-                  <ul class="steps steps-vertical w-full flex-grow"> <!-- flex-grow 추가 -->
+                  <ul class="steps steps-vertical w-full flex-grow">
                     <li class="step mb-4" :class="{
                           'step-primary': uploadStage.status === 'IN_PROGRESS',
                           'step-success': uploadStage.status === 'COMPLETED',
                           'step-error': uploadStage.status === 'FAILED'
                         }">
-                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                      <div class="flex flex-col items-start text-left w-full">
                         <div class="step-title">파일 업로드</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="uploadStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
-                        <progress class="progress progress-primary w-full" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress> <!-- progress bar 추가 -->
-                        <div class="text-xs font-mono w-full" x-show="uploadStage.percentage > 0" x-text="uploadStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="uploadStage.message"></div>
+                        <progress class="progress progress-primary w-full" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress>
+                        <div class="text-xs font-mono w-full" x-show="uploadStage.percentage > 0" x-text="uploadStage.percentage + '%'"></div>
                       </div>
                     </li>
                     <li class="step mb-4" :class="{
@@ -155,13 +158,13 @@
                           'step-success': parseStage.status === 'COMPLETED',
                           'step-error': parseStage.status === 'FAILED'
                         }">
-                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                      <div class="flex flex-col items-start text-left w-full">
                         <div class="step-title">파일 파싱</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="parseStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
-                        <progress class="progress progress-primary w-full" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress> <!-- progress bar 추가 -->
-                        <div class="text-xs font-mono w-full" x-show="parseStage.percentage > 0" x-text="parseStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="parseStage.message"></div>
+                        <progress class="progress progress-primary w-full" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress>
+                        <div class="text-xs font-mono w-full" x-show="parseStage.percentage > 0" x-text="parseStage.percentage + '%'"></div>
                         <template x-if="parseStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div> <!-- w-full 추가 -->
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div>
                         </template>
                       </div>
                     </li>
@@ -170,13 +173,13 @@
                           'step-success': validateStage.status === 'COMPLETED',
                           'step-error': validateStage.status === 'FAILED'
                         }">
-                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                      <div class="flex flex-col items-start text-left w-full">
                         <div class="step-title">인증서 검증</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="validateStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
-                        <progress class="progress progress-primary w-full" :value="validateStage.percentage" max="100" x-show="validateStage.percentage > 0"></progress> <!-- progress bar 추가 -->
-                        <div class="text-xs font-mono w-full" x-show="validateStage.percentage > 0" x-text="validateStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="validateStage.message"></div>
+                        <progress class="progress progress-primary w-full" :value="validateStage.percentage" max="100" x-show="validateStage.percentage > 0"></progress>
+                        <div class="text-xs font-mono w-full" x-show="validateStage.percentage > 0" x-text="validateStage.percentage + '%'"></div>
                         <template x-if="validateStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="validateStage.details"></div> <!-- w-full 추가 -->
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="validateStage.details"></div>
                         </template>
                       </div>
                     </li>
@@ -185,20 +188,20 @@
                           'step-success': ldapStage.status === 'COMPLETED',
                           'step-error': ldapStage.status === 'FAILED'
                         }">
-                      <div class="flex flex-col items-start text-left w-full"> <!-- w-full 추가 -->
+                      <div class="flex flex-col items-start text-left w-full">
                         <div class="step-title">LDAP 저장</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="ldapStage.message"></div> <!-- w-full overflow-hidden text-ellipsis 추가 -->
-                        <progress class="progress progress-primary w-full" :value="ldapStage.percentage" max="100" x-show="ldapStage.percentage > 0"></progress> <!-- progress bar 추가 -->
-                        <div class="text-xs font-mono w-full" x-show="ldapStage.percentage > 0" x-text="ldapStage.percentage + '%'"></div> <!-- 항상 표시되도록 조건 변경 -->
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="ldapStage.message"></div>
+                        <progress class="progress progress-primary w-full" :value="ldapStage.percentage" max="100" x-show="ldapStage.percentage > 0"></progress>
+                        <div class="text-xs font-mono w-full" x-show="ldapStage.percentage > 0" x-text="ldapStage.percentage + '%'"></div>
                         <template x-if="ldapStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="ldapStage.details"></div> <!-- w-full 추가 -->
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="ldapStage.details"></div>
                         </template>
                       </div>
                     </li>
                   </ul>
 
                   <!-- Manual Mode Control Panel -->
-                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-6 border-t pt-4">
+                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-6 border-t pt-4" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
                     <h4 class="font-bold text-md mb-3">수동 처리 제어</h4>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <!-- Parse Button -->
@@ -283,7 +286,7 @@
 
       <!-- Duplicate Warning Modal -->
       <dialog id="duplicateModal" class="modal">
-        <div class="modal-box max-w-2xl">
+        <div class="modal-box max-w-2xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>
@@ -347,6 +350,7 @@
             isValidFileType: true,
             fileInfo: '',
             selectedFile: null,
+            fileName: '', // Added fileName
 
             // Upload & Processing state
             isProcessing: false,
@@ -416,6 +420,7 @@
                 this.validationInProgress = false;
                 this.ldapInProgress = false;
                 this.errorMessages = [];
+                this.fileName = ''; // Reset fileName here too
             },
 
             handleFileDrop(event) {
@@ -435,9 +440,11 @@
               if (!this.selectedFile) {
                   this.fileInfo = '';
                   this.isValidFileType = true; // Reset validation
+                  this.fileName = ''; // Also reset fileName
                   return;
               };
               this.fileInfo = `${this.selectedFile.name} (${formatFileSize(this.selectedFile.size)})`;
+              this.fileName = this.selectedFile.name; // Set fileName here
 
               const fileName = this.selectedFile.name.toLowerCase();
               if (fileName.endsWith('.ldif')) {
@@ -633,10 +640,10 @@
                 this.isProcessing = true;
                 this.errorMessages = this.errorMessages.filter(e => !e.startsWith(`[${step}]`));
 
-                const stepNames = {'PARSE': '파싱', 'VALIDATE': '검증', 'LDAP_UPLOAD': 'LDAP 저장'};
-                const inProgressMap = {'PARSE': 'parsingInProgress', 'VALIDATE': 'validationInProgress', 'LDAP_UPLOAD': 'ldapInProgress'};
+                const stepNames = {'PARSE': '파싱', 'VALIDATE': '검증', 'UPLOAD_TO_LDAP': 'LDAP 저장'};
+                const inProgressMap = {'PARSE': 'parsingInProgress', 'VALIDATE': 'validationInProgress', 'UPLOAD_TO_LDAP': 'ldapInProgress'};
                 const stageMap = {
-                    'PARSE': this.parseStage, 'VALIDATE': this.validateStage, 'LDAP_UPLOAD': this.ldapStage
+                    'PARSE': this.parseStage, 'VALIDATE': this.validateStage, 'UPLOAD_TO_LDAP': this.ldapStage
                 };
 
                 this[inProgressMap[step]] = true;
@@ -645,7 +652,7 @@
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 try {
-                    const endpoint = `/api/processing/${step.toLowerCase().replace('_', '-')}/${this.uploadId}`;
+                    const endpoint = `/api/processing/${step.toLowerCase().replace(/_/g, '-')}/${this.uploadId}`;
                     const response = await fetch(endpoint, { method: 'POST' });
                     if (!response.ok) {
                         const error = await response.json();
@@ -662,7 +669,7 @@
             
             triggerParse() { this.triggerManualStep('PARSE'); },
             triggerValidate() { this.triggerManualStep('VALIDATE'); },
-            triggerLdapUpload() { this.triggerManualStep('LDAP_UPLOAD'); },
+            triggerLdapUpload() { this.triggerManualStep('UPLOAD_TO_LDAP'); },
 
             formatStageDetails(progress) {
                 if (!progress) return '';

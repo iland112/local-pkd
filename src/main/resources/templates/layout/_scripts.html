@@ -5,15 +5,12 @@
     <!-- 알림 컨테이너 -->
     <div id="notificationContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
 
-    <!-- Page-specific scripts (MUST come before Alpine.js) -->
+    <!-- Page-specific scripts -->
     <th:block layout:fragment="script-content">
         <!-- Page scripts will be inserted here -->
     </th:block>
 
-    <script
-            type="text/javascript"
-            th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
-    ></script>
+    <!-- Other vendor scripts -->
     <script
             type="text/javascript"
             th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
@@ -22,8 +19,8 @@
     <script>
         htmx.logAll();
     </script>
-
-    <!-- Alpine.js Global State is now managed in the 'dashboardApp' component within each page's main content -->
+    
+    <!-- Global Helper Functions -->
     <script>
         // 전역 Helper 함수들
         function showSystemInfo() {

@@ -23,7 +23,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <!-- AUTO Mode Option -->
         <div class="form-control">
-          <label class="label cursor-pointer gap-3 items-start"> <!-- justify-start 제거 -->
+          <label class="label cursor-pointer gap-3 items-start">
             <input
               type="radio"
               name="processingMode"
@@ -32,22 +32,24 @@
               th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
               x-model="processingMode"
             />
-            <div class="flex flex-col w-full"> <!-- 변경: flex-1 -> flex flex-col w-full -->
-              <span class="font-semibold text-base text-primary">
-                🤖 자동 처리 (AUTO)
-              </span>
-              <span class="block text-xs text-base-content opacity-70 whitespace-normal"> <!-- mt-1 제거 및 whitespace-normal 유지 -->
-                업로드 후 자동으로 파싱, 검증, LDAP 등록까지 처리됩니다.
-                <br/>
-                프로덕션 환경에 권장됩니다.
-              </span>
+            <div class="flex flex-col w-full">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-base text-primary">
+                  🤖 자동 처리 (AUTO)
+                </span>
+                <div class="tooltip tooltip-right tooltip-sm" data-tip="업로드 후 자동으로 파싱, 검증, LDAP 등록까지 처리됩니다. 프로덕션 환경에 권장됩니다.">
+                  <div tabindex="0" role="button" class="badge badge-circle badge-ghost badge-sm">
+                    <i class="fas fa-question text-xs"></i>
+                  </div>
+                </div>
+              </div>
             </div>
           </label>
         </div>
 
         <!-- MANUAL Mode Option -->
         <div class="form-control">
-          <label class="label cursor-pointer gap-3 items-start"> <!-- justify-start 제거 -->
+          <label class="label cursor-pointer gap-3 items-start">
             <input
               type="radio"
               name="processingMode"
@@ -56,15 +58,17 @@
               th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
               x-model="processingMode"
             />
-            <div class="flex flex-col w-full"> <!-- 변경: flex-1 -> flex flex-col w-full -->
-              <span class="font-semibold text-base text-secondary">
-                🎮 수동 처리 (MANUAL)
-              </span>
-              <span class="block text-xs text-base-content opacity-70 whitespace-normal"> <!-- mt-1 제거 및 whitespace-normal 유지 -->
-                각 단계를 사용자가 수동으로 진행할 수 있습니다.
-                <br/>
-                개발/테스트 환경이나 품질 검수에 권장됩니다.
-              </span>
+            <div class="flex flex-col w-full">
+                <div class="flex items-center gap-2">
+                    <span class="font-semibold text-base text-secondary">
+                        🎮 수동 처리 (MANUAL)
+                    </span>
+                    <div class="tooltip tooltip-right tooltip-sm" data-tip="각 단계를 사용자가 수동으로 진행할 수 있습니다. 개발/테스트 환경이나 품질 검수에 권장됩니다.">
+                        <div tabindex="0" role="button" class="badge badge-circle badge-ghost badge-sm">
+                            <i class="fas fa-question text-xs"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
           </label>
         </div>
