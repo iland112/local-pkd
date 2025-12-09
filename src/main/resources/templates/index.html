@@ -378,6 +378,7 @@
                         const { ctx, chartArea: { bottom }, scales: { x } } = chart;
                         const imageCache = chart.options.plugins.countryFlagLabels.imageCache;
                         
+                        ctx.save();
                         x.ticks.forEach((tick, index) => {
                             const countryCode = chart.data.labels[index];
                             if (!countryCode) return;
@@ -388,11 +389,17 @@
                                 const yPos = bottom + 5;
                                 const imageSize = 16;
                                 ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
+                            } else if (!img || img.failed) {
+                                const xPos = x.getPixelForTick(index);
+                                const yPos = bottom + 20;
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = this.getChartFontColor();
+                                ctx.fillText(countryCode, xPos, yPos);
                             }
                         });
+                        ctx.restore();
                     }
                 };
-                // Check if plugin is already registered
                 if (!Chart.registry.plugins.get('countryFlagLabels')) {
                     Chart.register(countryFlagLabelsPlugin);
                 }
@@ -458,18 +465,23 @@
 
               // 이미지 프리로드
               preloadFlagImages(countryCodes) {
-                  countryCodes.forEach(code => {
-                      if (!this.flagImageCache[code]) {
+                  const promises = countryCodes.map(code => {
+                      return new Promise((resolve) => {
+                          if (this.flagImageCache[code]) {
+                              resolve();
+                              return;
+                          }
                           const img = new Image();
-                          img.onload = () => {
-                              if (this.certificateCountryBarChartInstance) {
-                                  this.certificateCountryBarChartInstance.update();
-                              }
+                          img.onload = () => resolve();
+                          img.onerror = () => {
+                              img.failed = true;
+                              resolve();
                           };
                           img.src = `/svg/${code.toLowerCase()}.svg`;
                           this.flagImageCache[code] = img;
-                      }
+                      });
                   });
+                  return Promise.all(promises);
               },
   
               // 인증서 통계 로드
@@ -488,13 +500,14 @@
                               certificatesByCountry: data.certificatesByCountry || {}
                           };
                           
-                          this.preloadFlagImages(Object.keys(data.certificatesByCountry || {}));
-
-                          this.$nextTick(() => {
-                              this.createCertificateStatusPieChart();
-                              this.createCertificateTypePieChart();
-                              this.createCertificateCountryBarChart();
+                          this.preloadFlagImages(Object.keys(data.certificatesByCountry || {})).then(() => {
+                              this.$nextTick(() => {
+                                  this.createCertificateStatusPieChart();
+                                  this.createCertificateTypePieChart();
+                                  this.createCertificateCountryBarChart();
+                              });
                           });
+
                       } else {
                           console.warn('Failed to load certificate statistics, API might not be implemented yet.');
                       }
