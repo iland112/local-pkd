@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html
-  lang="ko"
   xmlns:th="http://www.thymeleaf.org"
   xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
   layout:decorate="~{layout/main}"
@@ -24,7 +23,7 @@
         </div>
 
         <!-- Page Header (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <div class="flex justify-between items-center">
               <h1 class="card-title text-3xl">
@@ -79,12 +78,12 @@
         </div>
 
         <!-- Search & Filter (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <h2 class="card-title">
               <i class="fas fa-filter text-primary"></i>
               검색 및 필터
-            </h2>
+            </h1>
 
             <form method="get" action="/upload-history" class="mt-4">
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -163,7 +162,7 @@
         </div>
 
         <!-- Results Table (DaisyUI) -->
-        <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body p-0">
             <div class="overflow-x-auto">
               <table class="table table-zebra w-full">
@@ -251,22 +250,23 @@
                                  data-filename=${history.fileName},
                                  data-format=${history.fileFormat},
                                  data-size=${history.fileSizeDisplay},
-                                 data-status=${history.status.displayName},
+                                 data-status=${uploadStatusDisplayNames[history.status]},
                                  data-time=${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm:ss')},
                                  data-hash=${history.fileHash},
                                  data-expected=${history.expectedChecksum},
                                  data-calculated=${history.calculatedChecksum},
                                  data-error=${history.errorMessage},
-                                 data-parsed-total=${history.parsingStats.certificateCount},
-                                 data-parsed-csca=${history.parsingStats.cscaCount},
-                                 data-parsed-dsc=${history.parsingStats.dscCount},
-                                 data-parsed-dsc-nc=${history.parsingStats.dscNcCount},
-                                 data-parsed-crl=${history.parsingStats.crlCount},
-                                 data-parsed-ml=${history.parsingStats.masterListCount},
-                                 data-validated-total=${history.validationStats.totalCount},
-                                 data-valid-count=${history.validationStats.validCount},
-                                 data-invalid-count=${history.validationStats.invalidCount},
-                                 data-expired-count=${history.validationStats.expiredCount}"
+                                 data-parsed-total=${history.parsedCertificateCount},
+                                 data-parsed-csca=${history.parsedCscaCount},
+                                 data-parsed-dsc=${history.parsedDscCount},
+                                 data-parsed-dsc-nc=${history.parsedDscNcCount},
+                                 data-parsed-crl=${history.parsedCrlCount},
+                                 data-parsed-ml=${history.parsedMasterListCount},
+                                 data-validated-total=${history.validatedCertificateCount},
+                                 data-valid-count=${history.validCertificateCount},
+                                 data-invalid-count=${history.invalidCertificateCount},
+                                 data-expired-count=${history.expiredCertificateCount},
+                                 data-ldap-saved-count=${history.totalLdapSavedCount}"
                         onclick="showDetailFromBtn(this)"
                       >
                         <i class="fas fa-eye"></i>
@@ -333,7 +333,7 @@
 
       <!-- Detail Modal (DaisyUI Modal) -->
       <dialog id="detailModal" class="modal">
-        <div class="modal-box max-w-3xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="modal-box max-w-3xl border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
           <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>
@@ -464,7 +464,7 @@
                 </h4>
                 <div class="stats stats-horizontal shadow bg-base-200">
                   <div class="stat">
-                    <div class="stat-title">검증 완료</div>
+                    <div class="stat-title">검증 대상</div>
                     <div class="stat-value text-sm" id="detail-validated-total">-</div>
                   </div>
                   <div class="stat">
@@ -478,6 +478,20 @@
                   <div class="stat">
                     <div class="stat-title">만료</div>
                     <div class="stat-value text-sm text-warning" id="detail-expired-count">-</div>
+                  </div>
+                </div>
+              </div>
+
+               <!-- LDAP Statistics -->
+              <div class="mb-4">
+                <h4 class="text-sm font-semibold mb-2">
+                  <i class="fas fa-database text-info mr-1"></i>
+                  LDAP 저장
+                </h4>
+                <div class="stats stats-horizontal shadow bg-base-200">
+                  <div class="stat">
+                    <div class="stat-title">저장된 인증서</div>
+                    <div class="stat-value text-sm text-info" id="detail-ldap-saved-count">-</div>
                   </div>
                 </div>
               </div>
@@ -551,9 +565,6 @@
           if (stats && (stats.parsedTotal > 0 || stats.validatedTotal > 0)) {
             // Parsing Statistics
             document.getElementById('detail-parsed-total').textContent = stats.parsedTotal || '0';
-            document.getElementById('detail-parsed-csca').textContent = stats.parsedCsca || '0';
-            document.getElementById('detail-parsed-dsc').textContent = stats.parsedDsc || '0';
-            document.getElementById('detail-parsed-dsc-nc').textContent = stats.parsedDscNc || '0';
             document.getElementById('detail-parsed-crl').textContent = stats.parsedCrl || '0';
             document.getElementById('detail-parsed-ml').textContent = stats.parsedMl || '0';
 
@@ -562,6 +573,9 @@
             document.getElementById('detail-valid-count').textContent = stats.validCount || '0';
             document.getElementById('detail-invalid-count').textContent = stats.invalidCount || '0';
             document.getElementById('detail-expired-count').textContent = stats.expiredCount || '0';
+
+            // LDAP Statistics
+            document.getElementById('detail-ldap-saved-count').textContent = stats.ldapSavedCount || '0';
 
             statsSection.style.display = 'block';
           } else {
@@ -584,15 +598,16 @@
           const d = btn.dataset;
           const stats = {
             parsedTotal: parseInt(d.parsedTotal) || 0,
-            parsedCsca: parseInt(d.parsedCsca) || 0,
-            parsedDsc: parseInt(d.parsedDsc) || 0,
-            parsedDscNc: parseInt(d.parsedDscNc) || 0,
+            parsedCsca: parseInt(d.parsedCsca) || 0, // This is not displayed, but kept for consistency
+            parsedDsc: parseInt(d.parsedDsc) || 0, // This is not displayed, but kept for consistency
+            parsedDscNc: parseInt(d.parsedDscNc) || 0, // This is not displayed, but kept for consistency
             parsedCrl: parseInt(d.parsedCrl) || 0,
             parsedMl: parseInt(d.parsedMl) || 0,
             validatedTotal: parseInt(d.validatedTotal) || 0,
             validCount: parseInt(d.validCount) || 0,
             invalidCount: parseInt(d.invalidCount) || 0,
-            expiredCount: parseInt(d.expiredCount) || 0
+            expiredCount: parseInt(d.expiredCount) || 0,
+            ldapSavedCount: parseInt(d.ldapSavedCount) || 0
           };
           showDetail(d.id, d.filename, d.format, d.size, d.status, d.time, d.hash, d.expected, d.calculated, d.error, stats);
         }

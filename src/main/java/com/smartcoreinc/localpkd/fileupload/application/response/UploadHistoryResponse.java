@@ -51,7 +51,7 @@ import java.util.UUID;
  * }</pre>
  *
  * @author SmartCore Inc.
- * @version 1.0
+ * @version 1.1
  * @since 2025-10-19
  */
 @Builder
@@ -84,7 +84,10 @@ public record UploadHistoryResponse(
         Integer validatedCertificateCount, // Total validated
         Integer validCertificateCount,     // Valid count
         Integer invalidCertificateCount,   // Invalid count
-        Integer expiredCertificateCount    // Expired count
+        Integer expiredCertificateCount,    // Expired count
+
+        // LDAP Statistics
+        Integer totalLdapSavedCount      // Total saved to LDAP
 ) {
     /**
      * UploadedFile Aggregate로부터 생성
@@ -116,7 +119,8 @@ public record UploadHistoryResponse(
             Integer validatedCertificateCount,
             Integer validCertificateCount,
             Integer invalidCertificateCount,
-            Integer expiredCertificateCount
+            Integer expiredCertificateCount,
+            Integer totalLdapSavedCount
     ) {
         return UploadHistoryResponse.builder()
                 .uploadId(uploadId)
@@ -144,6 +148,7 @@ public record UploadHistoryResponse(
                 .validCertificateCount(validCertificateCount)
                 .invalidCertificateCount(invalidCertificateCount)
                 .expiredCertificateCount(expiredCertificateCount)
+                .totalLdapSavedCount(totalLdapSavedCount)
                 .build();
     }
 }

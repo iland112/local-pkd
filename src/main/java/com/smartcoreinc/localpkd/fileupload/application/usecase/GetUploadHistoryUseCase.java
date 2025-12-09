@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  *
  * @author SmartCore Inc.
- * @version 1.0
+ * @version 1.1
  * @since 2025-10-19
  */
 @Slf4j
@@ -113,6 +113,9 @@ public class GetUploadHistoryUseCase {
             com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.EXPIRED
         );
 
+        // LDAP Statistics
+        int totalLdapSavedCount = validCount; // 'VALID' 상태인 인증서가 LDAP에 저장된 것으로 간주
+
         return UploadHistoryResponse.from(
             uploadId,
             uploadedFile.getFileName().getValue(),
@@ -142,7 +145,10 @@ public class GetUploadHistoryUseCase {
             validatedTotal,
             validCount,
             invalidCount,
-            expiredCount
+            expiredCount,
+
+            // LDAP Statistics
+            totalLdapSavedCount
         );
     }
 }
