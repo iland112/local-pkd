@@ -14,13 +14,17 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * 업로드 이력 조회 웹 컨트롤러 (DDD)
  *
  * <p>업로드된 파일 이력을 조회하는 웹 컨트롤러입니다.</p>
  *
  * @author SmartCore Inc.
- * @version 2.0 (DDD Refactoring)
+ * @version 2.1 (DDD Refactoring)
  * @since 2025-10-19
  */
 @Slf4j
@@ -76,6 +80,11 @@ public class UploadHistoryWebController {
             // Filter Options
             model.addAttribute("fileFormatTypes", FileFormat.Type.values());
             model.addAttribute("uploadStatuses", UploadStatus.values());
+            model.addAttribute(
+                "uploadStatusDisplayNames",
+                Arrays.stream(UploadStatus.values())
+                      .collect(Collectors.toMap(Enum::name, UploadStatus::getDisplayName))
+            );
 
             // Flash 메시지
             if (success != null) {
