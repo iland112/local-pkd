@@ -319,6 +319,38 @@
               }
             }
           });
+
+          // Chart.js Plugin for SVG Flag Labels
+            const countryFlagLabelsPlugin = {
+                id: 'countryFlagLabels',
+                afterDraw: (chart) => {
+                    const {
+                        ctx,
+                        chartArea: { top, bottom, left, right, width, height },
+                        scales: { x, y }
+                    } = chart;
+                    ctx.save();
+                    
+                    x.ticks.forEach((tick, index) => {
+                        const countryCode = chart.data.labels[index];
+                        if (!countryCode) return;
+
+                        const img = new Image();
+                        img.src = `/svg/${countryCode.toLowerCase()}.svg`;
+                        
+                        img.onload = () => {
+                            const xPos = x.getPixelForTick(index);
+                            const yPos = bottom + 5; // Position below the x-axis
+                            const imageSize = 16;
+                            
+                            ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
+                        }
+                    });
+                    
+                    ctx.restore();
+                }
+            };
+            Chart.register(countryFlagLabelsPlugin);
         });
   
         function dashboardApp() {
@@ -599,8 +631,24 @@
                         tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }}
                     },
                     scales: {
-                        x: { title: { display: true, text: '국가', color: this.getChartFontColor() }, ticks: { color: this.getChartFontColor() }, grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } },
-                        y: { beginAtZero: true, title: { display: true, text: '인증서 수', color: this.getChartFontColor() }, ticks: { color: this.getChartFontColor() }, grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } }
+                        x: { 
+                            title: { display: true, text: '국가', color: this.getChartFontColor() }, 
+                            ticks: { 
+                                color: this.getChartFontColor(),
+                                callback: function(value, index, ticks) {
+                                    // We will return null to hide the default text labels, 
+                                    // as our plugin will draw the images.
+                                    return null;
+                                }
+                            }, 
+                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
+                        },
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: '인증서 수', color: this.getChartFontColor() }, 
+                            ticks: { color: this.getChartFontColor() }, 
+                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
+                        }
                     }
                 };
               }
