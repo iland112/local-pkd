@@ -550,7 +550,7 @@
               if (this.sseReconnectAttempts < this.maxSseReconnectAttempts) {
                   this.sseReconnectAttempts++;
                   const delay = 2000 * Math.pow(2, this.sseReconnectAttempts - 1);
-                  this.errorMessages.push(`SSE 연결이 끊어졌습니다. ${delay/1000}초 후 재연결합니다...`);
+                  // this.errorMessages.push(`SSE 연결이 끊어졌습니다. ${delay/1000}초 후 재연결합니다...`); // Removed this line
                   this.sseReconnectTimer = setTimeout(() => this.startSseConnection(), delay);
               } else {
                   this.errorMessages.push('SSE 연결을 복구할 수 없습니다.');
