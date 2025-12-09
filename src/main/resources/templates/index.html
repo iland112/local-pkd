@@ -320,40 +320,6 @@
             }
           });
 
-          // Chart.js Plugin for SVG Flag Labels
-          const countryFlagLabelsPlugin = {
-              id: 'countryFlagLabels',
-              afterDraw: (chart) => {
-                  if (!chart.scales.x) {
-                      return;
-                  }
-                  const {
-                      ctx,
-                      chartArea: { top, bottom, left, right, width, height },
-                      scales: { x, y }
-                  } = chart;
-                  ctx.save();
-                  
-                  x.ticks.forEach((tick, index) => {
-                      const countryCode = chart.data.labels[index];
-                      if (!countryCode) return;
-
-                      const img = new Image();
-                      img.src = `/svg/${countryCode.toLowerCase()}.svg`;
-                      
-                      img.onload = () => {
-                          const xPos = x.getPixelForTick(index);
-                          const yPos = bottom + 5; // Position below the x-axis
-                          const imageSize = 16;
-                          
-                          ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
-                      }
-                  });
-                  
-                  ctx.restore();
-              }
-          };
-          Chart.register(countryFlagLabelsPlugin);
         });
   
         function dashboardApp() {
@@ -381,7 +347,8 @@
               },
               recentActivity: [],
               loadingRecent: false,
-  
+              flagImageCache: {},
+
               // 초기화
               init() {
                 this.updateDateTime();
@@ -400,6 +367,35 @@
                 this.$watch('$store.theme.darkMode', () => {
                     this.updateAllChartColors();
                 });
+                
+                // Register the plugin once.
+                const countryFlagLabelsPlugin = {
+                    id: 'countryFlagLabels',
+                    afterDraw: (chart) => {
+                        if (!chart.scales.x || chart.canvas.id !== 'certificateCountryBarChart') {
+                            return;
+                        }
+                        const { ctx, chartArea: { bottom }, scales: { x } } = chart;
+                        const imageCache = chart.options.plugins.countryFlagLabels.imageCache;
+                        
+                        x.ticks.forEach((tick, index) => {
+                            const countryCode = chart.data.labels[index];
+                            if (!countryCode) return;
+
+                            const img = imageCache[countryCode];
+                            if (img && img.complete) {
+                                const xPos = x.getPixelForTick(index);
+                                const yPos = bottom + 5;
+                                const imageSize = 16;
+                                ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
+                            }
+                        });
+                    }
+                };
+                // Check if plugin is already registered
+                if (!Chart.registry.plugins.get('countryFlagLabels')) {
+                    Chart.register(countryFlagLabelsPlugin);
+                }
               },
   
               // 날짜/시간 업데이트
@@ -459,6 +455,22 @@
                   console.error('Failed to load statistics:', error);
                 }
               },
+
+              // 이미지 프리로드
+              preloadFlagImages(countryCodes) {
+                  countryCodes.forEach(code => {
+                      if (!this.flagImageCache[code]) {
+                          const img = new Image();
+                          img.onload = () => {
+                              if (this.certificateCountryBarChartInstance) {
+                                  this.certificateCountryBarChartInstance.update();
+                              }
+                          };
+                          img.src = `/svg/${code.toLowerCase()}.svg`;
+                          this.flagImageCache[code] = img;
+                      }
+                  });
+              },
   
               // 인증서 통계 로드
               async loadCertificateStatistics() {
@@ -475,6 +487,9 @@
                               certificatesByType: data.certificatesByType || {},
                               certificatesByCountry: data.certificatesByCountry || {}
                           };
+                          
+                          this.preloadFlagImages(Object.keys(data.certificatesByCountry || {}));
+
                           this.$nextTick(() => {
                               this.createCertificateStatusPieChart();
                               this.createCertificateTypePieChart();
@@ -631,18 +646,16 @@
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }}
+                        tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }},
+                        countryFlagLabels: {
+                            imageCache: this.flagImageCache
+                        }
                     },
                     scales: {
                         x: { 
                             title: { display: true, text: '국가', color: this.getChartFontColor() }, 
                             ticks: { 
-                                color: this.getChartFontColor(),
-                                callback: function(value, index, ticks) {
-                                    // We will return null to hide the default text labels, 
-                                    // as our plugin will draw the images.
-                                    return null;
-                                }
+                                callback: () => null // Hide text labels
                             }, 
                             grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
                         },
