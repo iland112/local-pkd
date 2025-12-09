@@ -377,6 +377,7 @@
                         }
                         const { ctx, chartArea: { bottom }, scales: { x } } = chart;
                         const imageCache = chart.options.plugins.countryFlagLabels.imageCache;
+                        const fontColor = chart.options.plugins.countryFlagLabels.fontColor;
                         
                         ctx.save();
                         x.ticks.forEach((tick, index) => {
@@ -384,16 +385,16 @@
                             if (!countryCode) return;
 
                             const img = imageCache[countryCode];
-                            if (img && img.complete) {
+                            if (img && img.complete && !img.failed) {
                                 const xPos = x.getPixelForTick(index);
                                 const yPos = bottom + 5;
                                 const imageSize = 16;
                                 ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
-                            } else if (!img || img.failed) {
+                            } else {
                                 const xPos = x.getPixelForTick(index);
-                                const yPos = bottom + 20;
+                                const yPos = bottom + 15;
                                 ctx.textAlign = 'center';
-                                ctx.fillStyle = this.getChartFontColor();
+                                ctx.fillStyle = fontColor;
                                 ctx.fillText(countryCode, xPos, yPos);
                             }
                         });
@@ -661,7 +662,8 @@
                         legend: { display: false },
                         tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }},
                         countryFlagLabels: {
-                            imageCache: this.flagImageCache
+                            imageCache: this.flagImageCache,
+                            fontColor: this.getChartFontColor()
                         }
                     },
                     scales: {
