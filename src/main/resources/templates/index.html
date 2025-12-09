@@ -321,36 +321,39 @@
           });
 
           // Chart.js Plugin for SVG Flag Labels
-            const countryFlagLabelsPlugin = {
-                id: 'countryFlagLabels',
-                afterDraw: (chart) => {
-                    const {
-                        ctx,
-                        chartArea: { top, bottom, left, right, width, height },
-                        scales: { x, y }
-                    } = chart;
-                    ctx.save();
-                    
-                    x.ticks.forEach((tick, index) => {
-                        const countryCode = chart.data.labels[index];
-                        if (!countryCode) return;
+          const countryFlagLabelsPlugin = {
+              id: 'countryFlagLabels',
+              afterDraw: (chart) => {
+                  if (!chart.scales.x) {
+                      return;
+                  }
+                  const {
+                      ctx,
+                      chartArea: { top, bottom, left, right, width, height },
+                      scales: { x, y }
+                  } = chart;
+                  ctx.save();
+                  
+                  x.ticks.forEach((tick, index) => {
+                      const countryCode = chart.data.labels[index];
+                      if (!countryCode) return;
 
-                        const img = new Image();
-                        img.src = `/svg/${countryCode.toLowerCase()}.svg`;
-                        
-                        img.onload = () => {
-                            const xPos = x.getPixelForTick(index);
-                            const yPos = bottom + 5; // Position below the x-axis
-                            const imageSize = 16;
-                            
-                            ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
-                        }
-                    });
-                    
-                    ctx.restore();
-                }
-            };
-            Chart.register(countryFlagLabelsPlugin);
+                      const img = new Image();
+                      img.src = `/svg/${countryCode.toLowerCase()}.svg`;
+                      
+                      img.onload = () => {
+                          const xPos = x.getPixelForTick(index);
+                          const yPos = bottom + 5; // Position below the x-axis
+                          const imageSize = 16;
+                          
+                          ctx.drawImage(img, xPos - (imageSize / 2), yPos, imageSize, imageSize);
+                      }
+                  });
+                  
+                  ctx.restore();
+              }
+          };
+          Chart.register(countryFlagLabelsPlugin);
         });
   
         function dashboardApp() {
