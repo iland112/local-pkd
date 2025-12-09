@@ -288,7 +288,7 @@
 
             <!-- Pagination (DaisyUI) -->
             <div th:if="${!historyPage.empty}" class="flex justify-between items-center p-4 border-t border-base-300">
-              <div class="text-sm">
+              <div class="text-base">
                 전체 <span class="font-bold text-primary" th:text="${totalElements}">0</span>개 중
                 <span class="font-bold text-primary" th:text="${historyPage.numberOfElements}">0</span>개 표시
               </div>
@@ -297,29 +297,29 @@
                 <a
                   th:if="${currentPage > 0}"
                   th:href="@{/upload-history(page=${currentPage - 1}, size=${size}, search=${search}, status=${status}, format=${format})}"
-                  class="join-item btn btn-sm"
+                  class="join-item btn btn-md"
                 >
                   «
                 </a>
-                <button th:if="${currentPage == 0}" class="join-item btn btn-sm btn-disabled">«</button>
+                <button th:if="${currentPage == 0}" class="join-item btn btn-md btn-disabled">«</button>
 
-                <button class="join-item btn btn-sm btn-active">
+                <button class="join-item btn btn-md btn-active">
                   페이지 <span th:text="${currentPage + 1}">1</span> / <span th:text="${totalPages}">10</span>
                 </button>
 
                 <a
                   th:if="${currentPage < totalPages - 1}"
                   th:href="@{/upload-history(page=${currentPage + 1}, size=${size}, search=${search}, status=${status}, format=${format})}"
-                  class="join-item btn btn-sm"
+                  class="join-item btn btn-md"
                 >
                   »
                 </a>
-                <button th:if="${currentPage >= totalPages - 1}" class="join-item btn btn-sm btn-disabled">»</button>
+                <button th:if="${currentPage >= totalPages - 1}" class="join-item btn btn-md btn-disabled">»</button>
               </div>
 
               <div class="flex items-center gap-2">
-                <span class="text-sm">페이지당</span>
-                <select class="select select-bordered select-sm" onchange="changePageSize(this.value)">
+                <span class="text-base">페이지당</span>
+                <select class="select select-bordered select-md" onchange="changePageSize(this.value)">
                   <option value="10" th:selected="${size == 10}">10</option>
                   <option value="20" th:selected="${size == 20}">20</option>
                   <option value="50" th:selected="${size == 50}">50</option>
