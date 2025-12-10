@@ -354,4 +354,29 @@ public interface CertificateRepository {
      * @return 인증서 타입별 개수
      */
     List<CountryCount> countCertificatesByCountry();
+
+    /**
+     * 인증서 타입별 Certificate 목록 조회
+     *
+     * <p>특정 타입의 모든 인증서를 조회합니다.</p>
+     * <p>DSC 검증 시 CSCA 캐시 구축에 사용됩니다 (Phase 1-2 최적화)</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * // 전체 CSCA 인증서 조회 (DSC 검증용 캐시 구축)
+     * List<Certificate> allCscas = certificateRepository.findAllByType(CertificateType.CSCA);
+     *
+     * // CSCA 캐시 구축
+     * Map<String, Certificate> cscaCache = allCscas.stream()
+     *     .collect(Collectors.toMap(
+     *         cert -> cert.getSubjectInfo().getDistinguishedName(),
+     *         cert -> cert
+     *     ));
+     * }</pre>
+     *
+     * @param certificateType 인증서 타입 (CSCA, DSC, DSC_NC)
+     * @return Certificate 목록 (빈 리스트 가능)
+     * @throws IllegalArgumentException certificateType이 null인 경우
+     */
+    List<Certificate> findAllByType(CertificateType certificateType);
 }

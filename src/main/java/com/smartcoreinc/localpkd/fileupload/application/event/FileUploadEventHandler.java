@@ -42,6 +42,7 @@ public class FileUploadEventHandler {
     private final ValidateCertificatesUseCase validateCertificatesUseCase;
     private final ProgressService progressService;
     private final ParsedFileRepository parsedFileRepository;
+    private final com.smartcoreinc.localpkd.ldapintegration.application.usecase.UploadToLdapUseCase uploadToLdapUseCase;
 
     @EventListener
     public void handleFileUploaded(FileUploadedEvent event) {
@@ -88,7 +89,15 @@ public class FileUploadEventHandler {
             if (!validationResponse.success()) {
                throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
             }
-            // TODO: Chain to LDAP Upload
+
+            // 3. Upload to LDAP
+            com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse ldapResponse = uploadToLdap(
+                uploadedFile,
+                validationResponse
+            );
+            if (!ldapResponse.success()) {
+                throw new RuntimeException("LDAP upload failed: " + ldapResponse.errorMessage());
+            }
 
         } catch (Exception e) {
             log.error("Failed to process file for uploadId: {}", event.uploadId().getId(), e);
@@ -144,7 +153,7 @@ public class FileUploadEventHandler {
     }
 
     private CertificatesValidatedResponse validateCertificates(
-            UUID uploadId, UUID parsedFileId, int certificateCount, int crlCount) { 
+            UUID uploadId, UUID parsedFileId, int certificateCount, int crlCount) {
         progressService.sendProgress(ProcessingProgress.validationStarted(uploadId, certificateCount));
         log.info("Triggering certificate validation for uploadId={}", uploadId);
         ValidateCertificatesCommand validationCommand = ValidateCertificatesCommand.builder()
@@ -155,7 +164,47 @@ public class FileUploadEventHandler {
             .build();
         return validateCertificatesUseCase.execute(validationCommand);
     }
-    
+
+    private com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse uploadToLdap(
+            UploadedFile uploadedFile,
+            CertificatesValidatedResponse validationResponse) {
+        // Update status to UPLOADING_TO_LDAP
+        uploadedFile.updateStatusToUploadingToLdap();
+        uploadedFileRepository.save(uploadedFile);
+
+        log.info("Triggering LDAP upload for uploadId={}", uploadedFile.getId().getId());
+
+        // Create command for LDAP upload
+        // Note: ALL certificates (valid + invalid + expired) are uploaded to LDAP with their validation status
+        com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand ldapCommand =
+            com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand.create(
+                uploadedFile.getId().getId(),
+                validationResponse.validCertificateCount() + validationResponse.invalidCertificateCount(),  // All certificates
+                validationResponse.validCrlCount() + validationResponse.invalidCrlCount()  // All CRLs
+            );
+
+        // Execute LDAP upload
+        com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse ldapResponse =
+            uploadToLdapUseCase.execute(ldapCommand);
+
+        if (ldapResponse.success()) {
+            // Update status to COMPLETED
+            uploadedFile.updateStatusToCompleted();
+            uploadedFileRepository.save(uploadedFile);
+
+            log.info("LDAP upload completed successfully for uploadId={}, totalUploaded={}, totalFailed={}",
+                uploadedFile.getId().getId(), ldapResponse.getTotalUploaded(), ldapResponse.getTotalFailed());
+        } else {
+            // Update status to FAILED
+            uploadedFile.fail(ldapResponse.errorMessage());
+            uploadedFileRepository.save(uploadedFile);
+
+            log.error("LDAP upload failed for uploadId={}: {}", uploadedFile.getId().getId(), ldapResponse.errorMessage());
+        }
+
+        return ldapResponse;
+    }
+
 
     /**
      * Handle FileParsingCompletedEvent to send manual pause for MANUAL mode

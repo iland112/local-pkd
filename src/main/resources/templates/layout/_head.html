@@ -110,6 +110,11 @@
               recentActivity: [],
               loadingRecent: false,
 
+              // Chart instances (initialized to null)
+              certificateStatusPieChartInstance: null,
+              certificateTypePieChartInstance: null,
+              certificateCountryBarChartInstance: null,
+
 
               // 초기화
               init() {
@@ -264,12 +269,28 @@
               },
 
               updateAllChartColors() {
-                  const charts = [this.certificateStatusPieChartInstance, this.certificateTypePieChartInstance, this.certificateCountryBarChartInstance];
-                  charts.forEach(chart => this.updateChartColors(chart));
+                  try {
+                      const charts = [
+                          this.certificateStatusPieChartInstance,
+                          this.certificateTypePieChartInstance,
+                          this.certificateCountryBarChartInstance
+                      ];
+                      charts.forEach(chart => {
+                          if (chart) {
+                              this.updateChartColors(chart);
+                          }
+                      });
+                  } catch (error) {
+                      console.error('Error updating chart colors:', error);
+                  }
               },
 
               updateChartColors(chart) {
-                  if (!chart) return;
+                  if (!chart || !chart.options || !chart.data) {
+                      console.warn('Invalid chart object provided to updateChartColors');
+                      return;
+                  }
+                  try {
                   const newFontColor = this.getChartFontColor();
                   chart.options.plugins.legend.labels.color = newFontColor;
                   if (chart.config.type === 'bar') {
@@ -289,6 +310,9 @@
                       }
                   }
                   chart.update();
+                  } catch (error) {
+                      console.error('Error updating chart colors:', error);
+                  }
               },
               
               getPieChartBackgroundColors(darkMode = false) {
@@ -298,12 +322,26 @@
               },
 
               createOrUpdateChart(canvasId, type, data, options) {
-                  const ctx = document.getElementById(canvasId).getContext('2d');
-                  const existingChart = Chart.getChart(ctx);
-                  if (existingChart) {
-                      existingChart.destroy();
+                  try {
+                      const canvas = document.getElementById(canvasId);
+                      if (!canvas) {
+                          console.warn(`Canvas element with id '${canvasId}' not found`);
+                          return null;
+                      }
+                      const ctx = canvas.getContext('2d');
+                      if (!ctx) {
+                          console.warn(`Could not get 2d context for canvas '${canvasId}'`);
+                          return null;
+                      }
+                      const existingChart = Chart.getChart(ctx);
+                      if (existingChart) {
+                          existingChart.destroy();
+                      }
+                      return new Chart(ctx, { type, data, options });
+                  } catch (error) {
+                      console.error(`Error creating chart '${canvasId}':`, error);
+                      return null;
                   }
-                  return new Chart(ctx, { type, data, options });
               },
 
               // Create Pie Chart for Certificate Status (Valid/Invalid)

@@ -218,6 +218,20 @@ public class JpaCertificateRepository implements CertificateRepository {
         return jpaRepository.countCertificatesByCountry();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findAllByType(CertificateType certificateType) {
+        if (certificateType == null) {
+            log.warn("Cannot find certificates by type: certificateType is null");
+            throw new IllegalArgumentException("certificateType must not be null");
+        }
+
+        log.debug("Finding all certificates by type: {}", certificateType);
+        List<Certificate> certificates = jpaRepository.findByCertificateType(certificateType);
+        log.info("Found {} certificates of type: {}", certificates.size(), certificateType);
+        return certificates;
+    }
+
     // ========== Phase 2 - Master List & Source Tracking Query Methods ==========
 
     /**

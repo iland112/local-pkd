@@ -83,12 +83,31 @@ public class LdifParserAdapter implements FileParserPort {
                 if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
                     byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
                     try {
-                        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-                        X509Certificate cert = (X509Certificate) certFactory.generateCertificate(
-                            new ByteArrayInputStream(certBytes)
-                        );
-                        String fingerprint = calculateFingerprint(cert);
-                        allFingerprints.add(fingerprint);
+                        String fingerprint = null;
+
+                        // Try standard X509Certificate parsing first
+                        try {
+                            CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(
+                                new ByteArrayInputStream(certBytes)
+                            );
+                            fingerprint = calculateFingerprint(cert);
+                        } catch (Exception e) {
+                            // Check if this is an EC Parameter error
+                            if (e.getMessage() != null && e.getMessage().contains("ECParameters")) {
+                                log.debug("Certificate uses explicit EC parameters, using fallback fingerprint calculation: entry={}",
+                                    entry.getDN());
+                                // Fallback: Calculate fingerprint directly from bytes
+                                fingerprint = calculateFingerprintFromBytes(certBytes);
+                            } else {
+                                // Other error, rethrow
+                                throw e;
+                            }
+                        }
+
+                        if (fingerprint != null) {
+                            allFingerprints.add(fingerprint);
+                        }
                     } catch (Exception e) {
                         log.warn("Failed to calculate fingerprint for entry: {}", entry.getDN(), e);
                     }
@@ -134,12 +153,25 @@ public class LdifParserAdapter implements FileParserPort {
      * ✅ 캐시 기반 엔트리 파싱 (배치 중복 체크 최적화)
      */
     private void parseEntryWithCache(Entry entry, int entryNumber, ParsedFile parsedFile, Set<String> existingFingerprints) {
+        // Debug: Log all entry DNs that contain "crl" to diagnose CRL parsing issue
+        if (entry.getDN() != null && entry.getDN().toLowerCase().contains("crl")) {
+            log.debug("Found CRL-related entry: dn={}, attributes={}", entry.getDN(),
+                java.util.Arrays.toString(entry.getAttributes().toArray()));
+            log.debug("Has ATTR_CRL ({}): {}", ATTR_CRL, entry.hasAttribute(ATTR_CRL));
+        }
+
         if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
             parseCertificateFromEntryWithCache(entry, parsedFile, existingFingerprints);
         } else if (entry.hasAttribute(ATTR_CRL)) {
+            log.debug("CRL entry found: dn={}", entry.getDN());
             parseCrlFromBytes(entry.getAttribute(ATTR_CRL).getValueByteArray(), entry.getDN(), parsedFile);
         } else if (entry.hasAttribute(ATTR_MASTER_LIST_CONTENT)) {
             parseMasterListContent(entry.getAttribute(ATTR_MASTER_LIST_CONTENT).getValueByteArray(), entry.getDN(), parsedFile);
+        } else {
+            // Log entries that don't match any known type
+            if (entry.getDN() != null && !entry.getDN().contains("dc=data") && !entry.getDN().contains("o=crl") && !entry.getDN().contains("c=")) {
+                log.trace("Skipping entry (no recognized attributes): dn={}", entry.getDN());
+            }
         }
     }
 
@@ -166,11 +198,29 @@ public class LdifParserAdapter implements FileParserPort {
         byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
         String dn = entry.getDN();
         try {
-            CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
+            X509Certificate cert = null;
+            X509CertificateHolder holder = null;
+            boolean usesFallbackParsing = false;
 
-            String subjectDn = cert.getSubjectX500Principal().getName();
-            String issuerDn = cert.getIssuerX500Principal().getName();
+            // Try standard X509Certificate parsing first
+            try {
+                CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+                cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
+            } catch (Exception e) {
+                // Check if this is an EC Parameter error
+                if (e.getMessage() != null && e.getMessage().contains("ECParameters")) {
+                    log.warn("Certificate uses explicit EC parameters, using fallback parsing: dn={}", dn);
+                    usesFallbackParsing = true;
+                    // Parse using X509CertificateHolder instead
+                    holder = new X509CertificateHolder(certBytes);
+                } else {
+                    // Other error, rethrow
+                    throw e;
+                }
+            }
+
+            String subjectDn = usesFallbackParsing ? holder.getSubject().toString() : cert.getSubjectX500Principal().getName();
+            String issuerDn = usesFallbackParsing ? holder.getIssuer().toString() : cert.getIssuerX500Principal().getName();
             String countryCode = extractCountryCode(subjectDn);
 
             boolean selfSigned = subjectDn.equals(issuerDn);
@@ -186,7 +236,7 @@ public class LdifParserAdapter implements FileParserPort {
                 certType = "DSC";
             }
 
-            String fingerprint = calculateFingerprint(cert);
+            String fingerprint = usesFallbackParsing ? calculateFingerprintFromBytes(certBytes) : calculateFingerprint(cert);
 
             Map<String, List<String>> allAttributes = new HashMap<>();
             for (Attribute attr : entry.getAttributes()) {
@@ -206,19 +256,40 @@ public class LdifParserAdapter implements FileParserPort {
 
             // ✅ 메모리 Set으로 중복 체크 (DB 조회 없음)
             if (!existingFingerprints.contains(fingerprint)) {
-                CertificateData certData = CertificateData.of(
-                    certType,
-                    countryCode,
-                    subjectDn,
-                    issuerDn,
-                    cert.getSerialNumber().toString(16),
-                    convertToLocalDateTime(cert.getNotBefore()),
-                    convertToLocalDateTime(cert.getNotAfter()),
-                    cert.getEncoded(),
-                    fingerprint,
-                    true,
-                    allAttributes
-                );
+                CertificateData certData;
+                if (usesFallbackParsing) {
+                    // Fallback: Extract data from X509CertificateHolder
+                    certData = CertificateData.of(
+                        certType,
+                        countryCode,
+                        subjectDn,
+                        issuerDn,
+                        holder.getSerialNumber().toString(16).toUpperCase(),
+                        convertToLocalDateTime(holder.getNotBefore()),
+                        convertToLocalDateTime(holder.getNotAfter()),
+                        holder.getEncoded(),
+                        fingerprint,
+                        true,
+                        allAttributes
+                    );
+                    log.info("Successfully parsed DSC/CSCA with explicit EC parameters using fallback: fingerprint={}, type={}",
+                        fingerprint.substring(0, 16) + "...", certType);
+                } else {
+                    // Standard parsing
+                    certData = CertificateData.of(
+                        certType,
+                        countryCode,
+                        subjectDn,
+                        issuerDn,
+                        cert.getSerialNumber().toString(16).toUpperCase(),
+                        convertToLocalDateTime(cert.getNotBefore()),
+                        convertToLocalDateTime(cert.getNotAfter()),
+                        cert.getEncoded(),
+                        fingerprint,
+                        true,
+                        allAttributes
+                    );
+                }
                 parsedFile.addCertificate(certData);
             } else {
                 parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
@@ -226,6 +297,7 @@ public class LdifParserAdapter implements FileParserPort {
             }
         } catch (Exception e) {
             parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", dn, e.getMessage()));
+            log.error("Failed to parse certificate entry: dn={}, error={}", dn, e.getMessage(), e);
         }
     }
 
@@ -331,8 +403,12 @@ public class LdifParserAdapter implements FileParserPort {
                 true
             );
             parsedFile.addCrl(crlData);
+            log.debug("CRL parsed successfully: country={}, issuer={}, revokedCount={}",
+                countryCode, crl.getIssuerX500Principal().getName(),
+                crl.getRevokedCertificates() != null ? crl.getRevokedCertificates().size() : 0);
         } catch (Exception e) {
             parsedFile.addError(ParsingError.of("CRL_PARSE_ERROR", dn, e.getMessage()));
+            log.warn("CRL parse error: dn={}, error={}", dn, e.getMessage());
         }
     }
 

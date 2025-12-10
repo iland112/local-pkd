@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.5
-**Last Updated**: 2025-12-05
-**Status**: Production Ready (Phase 1-19 Complete + Upload Statistics Feature)
+**Version**: 3.6
+**Last Updated**: 2025-12-11
+**Status**: Production Ready (Phase 1-19 Complete + CRL Persistence + UI Fixes)
 
 ---
 
@@ -923,7 +923,8 @@ http://172.24.1.6:8081
 12. ✅ **SSE 진행 상황 상세화** (2025-12-03) - 각 단계별 인증서 타입, 유효성 통계를 포함한 상세 정보 표시
 13. ✅ **중복 인증서 감사 추적 지원** (2025-12-05) - parsed_certificate PK를 (parsed_file_id, fingerprint_sha256)로 변경하여 주기적 PKD 업데이트 시 중복 인증서 이력 추적 가능
 14. ✅ **데이터베이스 마이그레이션 통합** (2025-12-05) - 10개 마이그레이션 파일 (V1-V17, 958 라인)을 단일 V1__Initial_Schema.sql (465 라인)로 통합, ALTER 문 완전 제거, 32개 누락 컬럼 추가, SSE 오류 수정 (상세 내역: [SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md](docs/SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md))
-15. ✅ **업로드 통계 기능 구현** (2025-12-05 **NEW**) - 업로드 상세정보 dialog에 파싱 통계(인증서 타입별, CRL, Master List) 및 검증 통계(총 검증, 유효, 무효, 만료) 추가, 4개 repository에 uploadId 기반 count 메서드 구현, DaisyUI stats 컴포넌트로 시각화 (상세 내역: [SESSION_2025-12-05_UPLOAD_STATISTICS.md](docs/SESSION_2025-12-05_UPLOAD_STATISTICS.md))
+15. ✅ **업로드 통계 기능 구현** (2025-12-05) - 업로드 상세정보 dialog에 파싱 통계(인증서 타입별, CRL, Master List) 및 검증 통계(총 검증, 유효, 무효, 만료) 추가, 4개 repository에 uploadId 기반 count 메서드 구현, DaisyUI stats 컴포넌트로 시각화 (상세 내역: [SESSION_2025-12-05_UPLOAD_STATISTICS.md](docs/SESSION_2025-12-05_UPLOAD_STATISTICS.md))
+16. ✅ **CRL 영속화 및 UI 오류 수정** (2025-12-11 **NEW**) - CRL이 파싱되지만 DB에 저장되지 않던 문제 해결 (ValidateCertificatesUseCase.java에 CRL 영속화 로직 구현, 배치 저장, SSE 진행 상황 추가), 대시보드 차트 인스턴스 미선언 오류 수정, 차트 생성/색상 업데이트 메서드에 에러 핸들링 추가, 업로드 이력 페이지 darkMode 변수 참조 오류 수정 (4개 UI 오류 해결) (상세 내역: [SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md](docs/SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md))
 
 ### Remaining TODOs
 
@@ -1088,8 +1089,8 @@ ldapsearch -x -H ldap://192.168.100.10:389 \
 
 ---
 
-**Document Version**: 3.3
+**Document Version**: 3.6
 **Status**: PRODUCTION READY ✅
-**Last Review**: 2025-12-05
+**Last Review**: 2025-12-11
 
 *이 문서는 프로젝트의 핵심 정보와 최신 아키텍처 변경사항을 포함합니다. 상세한 구현 내용은 `docs/` 디렉토리의 개별 문서를 참조하세요.*

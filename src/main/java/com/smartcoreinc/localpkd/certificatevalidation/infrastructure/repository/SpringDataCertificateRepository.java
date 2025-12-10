@@ -119,4 +119,13 @@ public interface SpringDataCertificateRepository extends JpaRepository<Certifica
      * @return Certificate count for the given status
      */
     long countByUploadIdAndStatus(java.util.UUID uploadId, CertificateStatus status);
+
+    /**
+     * Find all certificates by certificate type
+     * Phase 1-2 CSCA 캐시 최적화: DSC 검증 시 전체 CSCA 조회
+     *
+     * @param certificateType Certificate type (CSCA, DSC, DSC_NC)
+     * @return List of certificates of the specified type
+     */
+    List<Certificate> findByCertificateType(com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType certificateType);
 }

@@ -409,10 +409,83 @@ public class ValidateCertificatesUseCase {
                 totalCertificates, validCertificateIds.size(), invalidCertificateIds.size());
 
 
-            // 4. CRL은 현재 스킵 (향후 Phase에서 구현)
+            // 4. CRL 검증 및 저장
+            log.info("=== CRL validation and persistence started ===");
             List<UUID> validCrlIds = new ArrayList<>();
             List<UUID> invalidCrlIds = new ArrayList<>();
-            log.info("CRL validation skipped (future implementation)");
+
+            List<com.smartcoreinc.localpkd.fileparsing.domain.model.CrlData> crlDataList = parsedFile.getCrls();
+            log.info("Found {} CRLs to process", crlDataList.size());
+
+            List<CertificateRevocationList> crlBatch = new ArrayList<>();
+
+            for (int i = 0; i < crlDataList.size(); i++) {
+                com.smartcoreinc.localpkd.fileparsing.domain.model.CrlData crlData = crlDataList.get(i);
+
+                try {
+                    // Create value objects
+                    CrlId crlId = CrlId.newId();
+                    IssuerName issuerName = IssuerName.of(crlData.getIssuerDN());
+                    CountryCode countryCode = CountryCode.of(crlData.getCountryCode());
+                    ValidityPeriod validityPeriod = ValidityPeriod.of(
+                        crlData.getThisUpdate(),
+                        crlData.getNextUpdate()
+                    );
+                    X509CrlData x509CrlData = X509CrlData.of(
+                        crlData.getCrlBinary(),
+                        crlData.getRevokedCertificatesCount()
+                    );
+                    RevokedCertificates revokedCertificates = RevokedCertificates.empty(); // We don't extract individual serials during parsing
+
+                    // Create CRL entity
+                    CertificateRevocationList crl = CertificateRevocationList.create(
+                        command.uploadId(),
+                        crlId,
+                        issuerName,
+                        countryCode,
+                        validityPeriod,
+                        x509CrlData,
+                        revokedCertificates
+                    );
+
+                    crlBatch.add(crl);
+                    validCrlIds.add(crlId.getId());
+
+                    log.debug("CRL processed: country={}, issuer={}, revokedCount={}",
+                        crlData.getCountryCode(),
+                        crlData.getIssuerDN().substring(0, Math.min(50, crlData.getIssuerDN().length())),
+                        crlData.getRevokedCertificatesCount());
+
+                } catch (Exception e) {
+                    log.error("Failed to process CRL: issuer={}, error={}",
+                        crlData.getIssuerDN(), e.getMessage(), e);
+                    // Continue processing other CRLs even if one fails
+                }
+
+                // Send progress update
+                if ((i + 1) % 10 == 0 || (i + 1) == crlDataList.size()) {
+                    int percentage = 85 + ((i + 1) * 5 / Math.max(crlDataList.size(), 1)); // 85-90%
+                    progressService.sendProgress(
+                        ProcessingProgress.builder()
+                            .uploadId(command.uploadId())
+                            .stage(ProcessingStage.VALIDATION_IN_PROGRESS)
+                            .percentage(Math.min(90, percentage))
+                            .processedCount(i + 1)
+                            .totalCount(crlDataList.size())
+                            .message(String.format("CRL 처리 중 (%d/%d)", i + 1, crlDataList.size()))
+                            .build()
+                    );
+                }
+            }
+
+            // Save all CRLs to database
+            if (!crlBatch.isEmpty()) {
+                log.info("Saving {} CRLs to database...", crlBatch.size());
+                crlRepository.saveAll(crlBatch);
+                log.info("CRL persistence completed: {} CRLs saved", crlBatch.size());
+            }
+
+            log.info("CRL validation completed: {} valid, {} invalid", validCrlIds.size(), invalidCrlIds.size());
 
             // 5. CertificatesValidatedEvent 생성 및 발행
             CertificatesValidatedEvent event = new CertificatesValidatedEvent(
@@ -980,29 +1053,52 @@ public class ValidateCertificatesUseCase {
     }
 
     /**
+     * LocalDateTime을 Date로 변환
+     */
+    private Date convertToDate(LocalDateTime localDateTime) {
+        return Date.from(localDateTime
+            .atZone(ZoneId.systemDefault())
+            .toInstant());
+    }
+
+    /**
      * ✅ CSCA 캐시 구축 메서드
      * Performance optimization: DSC 검증 시 N+1 쿼리 제거
      *
-     * @param uploadId 업로드 ID
+     * <p><b>중요</b>: 현재 업로드뿐만 아니라 <b>전체 DB의 모든 CSCA</b>를 캐시에 로드합니다.</p>
+     * <p>이유: DSC 파일과 CSCA 파일이 별도로 업로드될 수 있으므로,
+     * DSC 검증 시 다른 업로드의 CSCA도 참조할 수 있어야 합니다.</p>
+     *
+     * @param uploadId 현재 업로드 ID (로깅용으로만 사용)
      * @return SubjectDN → Certificate 매핑 캐시
      */
     private Map<String, Certificate> buildCscaCache(UUID uploadId) {
-        log.debug("Building CSCA cache for uploadId: {}", uploadId);
+        log.debug("Building CSCA cache for uploadId: {} (loading ALL CSCAs from database)", uploadId);
 
-        // 모든 인증서 조회 (단일 쿼리)
-        List<Certificate> allCertificates = certificateRepository.findByUploadId(uploadId);
+        // ✅ 전체 DB의 모든 CSCA 인증서 조회 (단일 쿼리)
+        // ❌ 이전: findByUploadId(uploadId) - 현재 업로드만 조회
+        // ✅ 개선: findAllByType(CSCA) - 전체 DB의 모든 CSCA 조회
+        List<Certificate> allCscas = certificateRepository.findAllByType(CertificateType.CSCA);
 
-        // CSCA만 필터링하여 Map 구축
-        Map<String, Certificate> cscaCache = allCertificates.stream()
-            .filter(cert -> cert.getCertificateType() == CertificateType.CSCA)
+        // CSCA를 SubjectDN 기준으로 Map 구축
+        Map<String, Certificate> cscaCache = allCscas.stream()
             .collect(java.util.stream.Collectors.toMap(
                 cert -> cert.getSubjectInfo().getDistinguishedName(),  // Key: SubjectDN
                 cert -> cert,                                            // Value: Certificate
-                (existing, replacement) -> existing                      // 중복 시 기존 값 유지
+                (existing, replacement) -> {
+                    // 중복 SubjectDN이 있을 경우: 최신 인증서 사용 (createdAt 기준)
+                    if (existing.getCreatedAt().isAfter(replacement.getCreatedAt())) {
+                        log.debug("Duplicate SubjectDN found, keeping newer certificate: {}", existing.getSubjectInfo().getDistinguishedName());
+                        return existing;
+                    } else {
+                        log.debug("Duplicate SubjectDN found, keeping newer certificate: {}", replacement.getSubjectInfo().getDistinguishedName());
+                        return replacement;
+                    }
+                }
             ));
 
-        log.info("CSCA cache built successfully: {} CSCAs cached from {} total certificates",
-            cscaCache.size(), allCertificates.size());
+        log.info("✅ CSCA cache built successfully: {} CSCAs cached (from entire database, not limited to current upload)",
+            cscaCache.size());
 
         return cscaCache;
     }

@@ -23,7 +23,7 @@
         </div>
 
         <!-- Page Header (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <div class="flex justify-between items-center">
               <h1 class="card-title text-3xl">
@@ -78,7 +78,7 @@
         </div>
 
         <!-- Search & Filter (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body">
             <h2 class="card-title">
               <i class="fas fa-filter text-primary"></i>
@@ -162,7 +162,7 @@
         </div>
 
         <!-- Results Table (DaisyUI) -->
-        <div class="card bg-base-100 shadow-xl border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <div class="card-body p-0">
             <div class="overflow-x-auto">
               <table class="table table-zebra w-full">
@@ -333,7 +333,7 @@
 
       <!-- Detail Modal (DaisyUI Modal) -->
       <dialog id="detailModal" class="modal">
-        <div class="modal-box max-w-3xl border" :class="darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="modal-box max-w-3xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
           <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>

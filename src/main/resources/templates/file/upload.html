@@ -589,6 +589,16 @@
                 if (completedMap[progress.status]) {
                     this[completedMap[progress.status]] = true;
                     if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = false;
+
+                    // Show completion notification for each stage
+                    const stageNames = {
+                        'PARSING_COMPLETED': '파싱',
+                        'VALIDATION_COMPLETED': '검증',
+                        'LDAP_SAVING_COMPLETED': 'LDAP 저장'
+                    };
+                    if (stageNames[progress.status]) {
+                        showNotification(`${stageNames[progress.status]} 단계가 완료되었습니다.`, 'success');
+                    }
                 }
                 
                 if (progress.step === 'PAUSE') {
@@ -658,7 +668,7 @@
                         const error = await response.json();
                         throw new Error(error.message || '수동 처리 시작에 실패했습니다.');
                     }
-                    showNotification(`${stepNames[step]} 단계가 시작되었습니다.`, 'info');
+                    // Toast will be shown when stage completes via SSE
                 } catch (error) {
                     this.errorMessages.push(`[${step}] ${error.message}`);
                     this.isProcessing = false;
