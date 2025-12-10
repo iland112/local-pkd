@@ -10,12 +10,15 @@
         <!-- Page scripts will be inserted here -->
     </th:block>
 
+    <!-- Vendor CSS -->
+    
+
     <!-- Other vendor scripts -->
     <script
             type="text/javascript"
             th:src="@{/webjars/htmx.org/dist/htmx.min.js}"
     ></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="text/javascript" th:src="@{/webjars/chartjs/4.4.3/dist/chart.umd.js}"></script>
     <script>
         htmx.logAll();
     </script>
