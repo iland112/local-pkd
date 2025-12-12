@@ -729,6 +729,98 @@ public class BouncyCastleValidationAdapter implements CertificateValidationPort 
     }
 
     /**
+     * Trust Chain 검증 (DSC → CSCA)
+     * <p>
+     * DSC가 CSCA에 의해 서명되었는지 검증합니다.
+     * </p>
+     *
+     * @param dsc Document Signer Certificate
+     * @param csca Country Signing CA
+     * @throws IllegalStateException Trust chain validation failed
+     */
+    public void validateTrustChain(Certificate dsc, Certificate csca) {
+        log.debug("Validating trust chain: DSC → CSCA");
+
+        try {
+            // 1. DSC의 Issuer DN과 CSCA의 Subject DN이 일치하는지 확인
+            String dscIssuerDn = dsc.getIssuerInfo().getDistinguishedName();
+            String cscaSubjectDn = csca.getSubjectInfo().getDistinguishedName();
+
+            if (!dscIssuerDn.equals(cscaSubjectDn)) {
+                throw new IllegalStateException(
+                    String.format("DSC issuer DN does not match CSCA subject DN: %s != %s",
+                        dscIssuerDn, cscaSubjectDn)
+                );
+            }
+
+            // 2. CSCA의 공개키로 DSC 서명 검증
+            if (!validateSignature(dsc, csca)) {
+                throw new IllegalStateException("DSC signature validation failed with CSCA public key");
+            }
+
+            // 3. CSCA 자체 검증 (self-signed)
+            if (!validateSignature(csca, null)) {
+                throw new IllegalStateException("CSCA self-signed signature validation failed");
+            }
+
+            log.debug("Trust chain validation passed");
+
+        } catch (Exception e) {
+            log.error("Trust chain validation error: {}", e.getMessage(), e);
+            throw new IllegalStateException("Trust chain validation failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 인증서가 CRL에 의해 폐기되었는지 확인
+     *
+     * @param certificate 검증할 인증서
+     * @param crl Certificate Revocation List
+     * @return 폐기되었으면 true, 아니면 false
+     */
+    public boolean isRevoked(Certificate certificate, CertificateRevocationList crl) {
+        log.debug("Checking if certificate is revoked: serialNumber={}",
+            certificate.getX509Data().getSerialNumber());
+
+        try {
+            // 1. CRL 유효성 확인
+            if (!crl.isValid()) {
+                if (crl.isExpired()) {
+                    log.warn("CRL is expired: nextUpdate={}",
+                        crl.getValidityPeriod().getNotAfter());
+                } else if (crl.isNotYetValid()) {
+                    log.warn("CRL is not yet valid: thisUpdate={}",
+                        crl.getValidityPeriod().getNotBefore());
+                }
+                // CRL이 유효하지 않으면 폐기 여부 확인 불가
+                return false;
+            }
+
+            // 2. 인증서 일련번호로 폐기 여부 확인
+            String serialNumber = certificate.getX509Data().getSerialNumber();
+            if (serialNumber == null || serialNumber.isEmpty()) {
+                log.error("Certificate has no serial number: id={}",
+                    certificate.getId().getId());
+                return false;
+            }
+
+            boolean revoked = crl.isRevoked(serialNumber);
+
+            if (revoked) {
+                log.warn("Certificate is revoked: serialNumber={}", serialNumber);
+            } else {
+                log.debug("Certificate is not revoked: serialNumber={}", serialNumber);
+            }
+
+            return revoked;
+
+        } catch (Exception e) {
+            log.error("Error checking certificate revocation: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
      * 완전한 인증서 검증 수행
      *
      * <p><b>⚠️ SKELETON IMPLEMENTATION - 향후 구현 예정</b></p>
