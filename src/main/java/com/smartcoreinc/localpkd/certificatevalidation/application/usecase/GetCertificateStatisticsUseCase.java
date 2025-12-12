@@ -32,6 +32,11 @@ public class GetCertificateStatisticsUseCase {
         Map<String, Long> certificatesByType = typeCounts.stream()
                 .collect(Collectors.toMap(tc -> tc.type().name(), TypeCount::count));
 
+        // CRL 개수 추가
+        if (totalCrls > 0) {
+            certificatesByType.put("CRL", totalCrls);
+        }
+
         List<CountryCount> countryCounts = certificateRepository.countCertificatesByCountry();
         Map<String, Long> certificatesByCountry = countryCounts.stream()
                 .collect(Collectors.toMap(CountryCount::country, CountryCount::count));

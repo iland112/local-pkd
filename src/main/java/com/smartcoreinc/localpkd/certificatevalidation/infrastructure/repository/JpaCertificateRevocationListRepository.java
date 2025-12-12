@@ -301,6 +301,32 @@ public class JpaCertificateRevocationListRepository implements CertificateRevoca
     }
 
     /**
+     * 업로드 ID로 CRL 개수 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 CRL의 개수를 조회합니다.</p>
+     * <p>업로드 통계 기능에서 사용됩니다.</p>
+     *
+     * @param uploadId 원본 업로드 파일 ID
+     * @return CRL 개수
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     * @since 2025-12-11
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countByUploadId(java.util.UUID uploadId) {
+        if (uploadId == null) {
+            log.warn("Cannot count CRLs by uploadId: uploadId is null");
+            throw new IllegalArgumentException("uploadId must not be null");
+        }
+
+        log.debug("Counting CRLs by uploadId: {}", uploadId);
+        long count = jpaRepository.countByUploadId(uploadId);
+        log.debug("Found {} CRL(s) for uploadId: {}", count, uploadId);
+
+        return count;
+    }
+
+    /**
      * CRL ID로 존재 여부 확인
      *
      * @param id CRL ID

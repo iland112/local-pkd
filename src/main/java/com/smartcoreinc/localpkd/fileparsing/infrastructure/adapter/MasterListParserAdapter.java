@@ -229,7 +229,18 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
 
     private CertificateData createCertificateData(X509Certificate x509Cert, String fingerprint) throws Exception {
         String subjectDn = x509Cert.getSubjectX500Principal().getName();
+        String issuerDn = x509Cert.getIssuerX500Principal().getName();
+
+        // Country code extraction with fallback strategy
         String countryCode = extractCountryCode(subjectDn);
+        if (countryCode == null) {
+            // Fallback: Extract from Issuer DN
+            countryCode = extractCountryCode(issuerDn);
+            if (countryCode != null) {
+                log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
+            }
+        }
+
         return CertificateData.of(
             "CSCA",
             countryCode,
@@ -413,7 +424,17 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
                     if (usesFallbackParsing) {
                         fingerprint = calculateFingerprintFromBytes(holder.getEncoded());
                         subjectDn = holder.getSubject().toString();
+
+                        // Country code extraction with fallback strategy
                         countryCodeStr = extractCountryCode(subjectDn);
+                        if (countryCodeStr == null) {
+                            // Fallback: Extract from Issuer DN
+                            String issuerDn = holder.getIssuer().toString();
+                            countryCodeStr = extractCountryCode(issuerDn);
+                            if (countryCodeStr != null) {
+                                log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCodeStr, subjectDn);
+                            }
+                        }
                         countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
 
                         // Create ParsedCsca with null x509Cert (fallback mode)
@@ -426,7 +447,17 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
                     } else {
                         fingerprint = calculateFingerprint(x509Cert);
                         subjectDn = x509Cert.getSubjectX500Principal().getName();
+
+                        // Country code extraction with fallback strategy
                         countryCodeStr = extractCountryCode(subjectDn);
+                        if (countryCodeStr == null) {
+                            // Fallback: Extract from Issuer DN
+                            String issuerDn = x509Cert.getIssuerX500Principal().getName();
+                            countryCodeStr = extractCountryCode(issuerDn);
+                            if (countryCodeStr != null) {
+                                log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCodeStr, subjectDn);
+                            }
+                        }
                         countryCode = countryCodeStr != null ? CountryCode.of(countryCodeStr) : null;
 
                         parsedCscas.add(MasterListParseResult.ParsedCsca.of(
@@ -476,7 +507,16 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
         String subjectDn = holder.getSubject().toString();
         String issuerDn = holder.getIssuer().toString();
         String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
+
+        // Country code extraction with fallback strategy
         String countryCode = extractCountryCode(subjectDn);
+        if (countryCode == null) {
+            // Fallback: Extract from Issuer DN
+            countryCode = extractCountryCode(issuerDn);
+            if (countryCode != null) {
+                log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
+            }
+        }
 
         // Extract validity dates
         LocalDateTime notBefore = convertToLocalDateTime(holder.getNotBefore());

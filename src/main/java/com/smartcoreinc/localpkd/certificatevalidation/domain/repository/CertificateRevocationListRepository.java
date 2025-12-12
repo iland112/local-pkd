@@ -176,6 +176,32 @@ public interface CertificateRevocationListRepository {
     List<CertificateRevocationList> findByUploadId(java.util.UUID uploadId);
 
     /**
+     * 업로드 ID로 CRL 개수 조회
+     *
+     * <p>특정 업로드 파일에서 추출된 CRL의 개수를 조회합니다.</p>
+     * <p>업로드 통계 기능에서 사용됩니다.</p>
+     *
+     * <p><b>사용 예시</b>:</p>
+     * <pre>{@code
+     * UUID uploadId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+     * long crlCount = repository.countByUploadId(uploadId);
+     *
+     * // 업로드 통계에 포함
+     * UploadStatistics stats = new UploadStatistics(
+     *     certificateCount,
+     *     crlCount,  // CRL 개수
+     *     masterListCount
+     * );
+     * }</pre>
+     *
+     * @param uploadId 원본 업로드 파일 ID
+     * @return CRL 개수
+     * @throws IllegalArgumentException uploadId가 null인 경우
+     * @since 2025-12-11
+     */
+    long countByUploadId(java.util.UUID uploadId);
+
+    /**
      * CRL ID로 존재 여부 확인
      *
      * @param id CRL ID

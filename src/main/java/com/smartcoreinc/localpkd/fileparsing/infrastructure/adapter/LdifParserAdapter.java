@@ -221,7 +221,23 @@ public class LdifParserAdapter implements FileParserPort {
 
             String subjectDn = usesFallbackParsing ? holder.getSubject().toString() : cert.getSubjectX500Principal().getName();
             String issuerDn = usesFallbackParsing ? holder.getIssuer().toString() : cert.getIssuerX500Principal().getName();
+
+            // Country code extraction with fallback strategy
             String countryCode = extractCountryCode(subjectDn);
+            if (countryCode == null) {
+                // Fallback 1: Extract from Issuer DN (for DSC without country in subject)
+                countryCode = extractCountryCode(issuerDn);
+                if (countryCode != null) {
+                    log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
+                }
+            }
+            if (countryCode == null && dn != null) {
+                // Fallback 2: Extract from LDIF entry DN
+                countryCode = extractCountryCodeFromMasterListDn(dn);
+                if (countryCode != null) {
+                    log.debug("Country code extracted from LDIF entry DN: {} for subject: {}", countryCode, subjectDn);
+                }
+            }
 
             boolean selfSigned = subjectDn.equals(issuerDn);
             boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
@@ -327,7 +343,23 @@ public class LdifParserAdapter implements FileParserPort {
 
             String subjectDn = cert.getSubjectX500Principal().getName();
             String issuerDn = cert.getIssuerX500Principal().getName();
+
+            // Country code extraction with fallback strategy
             String countryCode = extractCountryCode(subjectDn);
+            if (countryCode == null) {
+                // Fallback 1: Extract from Issuer DN
+                countryCode = extractCountryCode(issuerDn);
+                if (countryCode != null) {
+                    log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
+                }
+            }
+            if (countryCode == null && dn != null) {
+                // Fallback 2: Extract from LDIF entry DN
+                countryCode = extractCountryCodeFromMasterListDn(dn);
+                if (countryCode != null) {
+                    log.debug("Country code extracted from LDIF entry DN: {} for subject: {}", countryCode, subjectDn);
+                }
+            }
 
             boolean selfSigned = subjectDn.equals(issuerDn);
             boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
@@ -661,10 +693,17 @@ public class LdifParserAdapter implements FileParserPort {
         return matcher.find() ? matcher.group(1).trim() : null;
     }
 
+    /**
+     * DN에서 국가 코드 추출
+     *
+     * @param dn Distinguished Name
+     * @return 국가 코드 (대문자, 2-3자) 또는 null
+     * @deprecated Use {@link com.smartcoreinc.localpkd.common.util.CountryCodeUtil#extractCountryCode(String)} instead
+     */
+    @Deprecated(since = "2025-12-11", forRemoval = true)
     private String extractCountryCode(String dn) {
-        if (dn == null) return null;
-        Matcher matcher = Pattern.compile("(?:^|,)\\s*C=([A-Z]{2})").matcher(dn);
-        return matcher.find() ? matcher.group(1) : null;
+        // CountryCodeUtil로 위임 (DRY 원칙)
+        return com.smartcoreinc.localpkd.common.util.CountryCodeUtil.extractCountryCode(dn);
     }
 
     private String calculateFingerprint(X509Certificate cert) throws Exception {

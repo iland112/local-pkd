@@ -125,12 +125,14 @@ public class UploadToLdapUseCase {
 
             // ✅ 인증서 LDAP 배치 업로드 (including CSCAs from Master List)
             List<String> certBatch = new ArrayList<>();
+            List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certBatchObjects = new ArrayList<>();
             for (int i = 0; i < certificates.size(); i++) {
                 com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificates.get(i);
                 try {
                     // Convert to LDIF format (CSCAs will use o=csca)
                     String ldifEntry = ldifConverter.certificateToLdif(cert);
                     certBatch.add(ldifEntry);
+                    certBatchObjects.add(cert);
 
                     // ✅ 배치 크기에 도달하거나 마지막 항목이면 배치 업로드
                     if (certBatch.size() >= command.batchSize() || (i + 1) == certificates.size()) {
@@ -140,7 +142,16 @@ public class UploadToLdapUseCase {
                         skippedCertificateCount += (certBatch.size() - successCount);
                         log.info("Certificate batch uploaded: {} success, {} skipped",
                             successCount, certBatch.size() - successCount);
+
+                        // ✅ Update uploaded_to_ldap flag for successfully uploaded certificates
+                        // Note: Even skipped entries (duplicates) are considered uploaded
+                        for (com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate batchCert : certBatchObjects) {
+                            batchCert.markAsUploadedToLdap();
+                        }
+                        log.debug("Marked {} certificates as uploaded to LDAP", certBatchObjects.size());
+
                         certBatch.clear();
+                        certBatchObjects.clear();
                     }
 
                     // Send progress every 100 items or at the end

@@ -625,22 +625,13 @@ public class BouncyCastleValidationAdapter implements CertificateValidationPort 
      * <p>DN: CN=CSCA-QA,O=Qatar,C=QA 에서 QA 추출</p>
      *
      * @param dn Distinguished Name (Subject 또는 Issuer)
-     * @return 국가 코드 (2자) 또는 null
+     * @return 국가 코드 (2-3자) 또는 null
+     * @deprecated Use {@link com.smartcoreinc.localpkd.common.util.CountryCodeUtil#extractCountryCode(String)} instead
      */
+    @Deprecated(since = "2025-12-11", forRemoval = true)
     private String extractCountryCode(String dn) {
-        if (dn == null || dn.isEmpty()) {
-            return null;
-        }
-
-        // C= 패턴 추출 (2자 국가 코드)
-        Pattern pattern = Pattern.compile("C=([A-Z]{2})");
-        Matcher matcher = pattern.matcher(dn);
-
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-
-        return null;
+        // CountryCodeUtil로 위임 (DRY 원칙)
+        return com.smartcoreinc.localpkd.common.util.CountryCodeUtil.extractCountryCode(dn);
     }
 
     @Override

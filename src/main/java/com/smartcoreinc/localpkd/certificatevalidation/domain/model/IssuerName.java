@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.certificatevalidation.domain.model;
 
+import com.smartcoreinc.localpkd.common.util.CountryCodeUtil;
 import com.smartcoreinc.localpkd.shared.domain.ValueObject;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import jakarta.persistence.Column;
@@ -69,9 +70,15 @@ public class IssuerName implements ValueObject {
     /**
      * IssuerName 생성 (Static Factory Method)
      *
-     * @param value CSCA 발급자명 (예: CSCA-QA)
+     * <p>두 가지 형식을 지원합니다:</p>
+     * <ul>
+     *   <li>CSCA 형식: CSCA-XX (예: CSCA-QA, CSCA-NZ)</li>
+     *   <li>DN 형식: 전체 X.509 DN (예: CN=CSCA Finland,OU=VRK,O=Finland,C=FI)</li>
+     * </ul>
+     *
+     * @param value CSCA 발급자명 또는 DN
      * @return IssuerName
-     * @throws DomainException 형식이 유효하지 않은 경우
+     * @throws DomainException value가 null이거나 비어있는 경우
      */
     public static IssuerName of(String value) {
         if (value == null || value.isBlank()) {
@@ -81,15 +88,13 @@ public class IssuerName implements ValueObject {
             );
         }
 
-        String normalized = value.trim().toUpperCase();
+        String normalized = value.trim();
 
-        // 형식 검증: CSCA-XX (X는 대문자 알파벳)
-        if (!CSCA_PATTERN.matcher(normalized).matches()) {
-            throw new DomainException(
-                "INVALID_ISSUER_NAME_FORMAT",
-                "Issuer name must match format 'CSCA-XX' (e.g., CSCA-QA, CSCA-NZ). Got: " + value
-            );
+        // CSCA-XX 형식인 경우에만 대문자로 정규화
+        if (CSCA_PATTERN.matcher(normalized.toUpperCase()).matches()) {
+            normalized = normalized.toUpperCase();
         }
+        // 그 외에는 원본 값 유지 (DN 문자열 등)
 
         IssuerName issuerName = new IssuerName();
         issuerName.value = normalized;
@@ -99,15 +104,20 @@ public class IssuerName implements ValueObject {
     /**
      * 국가 코드 추출
      *
-     * <p>CSCA-QA에서 "QA"를 추출</p>
+     * <p>두 가지 형식 지원:</p>
+     * <ul>
+     *   <li>CSCA 형식: CSCA-QA → "QA"</li>
+     *   <li>DN 형식: CN=CSCA Finland,OU=VRK,O=Finland,C=FI → "FI"</li>
+     * </ul>
      *
-     * @return 2자 국가 코드
+     * <p><b>Note</b>: 실제 파싱은 {@link CountryCodeUtil#extractCountryCode(String)}에 위임합니다.</p>
+     *
+     * @return 2자 국가 코드 (대문자) 또는 빈 문자열
      */
     public String getCountryCode() {
-        if (value == null || value.length() < 3) {
-            return "";
-        }
-        return value.substring(6);  // "CSCA-"(5자) 이후 2자
+        // CountryCodeUtil로 위임 (DRY 원칙, 단일 진실 공급원)
+        String countryCode = CountryCodeUtil.extractCountryCode(value);
+        return countryCode != null ? countryCode : "";
     }
 
     /**

@@ -56,7 +56,9 @@ import java.util.Arrays;
  */
 @Embeddable
 @Getter
+@lombok.Setter(lombok.AccessLevel.PROTECTED)  // JPA용 protected setter 자동 생성
 @EqualsAndHashCode
+@jakarta.persistence.Access(jakarta.persistence.AccessType.PROPERTY)  // Force Hibernate to use getters
 public class X509CrlData implements ValueObject {
 
     /**
@@ -65,9 +67,13 @@ public class X509CrlData implements ValueObject {
      * <p>X.509 CRL의 완전한 DER-encoded 바이너리 데이터입니다.
      * LDIF 파일에서 certificateRevocationList;binary 필드로부터 추출된 Base64 데이터를 디코딩합니다.</p>
      * <p>최대 크기: 약 10MB</p>
+     *
+     * <p><b>Note</b>: Lombok @Getter/@Setter에서 제외됨 (수동 getter/setter 사용 - 복사본 반환)</p>
      */
     @Lob
     @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA")
+    @lombok.Getter(lombok.AccessLevel.NONE)  // Lombok getter 생성 제외 (수동 getter 사용)
+    @lombok.Setter(lombok.AccessLevel.NONE)  // Lombok setter 생성 제외 (수동 setter 사용)
     private byte[] crlBinary;
 
     /**
@@ -145,10 +151,23 @@ public class X509CrlData implements ValueObject {
     }
 
     /**
+     * CRL 바이너리 데이터 설정 (JPA용 - protected)
+     *
+     * <p>JPA/Hibernate가 데이터베이스에서 값을 읽어올 때 사용합니다.
+     * 외부에서는 접근 불가 (protected)하여 불변성 유지.</p>
+     *
+     * @param crlBinary DER-encoded CRL 바이너리 데이터
+     */
+    protected void setCrlBinary(byte[] crlBinary) {
+        this.crlBinary = crlBinary;
+    }
+
+    /**
      * CRL 데이터 크기
      *
      * @return 바이트 단위 크기
      */
+    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
     public int getSize() {
         return crlBinary != null ? crlBinary.length : 0;
     }
@@ -158,6 +177,7 @@ public class X509CrlData implements ValueObject {
      *
      * @return CRL 데이터가 없으면 true
      */
+    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
     public boolean isEmpty() {
         return crlBinary == null || crlBinary.length == 0;
     }
@@ -167,6 +187,7 @@ public class X509CrlData implements ValueObject {
      *
      * @return revokedCount > 0이면 true
      */
+    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
     public boolean hasRevokedCertificates() {
         return revokedCount > 0;
     }

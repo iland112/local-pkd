@@ -184,22 +184,17 @@ public class FileUploadEventHandler {
             );
 
         // Execute LDAP upload
+        // Note: Status will be updated by LdapUploadEventHandler when LdapUploadCompletedEvent is received
         com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse ldapResponse =
             uploadToLdapUseCase.execute(ldapCommand);
 
+        // Log the result (status update is handled by LdapUploadEventHandler)
         if (ldapResponse.success()) {
-            // Update status to COMPLETED
-            uploadedFile.updateStatusToCompleted();
-            uploadedFileRepository.save(uploadedFile);
-
-            log.info("LDAP upload completed successfully for uploadId={}, totalUploaded={}, totalFailed={}",
+            log.info("LDAP upload triggered successfully for uploadId={}, totalUploaded={}, totalFailed={}",
                 uploadedFile.getId().getId(), ldapResponse.getTotalUploaded(), ldapResponse.getTotalFailed());
         } else {
-            // Update status to FAILED
-            uploadedFile.fail(ldapResponse.errorMessage());
-            uploadedFileRepository.save(uploadedFile);
-
-            log.error("LDAP upload failed for uploadId={}: {}", uploadedFile.getId().getId(), ldapResponse.errorMessage());
+            log.error("LDAP upload failed for uploadId={}: {}",
+                uploadedFile.getId().getId(), ldapResponse.errorMessage());
         }
 
         return ldapResponse;

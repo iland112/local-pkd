@@ -10,16 +10,76 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 국가 코드 추출 및 검증 유틸리티
  * DN(Distinguished Name)에서 국가 코드 추출
+ *
+ * <p><b>지원 형식</b>:</p>
+ * <ul>
+ *   <li>CSCA-XX: CSCA-KR, CSCA-US (ICAO PKD 표준)</li>
+ *   <li>DN: CN=CSCA Finland,OU=VRK,O=Finland,C=FI (X.509 표준)</li>
+ *   <li>LDIF DN: cn=...,o=csca,c=KR,dc=data (LDAP 표준)</li>
+ * </ul>
+ *
+ * <p><b>Case-Insensitive</b>: C=, c=, CSCA-, csca- 모두 지원</p>
+ *
+ * @since 2025-10-24
+ * @version 2.0 (2025-12-11: CSCA-XX 형식 지원 추가, case-insensitive 개선)
  */
 @Slf4j
 public class CountryCodeUtil {
 
-    // ISO 3166-1 alpha-2 국가 코드 패턴
+    // CSCA-XX 형식 패턴 (ICAO PKD)
+    private static final Pattern CSCA_PATTERN = Pattern.compile("^CSCA-([A-Z]{2})$", Pattern.CASE_INSENSITIVE);
+
+    // DN 내 C= 컴포넌트 패턴 (X.509 / LDAP)
+    // C= 뒤에 공백이 있을 수 있으므로 \\s* 추가, 값도 공백 포함 가능하도록 변경
+    // [,+] 플러스(+)와 쉼표(,) 모두 RDN 구분자로 인식 (multi-valued RDN 지원)
+    private static final Pattern DN_COUNTRY_PATTERN = Pattern.compile("(?:^|[,+])\\s*C=\\s*([A-Z]{2,3})\\s*(?:[,+]|$)", Pattern.CASE_INSENSITIVE);
+
+    // Legacy pattern (deprecated)
     private static final Pattern COUNTRY_CODE_PATTERN = Pattern.compile("\\bc=([A-Z]{2})\\b", Pattern.CASE_INSENSITIVE);
+
     private static final String UNKNOWN_COUNTRY = "UNKNOWN";
 
     private CountryCodeUtil() {
         // Utility class - private constructor
+    }
+
+    /**
+     * 통합 국가 코드 추출 메서드 (권장)
+     *
+     * <p>CSCA-XX 형식과 DN 형식을 자동으로 감지하여 처리합니다.</p>
+     *
+     * <p><b>지원 형식</b>:</p>
+     * <ul>
+     *   <li>CSCA-XX: "CSCA-KR" → "KR"</li>
+     *   <li>X.509 DN: "CN=CSCA Finland,OU=VRK,O=Finland,C=FI" → "FI"</li>
+     *   <li>LDIF DN: "cn=...,o=csca,c=KR,dc=data" → "KR"</li>
+     *   <li>Mixed case: "csca-kr", "c=fi" → "KR", "FI"</li>
+     * </ul>
+     *
+     * @param value CSCA 이름 또는 DN 문자열
+     * @return 국가 코드 (대문자, 2-3자) 또는 null
+     */
+    public static String extractCountryCode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+
+        // 1. CSCA-XX 형식 체크
+        Matcher cscaMatcher = CSCA_PATTERN.matcher(trimmed);
+        if (cscaMatcher.matches()) {
+            return cscaMatcher.group(1).toUpperCase();
+        }
+
+        // 2. DN 형식 체크 (C= 컴포넌트)
+        Matcher dnMatcher = DN_COUNTRY_PATTERN.matcher(trimmed);
+        if (dnMatcher.find()) {
+            return dnMatcher.group(1).toUpperCase();
+        }
+
+        log.debug("Could not extract country code from: {}", value);
+        return null;
     }
 
     /**

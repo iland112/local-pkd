@@ -648,6 +648,162 @@ Alpine.store('theme', {
 
 ---
 
+## 🔧 Follow-up Fix: CRL Count Repository Method
+
+### Problem Discovery
+
+After implementing CRL persistence, testing revealed that CRL count still displayed as 0 in the UI despite 67 CRLs being parsed. Investigation uncovered a DDD layer violation:
+
+**Root Cause**:
+
+- `SpringDataCertificateRevocationListRepository` (infrastructure layer) had `countByUploadId(UUID)` method
+- `CertificateRevocationListRepository` (domain interface) was missing this method
+- `GetUploadHistoryUseCase` violated DDD by directly injecting infrastructure repository
+- Build succeeded because Spring Data repository had the method, but not exposed through domain layer
+
+### Files Modified
+
+#### 1. CertificateRevocationListRepository.java (Domain Interface)
+
+**Location**: [src/main/java/com/smartcoreinc/localpkd/certificatevalidation/domain/repository/CertificateRevocationListRepository.java](../src/main/java/com/smartcoreinc/localpkd/certificatevalidation/domain/repository/CertificateRevocationListRepository.java)
+
+**Added Method** (lines 178-202):
+```java
+/**
+ * 업로드 ID로 CRL 개수 조회
+ *
+ * <p>특정 업로드 파일에서 추출된 CRL의 개수를 조회합니다.</p>
+ * <p>업로드 통계 기능에서 사용됩니다.</p>
+ *
+ * <p><b>사용 예시</b>:</p>
+ * <pre>{@code
+ * UUID uploadId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+ * long crlCount = repository.countByUploadId(uploadId);
+ *
+ * // 업로드 통계에 포함
+ * UploadStatistics stats = new UploadStatistics(
+ *     certificateCount,
+ *     crlCount,  // CRL 개수
+ *     masterListCount
+ * );
+ * }</pre>
+ *
+ * @param uploadId 원본 업로드 파일 ID
+ * @return CRL 개수
+ * @throws IllegalArgumentException uploadId가 null인 경우
+ * @since 2025-12-11
+ */
+long countByUploadId(java.util.UUID uploadId);
+```
+
+#### 2. JpaCertificateRevocationListRepository.java (Infrastructure Implementation)
+
+**Location**: [src/main/java/com/smartcoreinc/localpkd/certificatevalidation/infrastructure/repository/JpaCertificateRevocationListRepository.java](../src/main/java/com/smartcoreinc/localpkd/certificatevalidation/infrastructure/repository/JpaCertificateRevocationListRepository.java)
+
+**Added Implementation** (lines 303-327):
+
+```java
+/**
+ * 업로드 ID로 CRL 개수 조회
+ *
+ * <p>특정 업로드 파일에서 추출된 CRL의 개수를 조회합니다.</p>
+ * <p>업로드 통계 기능에서 사용됩니다.</p>
+ *
+ * @param uploadId 원본 업로드 파일 ID
+ * @return CRL 개수
+ * @throws IllegalArgumentException uploadId가 null인 경우
+ * @since 2025-12-11
+ */
+@Override
+@Transactional(readOnly = true)
+public long countByUploadId(java.util.UUID uploadId) {
+    if (uploadId == null) {
+        log.warn("Cannot count CRLs by uploadId: uploadId is null");
+        throw new IllegalArgumentException("uploadId must not be null");
+    }
+
+    log.debug("Counting CRLs by uploadId: {}", uploadId);
+    long count = jpaRepository.countByUploadId(uploadId);
+    log.debug("Found {} CRL(s) for uploadId: {}", count, uploadId);
+
+    return count;
+}
+```
+
+### Database Investigation Results
+
+**Verification Queries**:
+
+```sql
+-- CRL persistence verification
+SELECT COUNT(*) FROM certificate_revocation_list;
+-- Result: 0 rows (expected - old upload before implementation)
+
+-- Parsed CRLs (temporary storage)
+SELECT COUNT(*) FROM parsed_crl;
+-- Result: 67 rows (CRLs were parsed successfully)
+
+-- Latest upload details
+SELECT
+    id,
+    file_name,
+    uploaded_at,
+    status
+FROM uploaded_file
+ORDER BY uploaded_at DESC
+LIMIT 1;
+-- Result: a93c38ae-85d7-4653-a94d-07b9c27843f0
+--         Uploaded: 2025-12-11 01:24:37 (8 hours ago)
+--         Status: COMPLETED
+
+-- Certificate validation statistics for latest upload
+SELECT
+    status,
+    COUNT(*) as count
+FROM certificate
+WHERE upload_id = 'a93c38ae-85d7-4653-a94d-07b9c27843f0'
+GROUP BY status;
+-- Result: VALID: 3,096, EXPIRED: 3,117, INVALID: 23,226
+--         Total: 29,439 certificates
+```
+
+**Conclusion**:
+
+- CRLs were parsed successfully (67 in `parsed_crl` table)
+- CRL persistence code was implemented AFTER the test upload 8 hours ago
+- At time of upload, ValidateCertificatesUseCase had TODO comment skipping CRL persistence
+- **Solution**: Need new upload to test CRL persistence functionality
+
+### Build Verification
+
+```bash
+./mvnw clean compile -DskipTests
+```
+
+**Result**: ✅ BUILD SUCCESS
+
+- **Time**: 13.473 seconds
+- **Source files**: 207 files compiled
+- **Warnings**: 0
+- **Errors**: 0
+
+### Impact
+
+**Before Fix**:
+
+- `countByUploadId()` only accessible through infrastructure layer
+- GetUploadHistoryUseCase violating DDD by injecting Spring Data repository directly
+- Method exists but not exposed through proper domain interface
+
+**After Fix**:
+
+- ✅ Domain repository interface exposes `countByUploadId()` method
+- ✅ JPA repository implements method with logging and validation
+- ✅ Proper DDD layer separation maintained
+- ✅ GetUploadHistoryUseCase can use domain repository (future refactoring opportunity)
+
+---
+
 ## 🚀 Next Steps
 
 ### Recommended Follow-up Tasks
