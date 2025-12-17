@@ -1,0 +1,87 @@
+{
+  "description": "Valid Korean ePassport with real chip data",
+  "passportNumber": "M46139533",
+  "issuingCountry": "KOR",
+  "nationality": "KOR",
+  "dateOfBirth": "1969-11-02",
+  "dateOfExpiry": "2030-05-28",
+  "holderName": "JUNG<<KYUNG<BAE",
+  "documentType": "PM",
+  "sex": "M",
+  "personalNumber": "910615V16477582",
+
+  "dataGroups": {
+    "dg1": {
+      "file": "dg1.bin",
+      "size": 93,
+      "description": "Machine Readable Zone (MRZ)",
+      "hash": "9d3cccd94f61440bac64df109d9251051e8e4bbf849048277f897f1ed1e41d4b",
+      "hashAlgorithm": "SHA-256"
+    },
+    "dg2": {
+      "file": "dg2.bin",
+      "size": 11874,
+      "description": "Facial Image (JPEG2000)",
+      "hash": "a8a75ed19dfa198b2d9711083e75eea5dcafd3d474e531d89456d936b051c5d5",
+      "hashAlgorithm": "SHA-256"
+    },
+    "dg3": {
+      "file": null,
+      "size": 0,
+      "description": "Fingerprint (hash only, no actual data in Korean passports)",
+      "hash": "9075f7630690b25075690b3bdf5194fbd70719dd8d2d1ab3b9c86dae39ff828d",
+      "hashAlgorithm": "SHA-256"
+    },
+    "dg14": {
+      "file": "dg14.bin",
+      "size": 302,
+      "description": "Security Info for Chip Authentication",
+      "hash": "b82b764b278d90d1112c89d90471765f086a025fd66d87bbcc7c26eaf7ac3e8e",
+      "hashAlgorithm": "SHA-256"
+    }
+  },
+
+  "securityObjectDocument": {
+    "file": "sod.bin",
+    "size": 1857,
+    "description": "Security Object Document (CMS SignedData)",
+    "ldsVersion": 0,
+    "hashAlgorithm": "2.16.840.1.101.3.4.2.1",
+    "hashAlgorithmName": "SHA-256"
+  },
+
+  "documentSignerCertificate": {
+    "subject": "C=KR,O=Government,OU=MOFA,CN=DS0120200313 1",
+    "issuer": "C=KR,O=Government,OU=MOFA,CN=CSCA003",
+    "serialNumber": "295",
+    "notBefore": "2020-03-13T17:05:47+09:00",
+    "notAfter": "2030-06-13T23:59:59+09:00",
+    "signatureAlgorithm": "1.2.840.113549.1.1.10",
+    "signatureAlgorithmName": "RSASSA-PSS"
+  },
+
+  "expectedValidationResult": {
+    "status": "VALID",
+    "trustChainValid": true,
+    "sodSignatureValid": true,
+    "dataGroupHashesValid": true,
+    "certificateNotRevoked": true,
+    "certificateNotExpired": true
+  },
+
+  "testScenarios": [
+    "Trust Chain Verification - Valid DSC signed by CSCA003",
+    "SOD Signature Verification - Valid SOD signed by DSC",
+    "Data Group Hash Verification - All hashes match",
+    "CRL Check - Certificate not revoked",
+    "Complete PA Flow - Full verification success"
+  ],
+
+  "notes": [
+    "This is REAL Korean ePassport chip data from a valid passport",
+    "DSC must be verified against CSCA003 in LDAP",
+    "Korean passports contain DG1, DG2, DG14 data",
+    "DG3 hash exists but no actual biometric data stored",
+    "All sensitive personal data should be handled securely in tests"
+  ]
+}
