@@ -47,8 +47,8 @@ public interface JpaPassportDataRepository
      * @param status verification status
      * @return list of PassportData with the given status
      */
-    @Query("SELECT p FROM PassportData p WHERE p.status = :status")
-    List<PassportData> findByStatus(@Param("status") PassiveAuthenticationStatus status);
+    @Query("SELECT p FROM PassportData p WHERE p.verificationStatus = :status")
+    List<PassportData> findByVerificationStatus(@Param("status") PassiveAuthenticationStatus status);
 
     /**
      * Find all completed PassportData (completedAt is not null).
@@ -72,8 +72,16 @@ public interface JpaPassportDataRepository
      * @param status verification status
      * @return count of PassportData with the given status
      */
-    @Query("SELECT COUNT(p) FROM PassportData p WHERE p.status = :status")
-    long countByStatus(@Param("status") PassiveAuthenticationStatus status);
+    @Query("SELECT COUNT(p) FROM PassportData p WHERE p.verificationStatus = :status")
+    long countByVerificationStatus(@Param("status") PassiveAuthenticationStatus status);
+
+    /**
+     * Count completed PassportData (completedAt is not null).
+     *
+     * @return count of completed PassportData
+     */
+    @Query("SELECT COUNT(p) FROM PassportData p WHERE p.completedAt IS NOT NULL")
+    long countCompleted();
 
     /**
      * Count in-progress PassportData.
@@ -96,15 +104,16 @@ public interface JpaPassportDataRepository
         @Param("endTime") LocalDateTime endTime
     );
 
-    /**
-     * Find PassportData by DSC certificate fingerprint.
-     *
-     * <p>DSC (Document Signer Certificate) fingerprint is used to link
-     * PassportData to the certificate used for SOD signature verification.
-     *
-     * @param fingerprintSha256 SHA-256 fingerprint of DSC certificate
-     * @return Optional PassportData
-     */
-    @Query("SELECT p FROM PassportData p WHERE p.dscFingerprintSha256 = :fingerprintSha256")
-    Optional<PassportData> findByDscFingerprint(@Param("fingerprintSha256") String fingerprintSha256);
+    // TODO: Add dscFingerprintSha256 field to PassportData entity
+    // /**
+    //  * Find PassportData by DSC certificate fingerprint.
+    //  *
+    //  * <p>DSC (Document Signer Certificate) fingerprint is used to link
+    //  * PassportData to the certificate used for SOD signature verification.
+    //  *
+    //  * @param fingerprintSha256 SHA-256 fingerprint of DSC certificate
+    //  * @return Optional PassportData
+    //  */
+    // @Query("SELECT p FROM PassportData p WHERE p.dscFingerprintSha256 = :fingerprintSha256")
+    // Optional<PassportData> findByDscFingerprint(@Param("fingerprintSha256") String fingerprintSha256);
 }

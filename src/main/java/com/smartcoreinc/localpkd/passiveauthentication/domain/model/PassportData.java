@@ -69,7 +69,7 @@ public class PassportData extends AggregateRoot<PassportDataId> {
     private Long processingDurationMs;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "verification_status", length = 20)
+    @Column(name = "verification_status", length = 20, insertable = false, updatable = false)
     private PassiveAuthenticationStatus verificationStatus;
 
     @Column(name = "raw_request_data", columnDefinition = "JSONB")

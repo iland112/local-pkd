@@ -1,5 +1,7 @@
 package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.exception;
 
+import com.smartcoreinc.localpkd.passiveauthentication.application.exception.PassiveAuthenticationApplicationException;
+import com.smartcoreinc.localpkd.shared.exception.BusinessException;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,8 @@ import java.util.UUID;
  * <ul>
  *   <li>IllegalArgumentException - 요청 파라미터 검증 오류 (400)</li>
  *   <li>DomainException - 도메인 규칙 위반 (400)</li>
+ *   <li>BusinessException - 비즈니스 로직 오류 (400/404)</li>
+ *   <li>PassiveAuthenticationApplicationException - PA 검증 오류 (400/404)</li>
  *   <li>HttpMessageNotReadableException - 잘못된 JSON 형식 (400)</li>
  *   <li>HttpMediaTypeNotSupportedException - 지원하지 않는 미디어 타입 (415)</li>
  *   <li>NoHandlerFoundException - 찾을 수 없는 엔드포인트 (404)</li>
@@ -122,6 +126,98 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+    }
+
+    /**
+     * BusinessException 처리
+     *
+     * <p>비즈니스 로직 오류 또는 애플리케이션 계층 예외</p>
+     *
+     * @param e 예외 객체
+     * @param request HTTP 요청
+     * @return 400 Bad Request 또는 404 Not Found 응답
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(
+            BusinessException e,
+            WebRequest request) {
+
+        // Determine HTTP status based on error code
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        if (e.getErrorCode().contains("NOT_FOUND")) {
+            status = HttpStatus.NOT_FOUND;
+        }
+
+        log.warn("Business exception: code={}, message={}, status={}",
+                e.getErrorCode(), e.getMessage(), status.value());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .success(false)
+                .error(ErrorResponse.Error.builder()
+                        .code(e.getErrorCode())
+                        .message(e.getMessage())
+                        .timestamp(LocalDateTime.now())
+                        .build())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .status(status.value())
+                .traceId(UUID.randomUUID().toString())
+                .build();
+
+        return ResponseEntity
+                .status(status)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+    }
+
+    /**
+     * PassiveAuthenticationApplicationException 처리
+     *
+     * <p>PA(Passive Authentication) 검증 프로세스 중 발생한 예외</p>
+     *
+     * <p><b>주요 에러 코드</b>:</p>
+     * <ul>
+     *   <li>VERIFICATION_NOT_FOUND - 검증 결과를 찾을 수 없음 (404)</li>
+     *   <li>DSC_NOT_FOUND - DSC 인증서를 LDAP에서 찾을 수 없음 (404)</li>
+     *   <li>CSCA_NOT_FOUND - CSCA 인증서를 LDAP에서 찾을 수 없음 (404)</li>
+     *   <li>SOD_PARSE_ERROR - SOD 파싱 실패 (400)</li>
+     *   <li>INVALID_DATA_GROUP - 유효하지 않은 Data Group (400)</li>
+     *   <li>PA_VERIFICATION_FAILED - PA 검증 실패 (400)</li>
+     * </ul>
+     *
+     * @param e 예외 객체
+     * @param request HTTP 요청
+     * @return 400 Bad Request 또는 404 Not Found 응답
+     */
+    @ExceptionHandler(PassiveAuthenticationApplicationException.class)
+    public ResponseEntity<ErrorResponse> handlePassiveAuthenticationApplicationException(
+            PassiveAuthenticationApplicationException e,
+            WebRequest request) {
+
+        // Determine HTTP status based on error code
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        if (e.getErrorCode().contains("NOT_FOUND")) {
+            status = HttpStatus.NOT_FOUND;
+        }
+
+        log.warn("PA application exception: code={}, message={}, status={}",
+                e.getErrorCode(), e.getMessage(), status.value());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .success(false)
+                .error(ErrorResponse.Error.builder()
+                        .code(e.getErrorCode())
+                        .message(e.getMessage())
+                        .timestamp(LocalDateTime.now())
+                        .build())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .status(status.value())
+                .traceId(UUID.randomUUID().toString())
+                .build();
+
+        return ResponseEntity
+                .status(status)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(response);
     }

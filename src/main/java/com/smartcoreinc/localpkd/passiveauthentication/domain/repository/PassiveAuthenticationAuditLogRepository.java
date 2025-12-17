@@ -24,10 +24,10 @@ public interface PassiveAuthenticationAuditLogRepository {
     /**
      * Save multiple PassiveAuthenticationAuditLog entries.
      *
-     * @param logs list of PassiveAuthenticationAuditLog entries
+     * @param logs iterable of PassiveAuthenticationAuditLog entries
      * @return list of saved PassiveAuthenticationAuditLog entries
      */
-    List<PassiveAuthenticationAuditLog> saveAll(List<PassiveAuthenticationAuditLog> logs);
+    <S extends PassiveAuthenticationAuditLog> List<S> saveAll(Iterable<S> logs);
 
     /**
      * Find audit logs by PassportData ID.

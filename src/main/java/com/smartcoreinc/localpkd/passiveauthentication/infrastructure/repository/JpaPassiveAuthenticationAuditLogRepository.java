@@ -1,7 +1,6 @@
 package com.smartcoreinc.localpkd.passiveauthentication.infrastructure.repository;
 
-import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassiveAuthenticationAuditLog;
-import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassportDataId;
+import com.smartcoreinc.localpkd.passiveauthentication.domain.model.*;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.repository.PassiveAuthenticationAuditLogRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -42,12 +41,12 @@ public interface JpaPassiveAuthenticationAuditLogRepository
     /**
      * Find all audit logs for a specific PassportData verification.
      *
-     * <p>Returns logs ordered by creation time (oldest first).
+     * <p>Returns logs ordered by timestamp (oldest first).
      *
      * @param passportDataId PassportData ID
-     * @return list of audit logs ordered by createdAt
+     * @return list of audit logs ordered by timestamp
      */
-    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId ORDER BY a.createdAt ASC")
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId ORDER BY a.timestamp ASC")
     List<PassiveAuthenticationAuditLog> findByPassportDataId(@Param("passportDataId") PassportDataId passportDataId);
 
     /**
@@ -57,8 +56,8 @@ public interface JpaPassiveAuthenticationAuditLogRepository
      * @param endTime end of the time range
      * @return list of audit logs created within the given range
      */
-    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.createdAt BETWEEN :startTime AND :endTime ORDER BY a.createdAt ASC")
-    List<PassiveAuthenticationAuditLog> findByCreatedAtBetween(
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.timestamp BETWEEN :startTime AND :endTime ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findByTimestampBetween(
         @Param("startTime") LocalDateTime startTime,
         @Param("endTime") LocalDateTime endTime
     );
@@ -83,7 +82,7 @@ public interface JpaPassiveAuthenticationAuditLogRepository
      * @return number of deleted logs
      */
     @Modifying
-    @Query("DELETE FROM PassiveAuthenticationAuditLog a WHERE a.createdAt < :cutoffDate")
+    @Query("DELETE FROM PassiveAuthenticationAuditLog a WHERE a.timestamp < :cutoffDate")
     int deleteOlderThan(@Param("cutoffDate") LocalDateTime cutoffDate);
 
     /**
@@ -94,4 +93,89 @@ public interface JpaPassiveAuthenticationAuditLogRepository
      */
     @Query("SELECT COUNT(a) FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId")
     long countByPassportDataId(@Param("passportDataId") PassportDataId passportDataId);
+
+    /**
+     * Find audit logs by PassportData ID and verification step.
+     *
+     * @param passportDataId PassportData ID
+     * @param step verification step
+     * @return list of audit logs for given PassportData and step
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId AND a.step = :step ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findByPassportDataIdAndStep(
+        @Param("passportDataId") PassportDataId passportDataId,
+        @Param("step") PassiveAuthenticationStep step
+    );
+
+    /**
+     * Find audit logs by PassportData ID and step status.
+     *
+     * @param passportDataId PassportData ID
+     * @param stepStatus step status
+     * @return list of audit logs for given PassportData and status
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId AND a.stepStatus = :stepStatus ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findByPassportDataIdAndStepStatus(
+        @Param("passportDataId") PassportDataId passportDataId,
+        @Param("stepStatus") StepStatus stepStatus
+    );
+
+    /**
+     * Find audit logs by log level.
+     *
+     * @param logLevel log level
+     * @return list of audit logs with given log level
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.logLevel = :logLevel ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findByLogLevel(@Param("logLevel") LogLevel logLevel);
+
+    /**
+     * Find error logs (log level = ERROR).
+     *
+     * @return list of error logs
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.logLevel = 'ERROR' ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findErrorLogs();
+
+    /**
+     * Find failed step logs (step status = FAILED).
+     *
+     * @return list of failed step logs
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.stepStatus = 'FAILED' ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findFailedSteps();
+
+    /**
+     * Find audit logs by PassportData ID ordered by timestamp.
+     *
+     * @param passportDataId PassportData ID
+     * @return list of audit logs ordered by timestamp ascending
+     */
+    @Query("SELECT a FROM PassiveAuthenticationAuditLog a WHERE a.passportDataId = :passportDataId ORDER BY a.timestamp ASC")
+    List<PassiveAuthenticationAuditLog> findByPassportDataIdOrderByTimestampAsc(@Param("passportDataId") PassportDataId passportDataId);
+
+    /**
+     * Count error logs.
+     *
+     * @return count of error logs
+     */
+    @Query("SELECT COUNT(a) FROM PassiveAuthenticationAuditLog a WHERE a.logLevel = 'ERROR'")
+    long countErrorLogs();
+
+    /**
+     * Count failed steps.
+     *
+     * @return count of failed steps
+     */
+    @Query("SELECT COUNT(a) FROM PassiveAuthenticationAuditLog a WHERE a.stepStatus = 'FAILED'")
+    long countFailedSteps();
+
+    /**
+     * Delete audit logs older than specified date.
+     *
+     * @param date cutoff date
+     */
+    @Modifying
+    @Query("DELETE FROM PassiveAuthenticationAuditLog a WHERE a.timestamp < :date")
+    void deleteByTimestampBefore(@Param("date") LocalDateTime date);
 }

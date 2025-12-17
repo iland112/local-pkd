@@ -1,8 +1,9 @@
-package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.exception;
+package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.ValidateCertificateResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificateUseCase;
+import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.exception.ErrorResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.CertificateValidationController;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.request.CertificateValidationRequest;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
