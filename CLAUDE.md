@@ -1,13 +1,14 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 3.6
-**Last Updated**: 2025-12-11
-**Status**: Production Ready (Phase 1-19 Complete + CRL Persistence + UI Fixes)
+**Version**: 4.0
+**Last Updated**: 2025-12-17
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.5 (In Progress)
 
 ---
 
 ## 🎯 Quick Overview
 
+### 1. PKD Upload Module (완료 ✅)
 ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파싱, 검증 후 OpenLDAP에 저장하는 웹 애플리케이션입니다.
 
 **핵심 기능**:
@@ -25,6 +26,23 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 - ✅ LDAP 검증 상태 기록 (VALID/INVALID/EXPIRED + 오류 메시지)
 - ✅ 업로드 상세정보 통계 표시 (파싱/검증 통계, DaisyUI stats 컴포넌트)
 
+### 2. Passive Authentication Module (진행 중 ⏳)
+ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다.
+
+**완료된 기능**:
+- ✅ Phase 1: Domain Layer (16 files, ~2,500 LOC)
+- ✅ Phase 2: Infrastructure Layer (5 files, ~940 LOC)
+- ✅ Phase 3: Application Layer (Use Cases, DTOs)
+- ✅ Phase 4.4: LDAP Integration Tests (6 tests, 100% pass)
+
+**진행 중**:
+- ⏳ Phase 4.5: PA UseCase Integration Tests (17 tests)
+  - Trust Chain Verification (4 scenarios)
+  - SOD Signature Verification (3 scenarios)
+  - Data Group Hash Verification (3 scenarios)
+  - CRL Check (3 scenarios)
+  - Complete PA Flow (4 scenarios)
+
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
 - DDD Libraries: JPearl 2.0.1, MapStruct 1.6.3
@@ -35,10 +53,10 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 
 ## 🏗️ DDD Architecture (현재 구조)
 
-### Bounded Contexts (4개)
+### Bounded Contexts (5개)
 
 ```
-fileupload/              # File Upload Context
+fileupload/              # File Upload Context (PKD 파일 업로드)
 ├── domain/
 │   ├── model/           # Aggregates (UploadedFile) + Value Objects (11개)
 │   ├── event/           # FileUploadedEvent, DuplicateFileDetectedEvent
@@ -48,35 +66,45 @@ fileupload/              # File Upload Context
 │   ├── command/         # UploadLdifFileCommand, UploadMasterListFileCommand, CheckDuplicateFileCommand
 │   ├── query/           # GetUploadHistoryQuery
 │   ├── response/        # UploadFileResponse, CheckDuplicateResponse, ProcessingResponse
-│   ├── service/         # AsyncUploadProcessor (NEW)
-│   ├── event/           # FileUploadEventHandler (REFACTORED)
+│   ├── service/         # AsyncUploadProcessor
+│   ├── event/           # FileUploadEventHandler
 │   └── usecase/         # 4개 Use Cases (CQRS)
 └── infrastructure/
     ├── adapter/         # LocalFileStorageAdapter
     ├── web/             # UnifiedFileUploadController, ProcessingController (Manual Mode)
     └── repository/      # JPA Implementation + Event Publishing
 
-fileparsing/             # File Parsing Context
+fileparsing/             # File Parsing Context (PKD 파일 파싱)
 ├── domain/              # ParsedFile, ParsedCertificate, CertificateRevocationList
 ├── application/         # ParseLdifFileUseCase, ParseMasterListFileUseCase
 └── infrastructure/      # LdifParserAdapter, MasterListParserAdapter
 
-certificatevalidation/   # Certificate Validation Context
+certificatevalidation/   # Certificate Validation Context (PKD 인증서 검증)
 ├── domain/              # Trust Chain, CRL Checking, Validation Logic, Certificate
 ├── application/         # ValidateCertificatesUseCase, UploadToLdapUseCase
 └── infrastructure/      # BouncyCastleValidationAdapter, UnboundIdLdapConnectionAdapter
 
-ldapintegration/         # LDAP Integration Context (Deprecated - Merged into certificatevalidation)
-├── domain/              # LDAP Entry Management
-├── application/         # Event Handlers
-└── infrastructure/      # UnboundIdLdapAdapter
+passiveauthentication/   # Passive Authentication Context (ePassport 검증) ⭐ NEW
+├── domain/
+│   ├── model/           # PassportData (Aggregate), DataGroup, SecurityObjectDocument (Value Objects)
+│   ├── service/         # PassiveAuthenticationService (Domain Service)
+│   ├── port/            # SodParserPort (Hexagonal)
+│   └── repository/      # PassportDataRepository, PassiveAuthenticationAuditLogRepository
+├── application/
+│   ├── command/         # PerformPassiveAuthenticationCommand
+│   ├── response/        # PassiveAuthenticationResponse, PassportVerificationDetailsResponse
+│   └── usecase/         # PerformPassiveAuthenticationUseCase
+└── infrastructure/
+    ├── adapter/         # BouncyCastleSodParserAdapter
+    ├── web/             # PassiveAuthenticationController (REST API)
+    └── repository/      # JpaPassportDataRepository, JpaPassiveAuthenticationAuditLogRepository
 
 shared/                  # Shared Kernel
 ├── domain/              # AbstractAggregateRoot, DomainEvent
 ├── event/               # EventBus, @EventListener, @Async
 ├── exception/           # DomainException, InfrastructureException, BusinessException
 ├── progress/            # ProcessingProgress, ProgressService (SSE), ProgressController
-└── util/                  # HashingUtil (SHA-256 checksum)
+└── util/                # HashingUtil (SHA-256 checksum)
 ```
 
 ---
@@ -333,7 +361,63 @@ public void processLdif(UploadId uploadId, ...) {
 
 ## 🛠️ MCP Tools 활용 가이드 (효율적 개발)
 
-**연결된 MCP 서버**: Filesystem, Context7, Sequential Thinking, Memory, Playwright
+**연결된 MCP 서버**: Serena (코드 분석), Filesystem, Context7, Sequential Thinking, Memory, Playwright
+
+**⚠️ CRITICAL**: 모든 작업 시작 전 반드시 Serena MCP를 활성화하여 사용하세요.
+
+### 0. Serena MCP - Semantic Code Analysis (최우선 사용)
+
+```java
+// ✅ 프로젝트 활성화 (작업 시작 시 필수)
+mcp__serena__activate_project(project="local-pkd")
+
+// ✅ 심볼 검색 (클래스, 메서드, 필드 찾기)
+mcp__serena__find_symbol(
+    name_path_pattern="UploadedFile",  // 클래스명
+    relative_path="",                   // 전체 검색
+    include_body=false,                 // 시그니처만
+    depth=1                             // 메서드 포함
+)
+
+// ✅ 파일 심볼 개요 (파일 구조 파악)
+mcp__serena__get_symbols_overview(
+    relative_path="src/main/java/com/smartcoreinc/localpkd/fileupload/domain/model/UploadedFile.java",
+    depth=1
+)
+
+// ✅ 심볼 참조 찾기 (어디서 사용되는지)
+mcp__serena__find_referencing_symbols(
+    name_path="UploadedFile/create",
+    relative_path="src/main/java/com/smartcoreinc/localpkd/fileupload/domain/model/UploadedFile.java"
+)
+
+// ✅ 패턴 검색 (코드 내용 검색)
+mcp__serena__search_for_pattern(
+    substring_pattern="@SpringBootTest",
+    relative_path="src/test/java",
+    restrict_search_to_code_files=true
+)
+
+// ✅ 심볼 본문 교체 (메서드/클래스 전체 교체)
+mcp__serena__replace_symbol_body(
+    name_path="UploadedFile/create",
+    relative_path="...",
+    body="public static UploadedFile create(...) { ... }"
+)
+
+// ✅ 파일 읽기 (일반 파일)
+mcp__serena__read_file(
+    relative_path="src/main/resources/application.properties",
+    start_line=0,
+    end_line=50
+)
+```
+
+**사용 우선순위**:
+
+1. **심볼 기반 작업** → Serena MCP 사용 (클래스, 메서드 찾기/수정)
+2. **일반 파일 작업** → Filesystem MCP 사용
+3. **외부 문서** → Context7 MCP 사용
 
 ### 1. Filesystem 작업
 
@@ -926,21 +1010,41 @@ http://172.24.1.6:8081
 15. ✅ **업로드 통계 기능 구현** (2025-12-05) - 업로드 상세정보 dialog에 파싱 통계(인증서 타입별, CRL, Master List) 및 검증 통계(총 검증, 유효, 무효, 만료) 추가, 4개 repository에 uploadId 기반 count 메서드 구현, DaisyUI stats 컴포넌트로 시각화 (상세 내역: [SESSION_2025-12-05_UPLOAD_STATISTICS.md](docs/SESSION_2025-12-05_UPLOAD_STATISTICS.md))
 16. ✅ **CRL 영속화 및 UI 오류 수정** (2025-12-11 **NEW**) - CRL이 파싱되지만 DB에 저장되지 않던 문제 해결 (ValidateCertificatesUseCase.java에 CRL 영속화 로직 구현, 배치 저장, SSE 진행 상황 추가), 대시보드 차트 인스턴스 미선언 오류 수정, 차트 생성/색상 업데이트 메서드에 에러 핸들링 추가, 업로드 이력 페이지 darkMode 변수 참조 오류 수정 (4개 UI 오류 해결) (상세 내역: [SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md](docs/SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md))
 
-### Remaining TODOs
+### Current Phase: Passive Authentication Phase 4.5
+
+**목표**: PA UseCase Integration Tests 구현 (17 tests)
+
+**진행 상황**:
+- ⏳ Phase 4.5.1: Trust Chain Verification Tests (4 scenarios)
+- ⏳ Phase 4.5.2: SOD Verification Tests (3 scenarios)
+- ⏳ Phase 4.5.3: Data Group Hash Verification Tests (3 scenarios)
+- ⏳ Phase 4.5.4: CRL Check Tests (3 scenarios)
+- ⏳ Phase 4.5.5: Complete PA Flow Tests (4 scenarios)
+
+**상세 내역**: [TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md](docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md)
+
+### PKD Upload Module - Remaining TODOs (Optional)
 
 1. ✅ ~~**FileUploadEventHandler.java:92** - LDAP 업로드 체인 연결~~ **COMPLETED (2025-11-27)**
 2. ✅ ~~**LdifConverter - LDAP 검증 상태 기록**~~ **COMPLETED (2025-11-28)**
-3. **ProcessingController.java:141-143** - Manual Mode Use Cases 구현 (Phase 20 예정)
-4. **ProcessingController.java:358-369** - 처리 상태 DB 조회 구현
+3. **ProcessingController.java:141-143** - Manual Mode Use Cases 구현 (Low Priority)
+4. **ProcessingController.java:358-369** - 처리 상태 DB 조회 구현 (Low Priority)
 5. **LdifConverter** - 단위 테스트 작성 (Optional)
 6. **UploadToLdapUseCase** - 통합 테스트 작성 (Optional)
 
-### Next Steps (Optional)
+### Future Enhancements (Optional)
 
-- **Phase 20**: Manual Mode 완성 (ValidateCertificatesUseCase, UploadToLdapUseCase 호출)
-- **Phase 21**: 고급 검색 & 필터링 (Full-Text Search, Elasticsearch)
-- **Phase 22**: 모니터링 & 운영 (Prometheus, Grafana, Alerts)
-- **Phase 23**: LDAP 검증 상태 모니터링 Dashboard (Validation Statistics)
+**PKD Module**:
+- Manual Mode 완성 (ValidateCertificatesUseCase, UploadToLdapUseCase 호출)
+- 고급 검색 & 필터링 (Full-Text Search, Elasticsearch)
+- 모니터링 & 운영 (Prometheus, Grafana, Alerts)
+- LDAP 검증 상태 모니터링 Dashboard (Validation Statistics)
+
+**PA Module**:
+- Phase 4.6: REST API Controller Integration Tests
+- Phase 4.7: Performance Testing & Optimization
+- Phase 5: UI Integration (Dashboard, Search)
+- Phase 6: Active Authentication Support
 
 ---
 
@@ -1089,8 +1193,32 @@ ldapsearch -x -H ldap://192.168.100.10:389 \
 
 ---
 
-**Document Version**: 3.6
-**Status**: PRODUCTION READY ✅
-**Last Review**: 2025-12-11
+**Document Version**: 4.0
+**Status**: PKD Module (PRODUCTION READY ✅) + PA Module (PHASE 4.5 IN PROGRESS ⏳)
+**Last Review**: 2025-12-17
 
 *이 문서는 프로젝트의 핵심 정보와 최신 아키텍처 변경사항을 포함합니다. 상세한 구현 내용은 `docs/` 디렉토리의 개별 문서를 참조하세요.*
+
+---
+
+## 📁 Key Documents
+
+### Latest Phase Documents
+
+| 문서 | 용도 | 위치 |
+|------|--------|------|
+| **TODO_PHASE_4_5** | Phase 4.5 작업 계획 및 가이드 | [docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md](docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md) |
+| **SESSION_2025-12-17** | Phase 4.4 LDAP Integration 완료 보고서 | [docs/SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md](docs/SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md) |
+| **SESSION_2025-12-12** | Phase 1-2 완료 + Lombok 이슈 해결 | [docs/SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md](docs/SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md) |
+| **PA_PHASE_1_COMPLETE** | Phase 1 Domain Layer 완료 보고서 | [docs/PA_PHASE_1_COMPLETE.md](docs/PA_PHASE_1_COMPLETE.md) |
+
+### PKD Module Documents
+
+| 문서 | 용도 | 위치 |
+|------|--------|------|
+| **PROJECT_SUMMARY** | 프로젝트 전체 개요 (DB, API, 완료 Phase) | [docs/PROJECT_SUMMARY_2025-11-21.md](docs/PROJECT_SUMMARY_2025-11-21.md) |
+| **CODE_CLEANUP_REPORT** | 최근 코드 정리 내역 (제거 파일, 빌드 결과) | [docs/CODE_CLEANUP_REPORT_2025-11-21.md](docs/CODE_CLEANUP_REPORT_2025-11-21.md) |
+| **MASTER_LIST_STORAGE** | Master List 구조 및 저장 전략 분석 | [docs/MASTER_LIST_LDAP_STORAGE_ANALYSIS.md](docs/MASTER_LIST_LDAP_STORAGE_ANALYSIS.md) |
+| **LDAP_BASE_DN_RECOVERY** | LDAP Base DN 복구 가이드 | [docs/LDAP_BASE_DN_RECOVERY.md](docs/LDAP_BASE_DN_RECOVERY.md) |
+
+**아카이브**: `docs/archive/phases/` (Phase 1-19 문서 50개)
