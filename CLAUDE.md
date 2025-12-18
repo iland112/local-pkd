@@ -1298,48 +1298,47 @@ http://172.24.1.6:8081
 22. ✅ **PA Phase 4.7 Test Cleanup** (2025-12-18) - Phase 4.5 컴파일 에러 수정 (20개), 잘못된 API 테스트 삭제, H2 schema 문제 식별 (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_7_CLEANUP.md](docs/SESSION_2025-12-18_PA_PHASE_4_7_CLEANUP.md))
 23. ✅ **PA Phase 4.8 H2 Schema Fix & Country Code Support** (2025-12-18) - H2 JSONB 호환성 문제 해결, ISO 3166-1 alpha-3 국가 코드 지원 추가 (ICAO Doc 9303 준수), 42개 국가 alpha-3 → alpha-2 변환 맵 구현, 테스트 실행 (24 tests: 7 passing) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_8_H2_SCHEMA_FIX.md](docs/SESSION_2025-12-18_PA_PHASE_4_8_H2_SCHEMA_FIX.md))
 24. ✅ **PA Phase 4.9 DSC Extraction from SOD** (2025-12-18) - ICAO Doc 9303 Part 10 Tag 0x77 wrapper unwrapping 구현, ASN.1 TLV 파싱 (short/long form), DSC Subject DN & Serial Number 실제 추출, 모든 SOD 파싱 메서드에 unwrapping 적용 (5개 메서드), Controller placeholder 제거, 20 tests 실행 (7 passing, DSC extraction working) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md](docs/SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md))
-25. ✅ **PA Phase 4.10 ICAO 9303 Standard Compliance** (2025-12-19 **NEW**) - `extractDscCertificate()` 메서드 추가로 SOD에서 DSC X.509 인증서 직접 추출 (ICAO 9303 Part 11 Section 6.1.3.1 준수), DSC LDAP lookup 단계 제거하여 검증 프로세스 단순화, PassiveAuthenticationService에 SOD 기반 DSC 추출 로직 통합, GlobalExceptionHandler에 Bean Validation 지원 추가 (@Valid, MethodArgumentNotValidException), CLAUDE.md에 ICAO 9303 PA Workflow 문서화 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md))
+25. ✅ **PA Phase 4.10 ICAO 9303 Standard Compliance** (2025-12-19) - `extractDscCertificate()` 메서드 추가로 SOD에서 DSC X.509 인증서 직접 추출 (ICAO 9303 Part 11 Section 6.1.3.1 준수), DSC LDAP lookup 단계 제거하여 검증 프로세스 단순화, PassiveAuthenticationService에 SOD 기반 DSC 추출 로직 통합, GlobalExceptionHandler에 Bean Validation 지원 추가 (@Valid, MethodArgumentNotValidException), CLAUDE.md에 ICAO 9303 PA Workflow 문서화 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md))
+26. ✅ **PA Phase 4.11.1 Request Validation** (2025-12-19 **NEW**) - Controller nested class 제거 (중복 PassiveAuthenticationRequest 정의 삭제), Bean Validation 정상화 (@Valid 어노테이션 동작), Validation 테스트 데이터 수정 (유효한 Base64 사용), Test pass rate 향상 (7/20 → 11/20, +20%), GlobalExceptionHandler HTTP 400 응답 검증 완료 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md))
 
-### Current Phase: Passive Authentication Phase 4.10 ✅ COMPLETED
+### Current Phase: Passive Authentication Phase 4.11.1 ✅ COMPLETED
 
-**목표**: ICAO 9303 Standard Compliance - SOD 기반 DSC 추출
+**목표**: Request Validation - Bean Validation 정상화
 
 **완료 내역**:
-- ✅ Added `extractDscCertificate()` method to `SodParserPort` interface
-- ✅ Implemented full X.509 certificate extraction from SOD (not just DN + Serial)
-- ✅ ICAO 9303 Part 11 Section 6.1.3.1 compliance (SOD contains embedded DSC)
-- ✅ Removed DSC LDAP lookup dependency (simplified verification flow)
-- ✅ Updated `PassiveAuthenticationService` to use SOD-extracted DSC
-- ✅ Added Bean Validation support in `GlobalExceptionHandler`
-- ✅ Documented ICAO 9303 PA Workflow in CLAUDE.md
+- ✅ Removed duplicate nested `PassiveAuthenticationRequest` class from Controller
+- ✅ Fixed Bean Validation to work with external DTO class
+- ✅ Updated validation tests to use valid Base64-encoded data
+- ✅ Verified GlobalExceptionHandler returns HTTP 400 for validation failures
+- ✅ All 4 validation tests now passing (100%)
 
 **주요 성과**:
-- **표준 준수**: ICAO 9303 Part 11 standard implementation
-- **검증 프로세스 단순화**: SOD DSC → LDAP CSCA → Verify (3 steps)
-- **호환성 향상**: DSC가 LDAP에 없어도 검증 가능
-- **보안성 강화**: 여권 칩에서 직접 추출한 원본 DSC 사용
-- **Global Exception Handler**: Bean Validation 지원 (@Valid, MethodArgumentNotValidException)
+- **Test Improvement**: 7/20 → 11/20 tests passing (+20%)
+- **Bean Validation**: @Valid annotation working correctly
+- **Error Messages**: Korean validation messages displayed properly
+- **HTTP 400 Responses**: Proper validation error structure
 
 **구현 위치**:
-- [SodParserPort.java:142-173](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/domain/port/SodParserPort.java#L142-L173) - `extractDscCertificate()` interface
-- [BouncyCastleSodParserAdapter.java:435-476](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/BouncyCastleSodParserAdapter.java#L435-L476) - DSC extraction implementation
-- [GlobalExceptionHandler.java:82-121](src/main/java/com/smartcoreinc/localpkd/certificatevalidation/infrastructure/exception/GlobalExceptionHandler.java#L82-L121) - Bean Validation handler
-- [CLAUDE.md:1040-1105](CLAUDE.md#L1040-L1105) - ICAO 9303 PA Workflow documentation
+- [PassiveAuthenticationController.java:1-306](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/web/PassiveAuthenticationController.java) - Nested class removed
+- [PassiveAuthenticationControllerTest.java:450-543](src/test/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/web/PassiveAuthenticationControllerTest.java) - Validation tests fixed
+- [GlobalExceptionHandler.java:82-121](src/main/java/com/smartcoreinc/localpkd/certificatevalidation/infrastructure/exception/GlobalExceptionHandler.java) - MethodArgumentNotValidException handler
 
 **상세 내역**:
-- [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md)
+- [SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md)
+- [TODO_PHASE_4_11_REQUEST_VALIDATION.md](docs/TODO_PHASE_4_11_REQUEST_VALIDATION.md)
 
-### Next Phase: Passive Authentication Phase 4.11
+### Next Phase: Passive Authentication Phase 4.11.2
 
-**목표**: Request Validation & Test Fixtures
+**목표**: LDAP Test Fixtures - CSCA/DSC Certificates
 
 **작업 내역**:
-- ⏳ Implement request validation (@Valid, Bean Validation annotations)
-- ⏳ Add test CSCA/DSC certificates to H2 database
-- ⏳ Fix remaining Controller test failures
-- ⏳ Add integration tests for SOD-based DSC extraction
-- ⏳ Performance testing & optimization (target: < 500ms)
+- ⏳ Create test CSCA certificate (self-signed)
+- ⏳ Create test DSC certificate (signed by CSCA)
+- ⏳ Add H2 database test data migrations (V100, V101)
+- ⏳ Fix Trust Chain tests (3 tests)
+- ⏳ Implement 404 handling for missing resources
 
+**Target**: 14/20 tests passing (70%)
 **Estimated Time**: 2-3 hours
 
 ### PKD Upload Module - Remaining TODOs (Optional)
