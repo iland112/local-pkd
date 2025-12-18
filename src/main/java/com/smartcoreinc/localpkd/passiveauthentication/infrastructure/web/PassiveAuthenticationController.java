@@ -303,31 +303,4 @@ public class PassiveAuthenticationController {
         }
         return request.getRemoteAddr();
     }
-
-    /**
-     * Request DTO for Passive Authentication verification.
-     *
-     * @param issuingCountry Issuing country (ISO 3166-1 alpha-2 or alpha-3, e.g., "KR" or "KOR")
-     * @param documentNumber Passport document number (e.g., "M12345678")
-     * @param sod Base64-encoded SOD (Security Object Document, PKCS#7 SignedData)
-     * @param dataGroups Map of Data Group number to Base64-encoded data (e.g., {"DG1": "...", "DG2": "..."})
-     * @param requestedBy Optional requester identifier (e.g., "border-control-officer-123")
-     */
-    public record PassiveAuthenticationRequest(
-        @Parameter(description = "발급 국가 (ISO 3166-1 alpha-2 or alpha-3)", example = "KOR", required = true)
-        String issuingCountry,
-
-        @Parameter(description = "여권 번호", example = "M12345678", required = true)
-        String documentNumber,
-
-        @Parameter(description = "Base64 인코딩된 SOD (PKCS#7 SignedData)", required = true)
-        String sod,
-
-        @Parameter(description = "Base64 인코딩된 Data Groups (DG1, DG2 등)", required = true)
-        Map<String, String> dataGroups,
-
-        @Parameter(description = "요청자 식별자 (선택)", example = "border-control-officer-123")
-        String requestedBy
-    ) {
-    }
 }

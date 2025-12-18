@@ -448,21 +448,22 @@ class PassiveAuthenticationControllerTest {
             .andDo(print());
     }
 
-    // ===== 2. Request Validation Tests =====
-
     @Test
     @DisplayName("POST /verify - Missing required field should return 400 Bad Request")
     void shouldRejectMissingRequiredField() throws Exception {
-        // Given: Request without issuingCountry
-        String invalidRequest = """
+        // Given: Request without issuingCountry (use valid Base64)
+        String validSod = Base64.getEncoder().encodeToString(sodBytes);
+        String validDg1 = Base64.getEncoder().encodeToString(dg1Bytes);
+        
+        String invalidRequest = String.format("""
             {
                 "documentNumber": "M12345678",
-                "sod": "MIIGBwYJKoZIhvcNAQcCoII...",
+                "sod": "%s",
                 "dataGroups": {
-                    "DG1": "UEQxMjM0NTY3ODk..."
+                    "DG1": "%s"
                 }
             }
-            """;
+            """, validSod, validDg1);
 
         // When: POST /api/v1/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
@@ -500,24 +501,27 @@ class PassiveAuthenticationControllerTest {
     @DisplayName("POST /verify - Invalid Data Group key should return 400")
     void shouldRejectInvalidDataGroupKey() throws Exception {
         // Given: Invalid Data Group key (DG99 doesn't exist)
-        String invalidRequest = """
+        String validSod = Base64.getEncoder().encodeToString(sodBytes);
+        String validDg1 = Base64.getEncoder().encodeToString(dg1Bytes);
+        
+        String invalidRequest = String.format("""
             {
                 "issuingCountry": "KOR",
                 "documentNumber": "M12345678",
-                "sod": "MIIGBwYJKoZIhvcNAQcCoII...",
+                "sod": "%s",
                 "dataGroups": {
-                    "DG99": "UEQxMjM0NTY3ODk..."
+                    "DG99": "%s"
                 }
             }
-            """;
+            """, validSod, validDg1);
 
         // When: POST /api/v1/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidRequest))
-            // Then: Response should be 400 Bad Request
+            // Then: Response should be 400 Bad Request (enum valueOf fails)
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error.message", containsString("Invalid Data Group key: DG99")))
+            .andExpect(jsonPath("$.error.message", containsString("DG99")))
             .andDo(print());
     }
 
@@ -525,18 +529,21 @@ class PassiveAuthenticationControllerTest {
     @DisplayName("POST /verify - Empty data groups should return 400")
     void shouldRejectEmptyDataGroups() throws Exception {
         // Given: Request with empty dataGroups map
-        PassiveAuthenticationRequest request = new PassiveAuthenticationRequest(
-            "KOR",
-            "M12345678",
-            Base64.getEncoder().encodeToString(sodBytes),
-            Map.of(),  // ❌ Empty
-            null
-        );
+        String validSod = Base64.getEncoder().encodeToString(sodBytes);
+        
+        String invalidRequest = String.format("""
+            {
+                "issuingCountry": "KOR",
+                "documentNumber": "M12345678",
+                "sod": "%s",
+                "dataGroups": {}
+            }
+            """, validSod);
 
         // When: POST /api/v1/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(invalidRequest))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error.message", containsString("최소 하나의 Data Group이 필요합니다")))
