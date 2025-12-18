@@ -876,6 +876,229 @@ if (cert.getMasterListId() == null) {
 
 ---
 
+## 📄 ICAO 9303 SOD (Security Object Document) Structure
+
+### SOD 개요
+
+SOD (Security Object Document)는 ePassport의 무결성을 보장하기 위한 핵심 데이터 구조입니다.
+- **표준**: ICAO Doc 9303 Part 10 (Logical Data Structure)
+- **형식**: PKCS#7 CMS SignedData (RFC 5652)
+- **용도**: Passive Authentication (PA)
+- **서명자**: Document Signer Certificate (DSC)
+
+### ICAO 9303 Part 10 EF.SOD File Structure
+
+```
+Tag 0x77 (Application 23) - EF.SOD wrapper
+  ├─ Length (TLV encoding)
+  │   ├─ Short form: 0x00-0x7F (length in lower 7 bits)
+  │   └─ Long form: 0x80-0xFF (number of octets in lower 7 bits)
+  │
+  └─ Value: CMS SignedData (Tag 0x30 SEQUENCE)
+       ├─ version (INTEGER)
+       ├─ digestAlgorithms (SET OF DigestAlgorithmIdentifier)
+       ├─ encapContentInfo (EncapsulatedContentInfo)
+       │   ├─ eContentType: id-icao-ldsSecurityObject (2.23.136.1.1.1)
+       │   └─ eContent: LDSSecurityObject (Data Group hashes)
+       │       ├─ version (INTEGER)
+       │       ├─ hashAlgorithm (DigestAlgorithmIdentifier) → SHA-256/384/512
+       │       └─ dataGroupHashValues (SEQUENCE OF DataGroupHash)
+       │           ├─ DataGroup 1 (MRZ) hash
+       │           ├─ DataGroup 2 (Face image) hash
+       │           ├─ DataGroup 14 (Security features) hash
+       │           └─ ... (other Data Groups)
+       │
+       ├─ certificates [0] IMPLICIT SEQUENCE OF Certificate
+       │   └─ DSC certificate (X.509) ← **여기서 DSC 추출**
+       │       ├─ Subject DN: "C=KR,O=Government,OU=MOFA,CN=DS..."
+       │       ├─ Serial Number: Hexadecimal (e.g., "127")
+       │       ├─ Public Key: RSA/ECDSA
+       │       └─ Issuer: CSCA DN
+       │
+       └─ signerInfos (SET OF SignerInfo)
+           └─ SignerInfo
+               ├─ sid (SignerIdentifier) → CSCA identifier
+               ├─ digestAlgorithm → Hash algorithm
+               ├─ signatureAlgorithm → SHA256withRSA, SHA256withECDSA, etc.
+               └─ signature → DSC's signature over LDSSecurityObject
+```
+
+### 실제 예시: 한국 여권 SOD
+
+```
+Offset | Hex Bytes                          | Description
+-------|-------------------------------------|---------------------------
+0x0000 | 77 82 07 3D                         | Tag 0x77, Long form length (2 octets)
+0x0004 | 30 82 07 39                         | CMS SignedData SEQUENCE
+0x0008 | 06 09 2A 86 48 86 F7 0D 01 07 02   | OID: pkcs7-signedData
+0x0013 | A0 82 07 2A                         | Context-specific [0]
+...    | ...                                 | LDSSecurityObject content
+...    | A0 82 03 E2                         | certificates [0]
+...    | 30 82 03 DE                         | DSC certificate (X.509)
+...    |   Subject: C=KR,O=Government,OU=MOFA,CN=DS0120200313 1
+...    |   Serial: 7F (127 in decimal)
+...    | A1 82 01 48                         | signerInfos [1]
+...    | 30 82 01 44                         | SignerInfo SEQUENCE
+
+Total: 1857 bytes (4 bytes TLV header + 1853 bytes CMS content)
+```
+
+### ASN.1 TLV (Tag-Length-Value) Encoding
+
+#### Short Form Length (0-127 bytes)
+
+```
+Example: 20 bytes content
+77 14 [20 bytes of data...]
+└─ Tag 0x77
+   └─ Length 0x14 (20 in decimal)
+```
+
+#### Long Form Length (128+ bytes)
+
+```
+Example: 1853 bytes content (Korean Passport)
+77 82 07 3D [1853 bytes of data...]
+└─ Tag 0x77
+   └─ Length encoding:
+       ├─ 0x82: Long form, 2 octets follow (0x80 | 0x02)
+       └─ 0x07 0x3D: 1853 bytes (big-endian)
+           = (0x07 << 8) | 0x3D
+           = (7 * 256) + 61
+           = 1792 + 61
+           = 1853
+```
+
+### SOD 파싱 구현 (Phase 4.9)
+
+**핵심 메서드**: `unwrapIcaoSod(byte[] sodBytes)`
+
+```java
+/**
+ * Unwraps ICAO 9303 Tag 0x77 wrapper from SOD if present.
+ *
+ * Implementation:
+ * 1. Check first byte: if 0x77, unwrap; else return as-is
+ * 2. Parse length byte(s):
+ *    - Short form (0x00-0x7F): length in lower 7 bits
+ *    - Long form (0x80-0xFF): number of octets in lower 7 bits
+ * 3. Extract CMS SignedData starting after TLV header
+ *
+ * @param sodBytes SOD bytes potentially wrapped with Tag 0x77
+ * @return Pure CMS SignedData bytes (starts with Tag 0x30)
+ */
+private byte[] unwrapIcaoSod(byte[] sodBytes) {
+    if ((sodBytes[0] & 0xFF) != 0x77) {
+        return sodBytes; // No wrapper
+    }
+
+    int offset = 1; // Skip tag
+    int lengthByte = sodBytes[offset++] & 0xFF;
+
+    if ((lengthByte & 0x80) != 0) {
+        // Long form: skip additional octets
+        int numOctets = lengthByte & 0x7F;
+        offset += numOctets;
+    }
+
+    // Extract CMS content
+    byte[] cmsBytes = new byte[sodBytes.length - offset];
+    System.arraycopy(sodBytes, offset, cmsBytes, 0, cmsBytes.length);
+    return cmsBytes;
+}
+```
+
+**적용 범위**: 모든 SOD 파싱 메서드 (5개)
+1. `parseDataGroupHashes()` - Data Group 해시 추출
+2. `verifySignature()` - DSC 서명 검증
+3. `extractHashAlgorithm()` - 해시 알고리즘 OID 추출
+4. `extractSignatureAlgorithm()` - 서명 알고리즘 OID 추출
+5. `extractDscInfo()` - DSC Subject DN & Serial Number 추출
+
+### DSC 추출 프로세스
+
+```java
+// 1. Unwrap ICAO 9303 Tag 0x77
+byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
+// 2. Parse CMS SignedData
+CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
+
+// 3. Extract certificates from SignedData
+var certificates = cmsSignedData.getCertificates();
+
+// 4. Get first certificate (DSC)
+var certHolder = (X509CertificateHolder) certificates.getMatches(null).iterator().next();
+
+// 5. Extract Subject DN and Serial Number
+String subjectDn = certHolder.getSubject().toString();
+String serialNumber = certHolder.getSerialNumber().toString(16).toUpperCase();
+
+// Result: DscInfo("C=KR,O=Government,OU=MOFA,CN=DS0120200313 1", "127")
+```
+
+### Passive Authentication Workflow
+
+```
+1. Client → API: SOD + Data Groups (DG1, DG2, ...)
+   ↓
+2. unwrapIcaoSod(SOD) → Extract CMS SignedData
+   ↓
+3. extractDscInfo(SOD) → Get DSC Subject DN & Serial
+   ↓
+4. LDAP Lookup: Find DSC by (Subject DN + Serial)
+   ↓
+5. Verify Trust Chain: DSC → CSCA → ICAO Root
+   ↓
+6. Verify SOD Signature: DSC Public Key → Signature valid?
+   ↓
+7. Extract Data Group Hashes from LDSSecurityObject
+   ↓
+8. Compute Client's Data Group Hashes (SHA-256/384/512)
+   ↓
+9. Compare: SOD hashes == Computed hashes?
+   ↓
+10. Result: VALID / INVALID / ERROR
+```
+
+### 주요 알고리즘 OIDs
+
+#### Hash Algorithms
+
+| OID | Algorithm | ICAO 9303 Recommended |
+|-----|-----------|----------------------|
+| 1.3.14.3.2.26 | SHA-1 | ❌ Deprecated |
+| 2.16.840.1.101.3.4.2.1 | SHA-256 | ✅ Yes |
+| 2.16.840.1.101.3.4.2.2 | SHA-384 | ✅ Yes |
+| 2.16.840.1.101.3.4.2.3 | SHA-512 | ✅ Yes |
+
+#### Signature Algorithms
+
+| OID | Algorithm | Key Type |
+|-----|-----------|----------|
+| 1.2.840.113549.1.1.11 | SHA256withRSA | RSA |
+| 1.2.840.113549.1.1.12 | SHA384withRSA | RSA |
+| 1.2.840.113549.1.1.13 | SHA512withRSA | RSA |
+| 1.2.840.10045.4.3.2 | SHA256withECDSA | ECDSA |
+| 1.2.840.10045.4.3.3 | SHA384withECDSA | ECDSA |
+| 1.2.840.10045.4.3.4 | SHA512withECDSA | ECDSA |
+
+### 참고 문서
+
+- **ICAO Doc 9303 Part 10**: Logical Data Structure (LDS) for eMRTDs
+- **ICAO Doc 9303 Part 11**: Security Mechanisms for MRTDs (Passive Authentication)
+- **RFC 5652**: Cryptographic Message Syntax (CMS)
+- **X.690**: ASN.1 encoding rules (BER, DER)
+
+**구현 위치**:
+- `BouncyCastleSodParserAdapter.java:294-330` - unwrapIcaoSod()
+- `BouncyCastleSodParserAdapter.java:383-433` - extractDscInfo()
+- `SodParserPort.java` - SOD 파싱 인터페이스
+
+**완료 Phase**: Phase 4.9 (2025-12-18)
+
+---
+
 ## 💾 Database Schema (현재 상태)
 
 ### 주요 테이블 (3개)
