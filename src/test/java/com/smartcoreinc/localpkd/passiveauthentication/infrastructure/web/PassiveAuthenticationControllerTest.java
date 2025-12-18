@@ -3,8 +3,32 @@ package com.smartcoreinc.localpkd.passiveauthentication.infrastructure.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
+import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileName;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileHash;
+import com.smartcoreinc.localpkd.fileupload.domain.model.FileSize;
+import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.SubjectInfo;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.IssuerInfo;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod;
+import com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+import java.security.MessageDigest;
+import java.security.PublicKey;
+import java.security.Security;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+
+import java.time.LocalDateTime;
 import com.smartcoreinc.localpkd.passiveauthentication.application.usecase.PerformPassiveAuthenticationUseCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +38,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +84,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @since 2025-12-18
  */
 @SpringBootTest
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Transactional
 @DisplayName("PassiveAuthenticationController REST API Tests")
@@ -77,6 +102,9 @@ class PassiveAuthenticationControllerTest {
     @Autowired
     private CertificateRepository certificateRepository;
 
+    @Autowired
+    private UploadedFileRepository uploadedFileRepository;
+
     private static final String FIXTURES_BASE = "src/test/resources/passport-fixtures/valid-korean-passport/";
     private static final String API_BASE_PATH = "/api/v1/pa";
 
@@ -93,9 +121,196 @@ class PassiveAuthenticationControllerTest {
         dg2Bytes = Files.readAllBytes(Path.of(FIXTURES_BASE + "dg2.bin"));
         dg14Bytes = Files.readAllBytes(Path.of(FIXTURES_BASE + "dg14.bin"));
 
-        // Verify LDAP has required certificates
+        // Create test certificates programmatically (bypassing H2 JSONB issue)
+        createTestCertificates();
+
+        // Verify LDAP has required certificates for PA testing
         List<Certificate> cscas = certificateRepository.findAllByType(CertificateType.CSCA);
-        assertThat(cscas).isNotEmpty();
+        List<Certificate> dscs = certificateRepository.findAllByType(CertificateType.DSC);
+
+        assertThat(cscas).as("CSCA certificates should be created programmatically").isNotEmpty();
+        assertThat(dscs).as("DSC certificates should be created programmatically").isNotEmpty();
+
+        // Verify Korean DSC exists (required for test SOD)
+        boolean koreanDscExists = dscs.stream()
+            .anyMatch(dsc -> dsc.getSubjectInfo().getDistinguishedName().contains("CN=DS0120200313 1"));
+        assertThat(koreanDscExists).as("Korean DSC (DS0120200313 1) should exist in test data").isTrue();
+    }
+
+    /**
+     * Creates test certificates by extracting real DSC from SOD file.
+     * <p>
+     * This approach uses actual certificate data from the Korean passport SOD fixture,
+     * ensuring test data matches the format expected by the PA verification logic.
+     * </p>
+     */
+    private void createTestCertificates() throws Exception {
+        // 0. Create dummy UploadedFile for test certificates
+        UploadedFile dummyUpload = UploadedFile.create(
+            UploadId.of("99999999-9999-9999-9999-999999999999"),
+            FileName.of("test-passport-sod.ml"),
+            FileHash.of("0000000000000000000000000000000000000000000000000000000000000000"),  // 64-char SHA-256
+            FileSize.ofBytes(1857L)  // SOD file size
+        );
+        uploadedFileRepository.save(dummyUpload);
+
+        // Add Bouncy Castle Provider
+        Security.addProvider(new BouncyCastleProvider());
+
+        // 1. Unwrap ICAO 9303 Tag 0x77
+        byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
+        // 2. Parse CMS SignedData
+        CMSSignedData signedData = new CMSSignedData(cmsBytes);
+
+        // 3. Extract DSC certificate
+        var certs = signedData.getCertificates().getMatches(null);
+        if (certs.isEmpty()) {
+            throw new IllegalStateException("No certificates found in SOD!");
+        }
+
+        X509CertificateHolder certHolder = (X509CertificateHolder) certs.iterator().next();
+
+        // 4. Convert to X509Certificate for PublicKey extraction
+        CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
+        X509Certificate x509Cert = (X509Certificate) certFactory.generateCertificate(
+            new java.io.ByteArrayInputStream(certHolder.getEncoded())
+        );
+
+        // 5. Extract certificate data
+        String subjectDn = certHolder.getSubject().toString();
+        String issuerDn = certHolder.getIssuer().toString();
+        String serialNumber = certHolder.getSerialNumber().toString(16).toUpperCase();
+        PublicKey publicKey = x509Cert.getPublicKey();
+        byte[] certEncoded = certHolder.getEncoded();
+
+        // 6. Calculate SHA-256 fingerprint
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        byte[] fingerprint = sha256.digest(certEncoded);
+        String fingerprintHex = bytesToHex(fingerprint);
+
+        // 7. Parse DN components
+        String countryCode = extractDnComponent(subjectDn, "C=");
+        String organization = extractDnComponent(subjectDn, "O=");
+        String orgUnit = extractDnComponent(subjectDn, "OU=");
+        String commonName = extractDnComponent(subjectDn, "CN=");
+
+        // 8. Create Certificate entities
+        // 8.1 Create Korean CSCA (issuer of DSC)
+        Certificate csca = Certificate.createForTest(
+            CertificateId.of(UUID.fromString("22222222-2222-2222-2222-222222222222")),
+            dummyUpload.getId(),  // uploadId
+            CertificateType.CSCA,
+            SubjectInfo.of(
+                issuerDn,  // CSCA DN
+                "KR",
+                "Government",
+                "MOFA",
+                "CSCA003"
+            ),
+            IssuerInfo.of(
+                issuerDn,  // Self-signed
+                "KR",
+                "Government",
+                "MOFA",
+                "CSCA003",
+                true  // isCA
+            ),
+            ValidityPeriod.of(
+                LocalDateTime.of(2015, 1, 1, 0, 0, 0),
+                LocalDateTime.of(2035, 12, 31, 23, 59, 59)
+            ),
+            X509Data.of(
+                new byte[]{0x30, (byte) 0x82, 0x01},  // Minimal cert binary
+                publicKey,  // Reuse DSC's key for testing
+                "A1B2C3D4",
+                "0000000000000000000000000000000000000000000000000000000000000000"
+            ),
+            CertificateStatus.VALID
+        );
+
+        // 8.2 Create Korean DSC (from real SOD)
+        Certificate dsc = Certificate.createForTest(
+            CertificateId.of(UUID.fromString("11111111-1111-1111-1111-111111111111")),
+            dummyUpload.getId(),  // uploadId
+            CertificateType.DSC,
+            SubjectInfo.of(
+                subjectDn,
+                countryCode,
+                organization,
+                orgUnit,
+                commonName
+            ),
+            IssuerInfo.of(
+                issuerDn,
+                "KR",
+                "Government",
+                "MOFA",
+                "CSCA003",
+                true
+            ),
+            ValidityPeriod.of(
+                certHolder.getNotBefore().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime(),
+                certHolder.getNotAfter().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            ),
+            X509Data.of(
+                certEncoded,
+                publicKey,
+                serialNumber,
+                fingerprintHex
+            ),
+            CertificateStatus.VALID
+        );
+
+        // 9. Save to database
+        certificateRepository.save(csca);
+        certificateRepository.save(dsc);
+    }
+
+    /**
+     * Unwraps ICAO 9303 Tag 0x77 wrapper from SOD if present.
+     */
+    private byte[] unwrapIcaoSod(byte[] sodBytes) {
+        if ((sodBytes[0] & 0xFF) != 0x77) {
+            return sodBytes;  // No wrapper
+        }
+
+        int offset = 1;
+        int lengthByte = sodBytes[offset++] & 0xFF;
+
+        if ((lengthByte & 0x80) != 0) {
+            int numOctets = lengthByte & 0x7F;
+            offset += numOctets;
+        }
+
+        byte[] cmsBytes = new byte[sodBytes.length - offset];
+        System.arraycopy(sodBytes, offset, cmsBytes, 0, cmsBytes.length);
+        return cmsBytes;
+    }
+
+    /**
+     * Extracts a component from a Distinguished Name string.
+     */
+    private String extractDnComponent(String dn, String prefix) {
+        int start = dn.indexOf(prefix);
+        if (start == -1) return null;
+        
+        start += prefix.length();
+        int end = dn.indexOf(',', start);
+        if (end == -1) end = dn.length();
+        
+        return dn.substring(start, end).trim();
+    }
+
+    /**
+     * Converts byte array to hexadecimal string.
+     */
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     // ===== 1. Controller Endpoint Tests =====

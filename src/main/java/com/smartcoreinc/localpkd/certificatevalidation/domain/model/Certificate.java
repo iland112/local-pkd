@@ -787,4 +787,45 @@ public class Certificate extends AggregateRoot<CertificateId> {
         cert.uploadedToLdap = false;
         return cert;
     }
+
+    /**
+     * 테스트용 Certificate 생성 with uploadId (Static Factory Method)
+     *
+     * <p><b>⚠️ 이 메서드는 테스트 코드에서만 사용하세요!</b></p>
+     *
+     * @param id 인증서 ID (테스트용)
+     * @param uploadId 업로드 ID (테스트용)
+     * @param certificateType 인증서 타입
+     * @param subjectInfo 주체 정보
+     * @param issuerInfo 발급자 정보
+     * @param validity 유효기간
+     * @param x509Data X.509 데이터
+     * @param status 초기 상태
+     * @return Certificate (테스트용)
+     */
+    public static Certificate createForTest(
+            CertificateId id,
+            com.smartcoreinc.localpkd.fileupload.domain.model.UploadId uploadId,
+            CertificateType certificateType,
+            SubjectInfo subjectInfo,
+            IssuerInfo issuerInfo,
+            ValidityPeriod validity,
+            X509Data x509Data,
+            CertificateStatus status
+    ) {
+        Certificate cert = new Certificate();
+        cert.id = id;
+        cert.uploadId = uploadId.getId();  // Extract UUID from UploadId
+        cert.certificateType = certificateType;
+        cert.subjectInfo = subjectInfo;
+        cert.issuerInfo = issuerInfo;
+        cert.validity = validity;
+        cert.x509Data = x509Data;
+        cert.status = status;
+        cert.sourceType = CertificateSourceType.LDIF_DSC;  // Default for test certificates
+        cert.signatureAlgorithm = "SHA256WithRSA";
+        cert.createdAt = LocalDateTime.now();
+        cert.uploadedToLdap = false;
+        return cert;
+    }
 }

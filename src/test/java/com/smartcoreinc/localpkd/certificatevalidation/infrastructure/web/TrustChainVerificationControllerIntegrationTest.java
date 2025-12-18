@@ -74,18 +74,16 @@ public class TrustChainVerificationControllerIntegrationTest {
     void setUp() {
         // VerifyTrustChainUseCase Mock 설정
         when(verifyTrustChainUseCase.execute(any()))
-                .thenReturn(VerifyTrustChainResponse.builder()
-                        .success(true)
-                        .message("Trust Chain 검증 완료")
-                        .endEntityCertificateId(UUID.fromString(VALID_CERTIFICATE_ID))
-                        .trustAnchorCertificateId(UUID.randomUUID())
-                        .trustAnchorCountryCode(VALID_COUNTRY_CODE)
-                        .chainValid(true)
-                        .chainDepth(3)
-                        .certificateChain(new ArrayList<>())
-                        .validatedAt(LocalDateTime.now())
-                        .durationMillis(500L)
-                        .build());
+                .thenReturn(VerifyTrustChainResponse.success(
+                        UUID.fromString(VALID_CERTIFICATE_ID),
+                        "CN=EndEntity",
+                        UUID.randomUUID(),
+                        "CN=TrustAnchor",
+                        VALID_COUNTRY_CODE,
+                        new ArrayList<>(),
+                        LocalDateTime.now(),
+                        500L
+                ));
     }
 
     /**

@@ -75,13 +75,20 @@ public class CertificateValidationControllerIntegrationTest {
     void setUp() {
         // ValidateCertificateUseCase Mock 설정
         when(validateCertificateUseCase.execute(any()))
-                .thenReturn(ValidateCertificateResponse.builder()
-                        .success(true)
-                        .message("Certificate validation completed")
-                        .certificateId(UUID.fromString(VALID_CERTIFICATE_ID))
-                        .validatedAt(LocalDateTime.now())
-                        .durationMillis(100L)
-                        .build());
+                .thenReturn(ValidateCertificateResponse.success(
+                        UUID.fromString(VALID_CERTIFICATE_ID),
+                        "CN=Test",
+                        "CN=TestCA",
+                        "123456",
+                        "fingerprint",
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        LocalDateTime.now(),
+                        100L
+                ));
     }
 
     /**

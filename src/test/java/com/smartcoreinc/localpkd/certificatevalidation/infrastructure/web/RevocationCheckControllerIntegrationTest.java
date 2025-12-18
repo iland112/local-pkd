@@ -76,20 +76,16 @@ public class RevocationCheckControllerIntegrationTest {
     void setUp() {
         // CheckRevocationUseCase Mock 설정 - NOT_REVOKED 기본값
         when(checkRevocationUseCase.execute(any()))
-                .thenReturn(CheckRevocationResponse.builder()
-                        .success(true)
-                        .message("인증서 폐기 확인 완료")
-                        .certificateId(UUID.fromString(VALID_CERTIFICATE_ID))
-                        .serialNumber(VALID_SERIAL_NUMBER)
-                        .revocationStatus("NOT_REVOKED")
-                        .revoked(false)
-                        .crlIssuerDn(VALID_ISSUER_DN)
-                        .crlLastUpdate(LocalDateTime.now().minusDays(1))
-                        .crlNextUpdate(LocalDateTime.now().plusDays(7))
-                        .crlFromCache(false)
-                        .checkedAt(LocalDateTime.now())
-                        .durationMillis(150L)
-                        .build());
+                .thenReturn(CheckRevocationResponse.notRevoked(
+                        UUID.fromString(VALID_CERTIFICATE_ID),
+                        VALID_SERIAL_NUMBER,
+                        VALID_ISSUER_DN,
+                        LocalDateTime.now().minusDays(1),
+                        LocalDateTime.now().plusDays(7),
+                        false,
+                        LocalDateTime.now(),
+                        150L
+                ));
     }
 
     /**
@@ -382,22 +378,18 @@ public class RevocationCheckControllerIntegrationTest {
     void testCheckRevocationRevokedCertificateFields() throws Exception {
         // GIVEN - Mock을 revoked 응답으로 설정
         when(checkRevocationUseCase.execute(any()))
-                .thenReturn(CheckRevocationResponse.builder()
-                        .success(true)
-                        .message("인증서가 폐기되었습니다")
-                        .certificateId(UUID.fromString(VALID_CERTIFICATE_ID))
-                        .serialNumber(VALID_SERIAL_NUMBER)
-                        .revocationStatus("REVOKED")
-                        .revoked(true)
-                        .revokedAt(LocalDateTime.now().minusDays(1))
-                        .revocationReasonCode("1")
-                        .revocationReason("keyCompromise")
-                        .crlIssuerDn(VALID_ISSUER_DN)
-                        .crlLastUpdate(LocalDateTime.now().minusDays(1))
-                        .crlNextUpdate(LocalDateTime.now().plusDays(7))
-                        .checkedAt(LocalDateTime.now())
-                        .durationMillis(150L)
-                        .build());
+                .thenReturn(CheckRevocationResponse.revoked(
+                        UUID.fromString(VALID_CERTIFICATE_ID),
+                        VALID_SERIAL_NUMBER,
+                        LocalDateTime.now().minusDays(1),
+                        "1",
+                        "keyCompromise",
+                        VALID_ISSUER_DN,
+                        LocalDateTime.now().minusDays(1),
+                        LocalDateTime.now().plusDays(7),
+                        LocalDateTime.now(),
+                        150L
+                ));
 
         RevocationCheckRequest request = RevocationCheckRequest.builder()
                 .certificateId(VALID_CERTIFICATE_ID)
