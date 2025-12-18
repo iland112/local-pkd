@@ -59,7 +59,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @since 2025-12-18
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("local")
 @AutoConfigureMockMvc
 @Transactional
 @DisplayName("PassiveAuthenticationController REST API Tests")

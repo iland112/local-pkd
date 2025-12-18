@@ -193,7 +193,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
     private List<ValidationError> validationErrors = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "all_attributes", columnDefinition = "jsonb")
+    @Column(name = "all_attributes")
     private Map<String, List<String>> allAttributes;
 
     /**
