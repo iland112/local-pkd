@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.config;
 
+import io.swagger.v3.oas.models.ExternalDocumentation;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -45,11 +46,21 @@ public class OpenApiConfig {
                                 ICAO Public Key Directory (PKD) 로컬 평가 및 관리 시스템의 REST API 문서입니다.
 
                                 ## 주요 기능
+                                
+                                ### 1. PKD 파일 관리
                                 - **파일 업로드**: LDIF 및 Master List 파일 업로드 (자동/수동 모드)
                                 - **파싱**: 파일 파싱 및 인증서/CRL 추출
                                 - **검증**: 인증서 신뢰 체인 검증
                                 - **LDAP 연동**: OpenLDAP 서버 연동 (PostgreSQL + OpenLDAP 이중 저장)
                                 - **이력 조회**: 업로드 이력 검색 및 필터링
+                                
+                                ### 2. Passive Authentication (PA)
+                                - **여권 검증**: 전자여권(ePassport) 데이터 무결성 검증
+                                - **인증서 체인 검증**: DSC → CSCA Trust Chain 검증
+                                - **SOD 서명 검증**: Security Object Document (PKCS#7) 서명 검증
+                                - **Data Group 해시 검증**: DG1-DG16 해시 일치 여부 확인
+                                - **CRL 체크**: 인증서 폐기 목록 검사
+                                - **검증 이력**: PA 검증 결과 조회 및 감사 추적
 
                                 ## 외부 시스템
                                 - **PostgreSQL**: 데이터 저장 및 분석
@@ -67,6 +78,9 @@ public class OpenApiConfig {
 
                                 ## 중복 검사
                                 파일 업로드 전 SHA-256 해시 기반 중복 검사 지원
+                                
+                                ## ICAO 9303 준수
+                                Passive Authentication은 ICAO 9303 Part 11 표준을 준수합니다.
                                 """)
                         .version("1.0.0")
                         .contact(new Contact()
@@ -76,6 +90,9 @@ public class OpenApiConfig {
                         .license(new License()
                                 .name("Proprietary")
                                 .url("https://www.smartcoreinc.com/license")))
+                .externalDocs(new ExternalDocumentation()
+                        .description("ICAO Doc 9303 Part 11 - Passive Authentication")
+                        .url("https://www.icao.int/publications/Documents/9303_p11_cons_en.pdf"))
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:" + serverPort)

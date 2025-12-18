@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.0
-**Last Updated**: 2025-12-17
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.5 (In Progress)
+**Version**: 4.1
+**Last Updated**: 2025-12-18
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.6 (Completed)
 
 ---
 
@@ -34,14 +34,24 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
 - ✅ Phase 2: Infrastructure Layer (5 files, ~940 LOC)
 - ✅ Phase 3: Application Layer (Use Cases, DTOs)
 - ✅ Phase 4.4: LDAP Integration Tests (6 tests, 100% pass)
+- ✅ Phase 4.5: PA UseCase Integration Tests (17 tests, 5 test classes)
+  - Trust Chain Verification (4 scenarios) ✅
+  - SOD Signature Verification (3 scenarios) ✅
+  - Data Group Hash Verification (3 scenarios) ✅
+  - CRL Check (3 scenarios) ✅
+  - Complete PA Flow (4 scenarios) ✅
+- ✅ Phase 4.6: REST API Controller Tests (22 tests, ~500 LOC) **NEW**
+  - Controller Endpoint Tests (7 scenarios) ✅
+  - Request Validation Tests (4 scenarios) ✅
+  - Response Format Tests (2 scenarios) ✅
+  - Error Handling Tests (5 scenarios) ✅
+  - Client Metadata Extraction Tests (3 scenarios) ✅
+  - OpenAPI/Swagger Documentation ✅
 
 **진행 중**:
-- ⏳ Phase 4.5: PA UseCase Integration Tests (17 tests)
-  - Trust Chain Verification (4 scenarios)
-  - SOD Signature Verification (3 scenarios)
-  - Data Group Hash Verification (3 scenarios)
-  - CRL Check (3 scenarios)
-  - Complete PA Flow (4 scenarios)
+
+- ⏳ Phase 4.7: Fix Phase 4.5 Errors & Full Test Execution
+- ⏳ Phase 4.8: Performance Testing & Optimization
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -974,7 +984,7 @@ http://172.24.1.6:8081
 
 ---
 
-## 📊 Current Status (2025-12-05)
+## 📊 Current Status (2025-12-18)
 
 ### Completed Phases ✅
 
@@ -1008,20 +1018,41 @@ http://172.24.1.6:8081
 13. ✅ **중복 인증서 감사 추적 지원** (2025-12-05) - parsed_certificate PK를 (parsed_file_id, fingerprint_sha256)로 변경하여 주기적 PKD 업데이트 시 중복 인증서 이력 추적 가능
 14. ✅ **데이터베이스 마이그레이션 통합** (2025-12-05) - 10개 마이그레이션 파일 (V1-V17, 958 라인)을 단일 V1__Initial_Schema.sql (465 라인)로 통합, ALTER 문 완전 제거, 32개 누락 컬럼 추가, SSE 오류 수정 (상세 내역: [SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md](docs/SESSION_2025-12-05_MIGRATION_CONSOLIDATION.md))
 15. ✅ **업로드 통계 기능 구현** (2025-12-05) - 업로드 상세정보 dialog에 파싱 통계(인증서 타입별, CRL, Master List) 및 검증 통계(총 검증, 유효, 무효, 만료) 추가, 4개 repository에 uploadId 기반 count 메서드 구현, DaisyUI stats 컴포넌트로 시각화 (상세 내역: [SESSION_2025-12-05_UPLOAD_STATISTICS.md](docs/SESSION_2025-12-05_UPLOAD_STATISTICS.md))
-16. ✅ **CRL 영속화 및 UI 오류 수정** (2025-12-11 **NEW**) - CRL이 파싱되지만 DB에 저장되지 않던 문제 해결 (ValidateCertificatesUseCase.java에 CRL 영속화 로직 구현, 배치 저장, SSE 진행 상황 추가), 대시보드 차트 인스턴스 미선언 오류 수정, 차트 생성/색상 업데이트 메서드에 에러 핸들링 추가, 업로드 이력 페이지 darkMode 변수 참조 오류 수정 (4개 UI 오류 해결) (상세 내역: [SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md](docs/SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md))
+16. ✅ **CRL 영속화 및 UI 오류 수정** (2025-12-11) - CRL이 파싱되지만 DB에 저장되지 않던 문제 해결 (ValidateCertificatesUseCase.java에 CRL 영속화 로직 구현, 배치 저장, SSE 진행 상황 추가), 대시보드 차트 인스턴스 미선언 오류 수정, 차트 생성/색상 업데이트 메서드에 에러 핸들링 추가, 업로드 이력 페이지 darkMode 변수 참조 오류 수정 (4개 UI 오류 해결) (상세 내역: [SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md](docs/SESSION_2025-12-11_CRL_PERSISTENCE_AND_UI_FIXES.md))
 
-### Current Phase: Passive Authentication Phase 4.5
+### Passive Authentication Development (2025-12-12 ~ 2025-12-18) ✅
 
-**목표**: PA UseCase Integration Tests 구현 (17 tests)
+17. ✅ **PA Phase 1-2 구현** (2025-12-12) - Domain Layer (16 files, ~2,500 LOC), Infrastructure Layer (5 files, ~940 LOC), Lombok 이슈 해결 (상세 내역: [SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md](docs/SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md))
+18. ✅ **PA Phase 3 구현** (2025-12-12) - Application Layer (Use Cases, DTOs, Commands, Responses) (상세 내역: [PA_PHASE_1_COMPLETE.md](docs/PA_PHASE_1_COMPLETE.md))
+19. ✅ **PA Phase 4.4 LDAP Integration Tests** (2025-12-17) - LDAP 연결 및 조회 기능 검증 (6 tests, 100% pass) (상세 내역: [SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md](docs/SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md))
+20. ✅ **PA Phase 4.5 UseCase Integration Tests** (2025-12-17) - Trust Chain, SOD, Data Group Hash, CRL 검증 테스트 (17 tests, 5 test classes)
+21. ✅ **PA Phase 4.6 REST API Controller Tests** (2025-12-18 **NEW**) - HTTP 레이어 통합 테스트 (22 tests, ~500 LOC), OpenAPI/Swagger 문서 업데이트 (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md](docs/SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md))
 
-**진행 상황**:
-- ⏳ Phase 4.5.1: Trust Chain Verification Tests (4 scenarios)
-- ⏳ Phase 4.5.2: SOD Verification Tests (3 scenarios)
-- ⏳ Phase 4.5.3: Data Group Hash Verification Tests (3 scenarios)
-- ⏳ Phase 4.5.4: CRL Check Tests (3 scenarios)
-- ⏳ Phase 4.5.5: Complete PA Flow Tests (4 scenarios)
+### Current Phase: Passive Authentication Phase 4.6 ✅ COMPLETED
 
-**상세 내역**: [TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md](docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md)
+**목표**: REST API Controller Tests 구현 (22 tests)
+
+**완료 내역**:
+- ✅ Phase 4.6.1: Controller Endpoint Tests (7 scenarios) - POST /verify, GET /history, GET /{id}
+- ✅ Phase 4.6.2: Request Validation Tests (4 scenarios) - Bean Validation
+- ✅ Phase 4.6.3: Response Format Tests (2 scenarios) - JSON structure, ISO 8601 timestamp
+- ✅ Phase 4.6.4: Error Handling Tests (5 scenarios) - 400, 404, 500 status codes
+- ✅ Phase 4.6.5: Client Metadata Extraction Tests (3 scenarios) - IP, User-Agent
+- ✅ Phase 4.6.6: OpenAPI/Swagger Documentation Update
+
+**상세 내역**: 
+- [TODO_PHASE_4_6_REST_API_CONTROLLER_TESTS.md](docs/TODO_PHASE_4_6_REST_API_CONTROLLER_TESTS.md)
+- [SESSION_2025-12-18_PA_PHASE_4_6.md](docs/SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md)
+
+### Next Phase: Passive Authentication Phase 4.7
+
+**목표**: Fix Phase 4.5 Errors & Full Test Execution
+
+**작업 내역**:
+- ⏳ Fix Phase 4.5 compilation errors (old API method references)
+- ⏳ Update PassiveAuthenticationStatus enum values
+- ⏳ Run full PA test suite (45 tests: 6 + 17 + 22)
+- ⏳ Verify 100% pass rate
 
 ### PKD Upload Module - Remaining TODOs (Optional)
 
@@ -1207,7 +1238,9 @@ ldapsearch -x -H ldap://192.168.100.10:389 \
 
 | 문서 | 용도 | 위치 |
 |------|--------|------|
-| **TODO_PHASE_4_5** | Phase 4.5 작업 계획 및 가이드 | [docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md](docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md) |
+| **TODO_PHASE_4_6** | Phase 4.6 REST API Controller Tests 작업 계획 | [docs/TODO_PHASE_4_6_REST_API_CONTROLLER_TESTS.md](docs/TODO_PHASE_4_6_REST_API_CONTROLLER_TESTS.md) |
+| **SESSION_2025-12-18** | Phase 4.6 REST API Controller Tests 완료 보고서 | [docs/SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md](docs/SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md) |
+| **TODO_PHASE_4_5** | Phase 4.5 UseCase Integration Tests 작업 계획 | [docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md](docs/TODO_PHASE_4_5_PASSIVE_AUTHENTICATION.md) |
 | **SESSION_2025-12-17** | Phase 4.4 LDAP Integration 완료 보고서 | [docs/SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md](docs/SESSION_2025-12-17_PASSIVE_AUTHENTICATION_INTEGRATION_TESTS.md) |
 | **SESSION_2025-12-12** | Phase 1-2 완료 + Lombok 이슈 해결 | [docs/SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md](docs/SESSION_2025-12-12_LOMBOK_FIX_AND_PA_PHASE2.md) |
 | **PA_PHASE_1_COMPLETE** | Phase 1 Domain Layer 완료 보고서 | [docs/PA_PHASE_1_COMPLETE.md](docs/PA_PHASE_1_COMPLETE.md) |
