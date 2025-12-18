@@ -86,8 +86,11 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
         try {
             log.debug("Parsing SOD to extract Data Group hashes (SOD size: {} bytes)", sodBytes.length);
 
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
             // Parse CMS SignedData
-            CMSSignedData cmsSignedData = new CMSSignedData(sodBytes);
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
 
             // Extract LDSSecurityObject from content
             LDSSecurityObject ldsSecurityObject = extractLdsSecurityObject(cmsSignedData);
@@ -142,8 +145,11 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
         try {
             log.debug("Verifying SOD signature with DSC public key");
 
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
             // Parse CMS SignedData
-            CMSSignedData cmsSignedData = new CMSSignedData(sodBytes);
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
 
             // Extract SignerInfo
             SignerInformationStore signerInfos = cmsSignedData.getSignerInfos();
@@ -194,8 +200,11 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
         try {
             log.debug("Extracting hash algorithm from SOD");
 
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
             // Parse CMS SignedData
-            CMSSignedData cmsSignedData = new CMSSignedData(sodBytes);
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
 
             // Extract LDSSecurityObject
             LDSSecurityObject ldsSecurityObject = extractLdsSecurityObject(cmsSignedData);
@@ -238,8 +247,11 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
         try {
             log.debug("Extracting signature algorithm from SOD");
 
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
             // Parse CMS SignedData
-            CMSSignedData cmsSignedData = new CMSSignedData(sodBytes);
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
 
             // Extract SignerInfo
             SignerInformationStore signerInfos = cmsSignedData.getSignerInfos();
@@ -276,6 +288,60 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
     }
 
     /**
+     * Unwraps ICAO 9303 Tag 0x77 wrapper from SOD if present.
+     * <p>
+     * ICAO Doc 9303 Part 10 specifies that EF.SOD file is wrapped with Tag 0x77 (Application 23).
+     * The structure is:
+     * <pre>
+     * Tag 0x77 (Application 23) - EF.SOD wrapper
+     *   ├─ Length (TLV format)
+     *   └─ Value: CMS SignedData (Tag 0x30 SEQUENCE)
+     * </pre>
+     * <p>
+     * This method removes the 0x77 wrapper to extract the pure CMS SignedData bytes.
+     *
+     * @param sodBytes SOD bytes potentially wrapped with Tag 0x77
+     * @return Pure CMS SignedData bytes (starts with Tag 0x30)
+     */
+    private byte[] unwrapIcaoSod(byte[] sodBytes) {
+        if (sodBytes == null || sodBytes.length < 4) {
+            return sodBytes;
+        }
+
+        // Check if first byte is Tag 0x77 (ICAO EF.SOD wrapper)
+        if ((sodBytes[0] & 0xFF) != 0x77) {
+            // No wrapper, return as-is
+            log.debug("SOD does not have Tag 0x77 wrapper, using raw bytes");
+            return sodBytes;
+        }
+
+        log.debug("SOD has Tag 0x77 wrapper, unwrapping...");
+
+        // Parse TLV structure to skip wrapper
+        int offset = 1; // Skip tag byte
+
+        // Parse length byte(s)
+        int lengthByte = sodBytes[offset++] & 0xFF;
+
+        if ((lengthByte & 0x80) == 0) {
+            // Short form: length is in the lower 7 bits
+            // Content starts immediately after length byte
+        } else {
+            // Long form: number of subsequent octets is in lower 7 bits
+            int numOctets = lengthByte & 0x7F;
+            offset += numOctets; // Skip length octets
+        }
+
+        // Extract CMS SignedData (everything after TLV header)
+        byte[] cmsBytes = new byte[sodBytes.length - offset];
+        System.arraycopy(sodBytes, offset, cmsBytes, 0, cmsBytes.length);
+
+        log.debug("Unwrapped SOD: {} bytes (was {} bytes with wrapper)", cmsBytes.length, sodBytes.length);
+
+        return cmsBytes;
+    }
+
+    /**
      * Extract LDSSecurityObject from CMSSignedData.
      *
      * <p>LDSSecurityObject is embedded in the SignedData content (eContent).
@@ -299,6 +365,70 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
         try (ASN1InputStream asn1InputStream = new ASN1InputStream(new ByteArrayInputStream(contentBytes))) {
             ASN1Sequence sequence = (ASN1Sequence) asn1InputStream.readObject();
             return LDSSecurityObject.getInstance(sequence);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Implementation notes:
+     * <ul>
+     *   <li>Parses PKCS#7 SignedData to extract certificates</li>
+     *   <li>Assumes first certificate in certificates field is the DSC</li>
+     *   <li>Extracts Subject DN and Serial Number from X.509 certificate</li>
+     *   <li>Serial Number is converted to hexadecimal uppercase format</li>
+     * </ul>
+     */
+    @Override
+    public com.smartcoreinc.localpkd.passiveauthentication.domain.port.DscInfo extractDscInfo(byte[] sodBytes) {
+        try {
+            log.debug("Extracting DSC information from SOD");
+
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
+            // Parse CMS SignedData
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
+
+            // Extract certificates from SignedData
+            var certificates = cmsSignedData.getCertificates();
+            if (certificates == null || certificates.getMatches(null).isEmpty()) {
+                throw new InfrastructureException(
+                    "NO_DSC_IN_SOD",
+                    "No certificates found in SOD"
+                );
+            }
+
+            // Get first certificate (should be DSC)
+            var certIterator = certificates.getMatches(null).iterator();
+            if (!certIterator.hasNext()) {
+                throw new InfrastructureException(
+                    "NO_DSC_IN_SOD",
+                    "Certificate iterator is empty"
+                );
+            }
+
+            var certHolder = (org.bouncycastle.cert.X509CertificateHolder) certIterator.next();
+
+            // Extract Subject DN
+            String subjectDn = certHolder.getSubject().toString();
+
+            // Extract Serial Number (convert to hex uppercase)
+            String serialNumber = certHolder.getSerialNumber().toString(16).toUpperCase();
+
+            log.info("Extracted DSC info - Subject: {}, Serial: {}", subjectDn, serialNumber);
+
+            return new com.smartcoreinc.localpkd.passiveauthentication.domain.port.DscInfo(
+                subjectDn,
+                serialNumber
+            );
+
+        } catch (Exception e) {
+            throw new InfrastructureException(
+                "DSC_EXTRACT_ERROR",
+                "Failed to extract DSC information from SOD: " + e.getMessage(),
+                e
+            );
         }
     }
 }

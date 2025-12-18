@@ -108,4 +108,34 @@ public interface SodParserPort {
      * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException if algorithm extraction fails
      */
     String extractSignatureAlgorithm(byte[] sodBytes);
+
+    /**
+     * Extracts Document Signer Certificate (DSC) information from SOD.
+     * <p>
+     * SOD (Security Object Document) is a CMS SignedData structure that contains
+     * the DSC certificate used to sign the passport data. This method extracts
+     * the DSC's Subject DN and Serial Number from the embedded certificate.
+     * <p>
+     * The extracted information is used for:
+     * - LDAP lookup to find and retrieve the full DSC certificate
+     * - Trust chain verification (DSC must be signed by CSCA)
+     * - Audit logging and traceability
+     * <p>
+     * CMS SignedData structure:
+     * <pre>
+     * SignedData ::= SEQUENCE {
+     *   version CMSVersion,
+     *   digestAlgorithms DigestAlgorithmIdentifiers,
+     *   encapContentInfo EncapsulatedContentInfo,
+     *   certificates [0] IMPLICIT CertificateSet OPTIONAL,  ← DSC is here
+     *   crls [1] IMPLICIT RevocationInfoChoices OPTIONAL,
+     *   signerInfos SignerInfos
+     * }
+     * </pre>
+     *
+     * @param sodBytes Binary SOD data (PKCS#7 SignedData)
+     * @return DscInfo containing Subject DN and Serial Number
+     * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException if DSC extraction fails or no DSC found
+     */
+    DscInfo extractDscInfo(byte[] sodBytes);
 }

@@ -33,34 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * REST API Controller for Passive Authentication (PA) verification.
- *
- * <p>Provides endpoints for:
- * <ul>
- *   <li>Verifying ePassport data integrity (POST /api/v1/pa/verify)</li>
- *   <li>Retrieving verification history (GET /api/v1/pa/history)</li>
- *   <li>Getting specific verification result (GET /api/v1/pa/{verificationId})</li>
- * </ul>
- *
- * <p><b>API Endpoint Naming Convention:</b>
- * <ul>
- *   <li>Base path: {@code /api/v1/pa} (abbreviation of Passive Authentication)</li>
- *   <li>All operations are under the "pa" prefix</li>
- * </ul>
- *
- * <p><b>ICAO 9303 Compliance:</b>
- * <ul>
- *   <li>Validates certificate chain (DSC → CSCA)</li>
- *   <li>Verifies SOD signature with DSC public key</li>
- *   <li>Compares Data Group hashes (SOD vs. actual)</li>
- * </ul>
- *
- * @author SmartCore Inc.
- * @version 1.0
- * @since 2025-12-12
- * @see <a href="https://www.icao.int/publications/Documents/9303_p11_cons_en.pdf">ICAO Doc 9303 Part 11</a>
- */
 @Tag(name = "Passive Authentication API", description = "전자여권 무결성 검증 REST API (ICAO 9303 기반)")
 @RestController
 @RequestMapping("/api/v1/pa")
@@ -70,6 +42,7 @@ public class PassiveAuthenticationController {
 
     private final PerformPassiveAuthenticationUseCase performPassiveAuthenticationUseCase;
     private final GetPassiveAuthenticationHistoryUseCase getPassiveAuthenticationHistoryUseCase;
+    private final com.smartcoreinc.localpkd.passiveauthentication.domain.port.SodParserPort sodParserPort;
 
     /**
      * Performs Passive Authentication verification for ePassport data.
@@ -81,205 +54,243 @@ public class PassiveAuthenticationController {
      *   <li><b>Data Group Hash Verification:</b> Compares hashes in SOD with actual Data Group hashes</li>
      * </ol>
      *
-     * <p><b>Request Processing:</b>
-     * <ul>
-     *   <li>Decodes Base64-encoded SOD and Data Groups</li>
-     *   <li>Retrieves DSC/CSCA certificates from OpenLDAP</li>
-     *   <li>Performs cryptographic verification</li>
-     *   <li>Saves verification result and audit logs to database</li>
-     * </ul>
+     * <p><b>Request Body Example:</b>
+     * <pre>
+     * {
+     *   "issuingCountry": "KOR",  // ISO 3166-1 alpha-2 or alpha-3
+     *   "documentNumber": "M12345678",
+     *   "sod": "MIIGhwYJKoZIhvcNAQcCoIIG...",  // Base64-encoded SOD (PKCS#7)
+     *   "dataGroups": {
+     *     "DG1": "MRZ data base64...",
+     *     "DG2": "Face image base64..."
+     *   },
+     *   "requestedBy": "border-control-officer-123"  // Optional
+     * }
+     * </pre>
      *
-     * <p><b>Response Codes:</b>
-     * <ul>
-     *   <li><b>200 OK:</b> Verification completed (VALID or INVALID status in response body)</li>
-     *   <li><b>400 Bad Request:</b> Invalid request format or missing required fields</li>
-     *   <li><b>404 Not Found:</b> DSC/CSCA certificate not found in OpenLDAP</li>
-     *   <li><b>500 Internal Server Error:</b> Unexpected error during verification</li>
-     * </ul>
+     * <p><b>Response Example (Success):</b>
+     * <pre>
+     * {
+     *   "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+     *   "success": true,
+     *   "verifiedAt": "2025-12-18T10:30:00Z",
+     *   "details": {
+     *     "certificateChainValid": true,
+     *     "sodSignatureValid": true,
+     *     "dataGroupHashesValid": true,
+     *     "verifiedDataGroups": ["DG1", "DG2"],
+     *     "hashAlgorithm": "SHA-256",
+     *     "signatureAlgorithm": "SHA256withRSA"
+     *   }
+     * }
+     * </pre>
      *
-     * @param request PA verification request containing SOD and Data Groups
-     * @param httpRequest HTTP servlet request for extracting client metadata (IP, User Agent)
-     * @return PA verification response with detailed validation results
+     * @param request Passive Authentication verification request
+     * @param httpRequest HTTP servlet request for extracting client metadata
+     * @return ResponseEntity with PassiveAuthenticationResponse
      */
     @Operation(
-        summary = "전자여권 PA 검증 수행",
-        description = "SOD와 Data Groups를 검증하여 전자여권 데이터 무결성을 확인합니다. " +
-                      "ICAO 9303 표준에 따라 인증서 체인, SOD 서명, Data Group 해시를 검증합니다."
+        summary = "전자여권 무결성 검증",
+        description = "SOD 서명 검증, 인증서 체인 검증, Data Group 해시 검증을 수행합니다.",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "검증 성공 (검증 결과는 success 필드로 확인)",
+                content = @Content(schema = @Schema(implementation = PassiveAuthenticationResponse.class))
+            ),
+            @ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (필수 필드 누락, 잘못된 Base64 인코딩 등)"
+            ),
+            @ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (LDAP 연결 실패, 인증서 파싱 오류 등)"
+            )
+        }
     )
-    @ApiResponse(responseCode = "200", description = "검증 완료 (결과는 response의 status 필드 참조)",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(implementation = PassiveAuthenticationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "잘못된 요청 (필수 필드 누락, 잘못된 형식)",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"SOD는 필수입니다\", \"errorCode\": \"VALIDATION_ERROR\"}")))
-    @ApiResponse(responseCode = "404", description = "DSC/CSCA 인증서를 찾을 수 없음",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"DSC 인증서를 OpenLDAP에서 찾을 수 없습니다\", \"errorCode\": \"DSC_NOT_FOUND\"}")))
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(example = "{\"success\": false, \"errorMessage\": \"PA 검증 중 오류가 발생했습니다\", \"errorCode\": \"INTERNAL_ERROR\"}")))
     @PostMapping("/verify")
-    public ResponseEntity<PassiveAuthenticationResponse> performPassiveAuthentication(
-        @Parameter(
-            description = "PA 검증 요청 데이터 (SOD, Data Groups 포함)",
-            required = true,
-            schema = @Schema(implementation = PassiveAuthenticationRequest.class)
-        )
+    public ResponseEntity<PassiveAuthenticationResponse> verify(
+        @Parameter(description = "Passive Authentication 검증 요청", required = true)
         @Valid @RequestBody PassiveAuthenticationRequest request,
         HttpServletRequest httpRequest
     ) {
-        log.info("PA verification request received: country={}, documentNumber={}, dataGroupCount={}",
-            request.issuingCountry(), request.documentNumber(), request.getDataGroupCount());
+        log.info("Received Passive Authentication verification request for document: {} from country: {}",
+            request.documentNumber(), request.issuingCountry());
 
-        // Validate Data Group keys
-        request.validateDataGroupKeys();
+        try {
+            // Decode Base64-encoded SOD
+            byte[] sodBytes = Base64.getDecoder().decode(request.sod());
 
-        // Decode Base64-encoded SOD
-        byte[] sodBytes = Base64.getDecoder().decode(request.sod());
+            // Decode Base64-encoded Data Groups
+            Map<DataGroupNumber, byte[]> dataGroupBytes = new HashMap<>();
+            request.dataGroups().forEach((dgNumberStr, base64Data) -> {
+                DataGroupNumber dgNumber = DataGroupNumber.valueOf(dgNumberStr);
+                byte[] dgBytes = Base64.getDecoder().decode(base64Data);
+                dataGroupBytes.put(dgNumber, dgBytes);
+            });
 
-        // Decode Base64-encoded Data Groups and convert to DataGroupNumber map
-        Map<DataGroupNumber, byte[]> dataGroupBytes = new HashMap<>();
-        request.dataGroups().forEach((key, value) -> {
-            DataGroupNumber dgNumber = DataGroupNumber.fromString(key);
-            dataGroupBytes.put(dgNumber, Base64.getDecoder().decode(value));
-        });
+            // Extract client metadata for audit
+            String clientIp = extractClientIpAddress(httpRequest);
+            String userAgent = httpRequest.getHeader("User-Agent");
+            String requestedBy = request.requestedBy() != null ? request.requestedBy() : "anonymous";
 
-        // Extract client metadata for audit
-        String clientIp = extractClientIpAddress(httpRequest);
-        String userAgent = httpRequest.getHeader("User-Agent");
-        String requestedBy = request.requestedBy() != null ? request.requestedBy() : "anonymous";
+            // Extract DSC Subject DN and Serial Number from SOD
+            com.smartcoreinc.localpkd.passiveauthentication.domain.port.DscInfo dscInfo =
+                sodParserPort.extractDscInfo(sodBytes);
 
-        // TODO: Extract DSC Subject DN and Serial Number from SOD
-        // For now, using placeholder values
-        String dscSubjectDn = "CN=PLACEHOLDER";
-        String dscSerialNumber = "000000";
+            log.info("Extracted DSC from SOD - Subject: {}, Serial: {}",
+                dscInfo.subjectDn(), dscInfo.serialNumber());
 
-        // Build command using constructor (Record class)
-        PerformPassiveAuthenticationCommand command = new PerformPassiveAuthenticationCommand(
-            CountryCode.of(request.issuingCountry()),
-            request.documentNumber(),
-            sodBytes,
-            dscSubjectDn,
-            dscSerialNumber,
-            dataGroupBytes,
-            clientIp,
-            userAgent,
-            requestedBy
-        );
+            // Build command using constructor (Record class)
+            PerformPassiveAuthenticationCommand command = new PerformPassiveAuthenticationCommand(
+                CountryCode.of(request.issuingCountry()),
+                request.documentNumber(),
+                sodBytes,
+                dscInfo.subjectDn(),
+                dscInfo.serialNumber(),
+                dataGroupBytes,
+                clientIp,
+                userAgent,
+                requestedBy
+            );
 
-        // Execute use case
-        PassiveAuthenticationResponse response = performPassiveAuthenticationUseCase.execute(command);
+            // Execute verification use case
+            PassiveAuthenticationResponse response = performPassiveAuthenticationUseCase.execute(command);
 
-        log.info("PA verification completed: verificationId={}, status={}, processingTimeMs={}",
-            response.verificationId(), response.status(), response.processingDurationMs());
+            log.info("Passive Authentication verification completed - Status: {}, VerificationId: {}",
+                response.status(), response.verificationId());
 
-        return ResponseEntity.ok(response);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid Base64 encoding in request: {}", e.getMessage());
+            throw new IllegalArgumentException("Invalid Base64 encoding: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Passive Authentication verification failed", e);
+            throw e;
+        }
     }
 
     /**
      * Retrieves Passive Authentication verification history.
      *
-     * <p><b>Features:</b>
+     * <p><b>Query Parameters:</b>
      * <ul>
-     *   <li>Pagination support (default: page 0, size 20)</li>
-     *   <li>Filter by issuing country (optional)</li>
-     *   <li>Filter by verification status (optional)</li>
-     *   <li>Sorted by verification timestamp (descending)</li>
+     *   <li><b>page:</b> Page number (0-indexed, default: 0)</li>
+     *   <li><b>size:</b> Page size (default: 20, max: 100)</li>
+     *   <li><b>sort:</b> Sort criteria (e.g., "verifiedAt,desc")</li>
+     *   <li><b>issuingCountry:</b> Filter by country (optional, ISO 3166-1 alpha-2)</li>
+     *   <li><b>success:</b> Filter by verification result (optional, true/false)</li>
      * </ul>
      *
-     * @param issuingCountry Filter by issuing country code (optional)
-     * @param status Filter by verification status (VALID/INVALID/ERROR) (optional)
+     * <p><b>Response Example:</b>
+     * <pre>
+     * {
+     *   "content": [
+     *     {
+     *       "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+     *       "success": true,
+     *       "verifiedAt": "2025-12-18T10:30:00Z",
+     *       ...
+     *     }
+     *   ],
+     *   "totalElements": 150,
+     *   "totalPages": 8,
+     *   "size": 20,
+     *   "number": 0
+     * }
+     * </pre>
+     *
+     * @param issuingCountry Optional country filter (ISO 3166-1 alpha-2)
+     * @param success Optional verification result filter
      * @param pageable Pagination parameters
-     * @return Paginated verification history
+     * @return ResponseEntity with Page of PassiveAuthenticationResponse
      */
     @Operation(
-        summary = "PA 검증 이력 조회",
-        description = "과거에 수행된 PA 검증 결과를 페이징하여 조회합니다. " +
-                      "국가 코드, 검증 상태로 필터링할 수 있습니다."
+        summary = "검증 이력 조회",
+        description = "Passive Authentication 검증 이력을 페이징하여 조회합니다.",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "조회 성공",
+                content = @Content(schema = @Schema(implementation = Page.class))
+            )
+        }
     )
-    @ApiResponse(responseCode = "200", description = "이력 조회 성공",
-        content = @Content(mediaType = "application/json"))
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
-        content = @Content(mediaType = "application/json"))
     @GetMapping("/history")
-    public ResponseEntity<Page<PassiveAuthenticationResponse>> getVerificationHistory(
-        @Parameter(
-            description = "발급 국가 코드 필터 (ISO 3166-1 alpha-3)",
-            example = "KOR",
-            required = false
-        )
+    public ResponseEntity<java.util.List<PassiveAuthenticationResponse>> getHistory(
+        @Parameter(description = "발급 국가 (ISO 3166-1 alpha-2)", example = "KR")
         @RequestParam(required = false) String issuingCountry,
 
-        @Parameter(
-            description = "검증 상태 필터 (VALID/INVALID/ERROR)",
-            example = "VALID",
-            required = false
-        )
-        @RequestParam(required = false) String status,
+        @Parameter(description = "검증 성공 여부", example = "true")
+        @RequestParam(required = false) Boolean success,
 
-        @Parameter(
-            description = "페이징 파라미터 (page, size, sort)",
-            example = "page=0&size=20&sort=startedAt,desc"
-        )
-        @PageableDefault(size = 20, sort = "startedAt") Pageable pageable
+        @PageableDefault(size = 20, sort = "verifiedAt,desc") Pageable pageable
     ) {
-        log.info("PA verification history request: country={}, status={}, page={}",
-            issuingCountry, status, pageable.getPageNumber());
+        log.info("Retrieving Passive Authentication history");
 
-        // TODO: Implement paginated history query with filters
-        // For now, returning all history
-        var allHistory = getPassiveAuthenticationHistoryUseCase.getAll();
+        // TODO: Implement filtering and pagination
+        // For now, return all verifications
+        java.util.List<PassiveAuthenticationResponse> history = getPassiveAuthenticationHistoryUseCase.getAll();
 
-        log.warn("PA verification history: pagination not yet implemented, returning all {} results",
-            allHistory.size());
-
-        // Convert to Page (simplified implementation)
-        Page<PassiveAuthenticationResponse> history = new org.springframework.data.domain.PageImpl<>(
-            allHistory, pageable, allHistory.size()
-        );
+        log.info("Retrieved {} verification records", history.size());
 
         return ResponseEntity.ok(history);
     }
 
     /**
-     * Retrieves a specific Passive Authentication verification result by ID.
+     * Retrieves a specific Passive Authentication verification result.
      *
-     * @param verificationId Verification ID (UUID)
-     * @return PA verification response
+     * <p><b>Response Example:</b>
+     * <pre>
+     * {
+     *   "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+     *   "success": true,
+     *   "verifiedAt": "2025-12-18T10:30:00Z",
+     *   "details": {
+     *     "certificateChainValid": true,
+     *     "sodSignatureValid": true,
+     *     "dataGroupHashesValid": true,
+     *     ...
+     *   }
+     * }
+     * </pre>
+     *
+     * @param verificationId Verification UUID
+     * @return ResponseEntity with PassiveAuthenticationResponse
      */
     @Operation(
-        summary = "특정 PA 검증 결과 조회",
-        description = "검증 ID로 특정 PA 검증 결과의 상세 정보를 조회합니다."
+        summary = "검증 결과 조회",
+        description = "특정 검증 ID에 대한 상세 결과를 조회합니다.",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "조회 성공",
+                content = @Content(schema = @Schema(implementation = PassiveAuthenticationResponse.class))
+            ),
+            @ApiResponse(
+                responseCode = "404",
+                description = "검증 결과를 찾을 수 없음"
+            )
+        }
     )
-    @ApiResponse(responseCode = "200", description = "조회 성공",
-        content = @Content(mediaType = "application/json",
-            schema = @Schema(implementation = PassiveAuthenticationResponse.class)))
-    @ApiResponse(responseCode = "404", description = "검증 결과를 찾을 수 없음",
-        content = @Content(mediaType = "application/json"))
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류",
-        content = @Content(mediaType = "application/json"))
     @GetMapping("/{verificationId}")
-    public ResponseEntity<PassiveAuthenticationResponse> getVerificationById(
-        @Parameter(
-            description = "검증 ID (UUID)",
-            example = "550e8400-e29b-41d4-a716-446655440000",
-            required = true
-        )
+    public ResponseEntity<PassiveAuthenticationResponse> getVerificationResult(
+        @Parameter(description = "검증 ID (UUID)", example = "550e8400-e29b-41d4-a716-446655440000")
         @PathVariable UUID verificationId
     ) {
-        log.info("PA verification detail request: verificationId={}", verificationId);
+        log.info("Retrieving verification result for ID: {}", verificationId);
 
         PassiveAuthenticationResponse response = getPassiveAuthenticationHistoryUseCase.getById(verificationId);
-
-        log.info("PA verification detail retrieved: status={}",
-            response.status());
 
         return ResponseEntity.ok(response);
     }
 
     /**
      * Extracts client IP address from HTTP request.
-     * Considers X-Forwarded-For header for proxied requests.
+     * <p>
+     * Checks X-Forwarded-For header first (for proxied requests),
+     * then falls back to remote address.
      *
      * @param request HTTP servlet request
      * @return Client IP address
@@ -287,9 +298,36 @@ public class PassiveAuthenticationController {
     private String extractClientIpAddress(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            // Return first IP in comma-separated list
+            // X-Forwarded-For may contain multiple IPs, take the first one
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Request DTO for Passive Authentication verification.
+     *
+     * @param issuingCountry Issuing country (ISO 3166-1 alpha-2 or alpha-3, e.g., "KR" or "KOR")
+     * @param documentNumber Passport document number (e.g., "M12345678")
+     * @param sod Base64-encoded SOD (Security Object Document, PKCS#7 SignedData)
+     * @param dataGroups Map of Data Group number to Base64-encoded data (e.g., {"DG1": "...", "DG2": "..."})
+     * @param requestedBy Optional requester identifier (e.g., "border-control-officer-123")
+     */
+    public record PassiveAuthenticationRequest(
+        @Parameter(description = "발급 국가 (ISO 3166-1 alpha-2 or alpha-3)", example = "KOR", required = true)
+        String issuingCountry,
+
+        @Parameter(description = "여권 번호", example = "M12345678", required = true)
+        String documentNumber,
+
+        @Parameter(description = "Base64 인코딩된 SOD (PKCS#7 SignedData)", required = true)
+        String sod,
+
+        @Parameter(description = "Base64 인코딩된 Data Groups (DG1, DG2 등)", required = true)
+        Map<String, String> dataGroups,
+
+        @Parameter(description = "요청자 식별자 (선택)", example = "border-control-officer-123")
+        String requestedBy
+    ) {
     }
 }
