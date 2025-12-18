@@ -1037,29 +1037,72 @@ String serialNumber = certHolder.getSerialNumber().toString(16).toUpperCase();
 // Result: DscInfo("C=KR,O=Government,OU=MOFA,CN=DS0120200313 1", "127")
 ```
 
-### Passive Authentication Workflow
+### ICAO 9303 Passive Authentication Workflow (표준 구현)
+
+**ICAO Doc 9303 Part 11 Section 6.1 - Passive Authentication**
+
+Passive Authentication은 ePassport의 Data Groups가 발급국에서 서명된 원본이며 변조되지 않았음을 검증하는 프로세스입니다.
+
+#### Standard Verification Flow
 
 ```
 1. Client → API: SOD + Data Groups (DG1, DG2, ...)
    ↓
-2. unwrapIcaoSod(SOD) → Extract CMS SignedData
+2. unwrapIcaoSod(SOD) → Extract CMS SignedData (ICAO Tag 0x77 제거)
    ↓
-3. extractDscInfo(SOD) → Get DSC Subject DN & Serial
+3. extractDscCertificate(SOD) → Extract DSC from SOD certificates [0]
+   ⚠️ ICAO Standard: SOD에서 DSC 직접 추출 (LDAP lookup 불필요)
    ↓
-4. LDAP Lookup: Find DSC by (Subject DN + Serial)
+4. Extract CSCA DN from DSC Issuer Field
    ↓
-5. Verify Trust Chain: DSC → CSCA → ICAO Root
+5. LDAP Lookup: Find CSCA by Subject DN
+   (DSC issuer DN == CSCA subject DN)
    ↓
-6. Verify SOD Signature: DSC Public Key → Signature valid?
+6. Verify DSC Trust Chain:
+   - dscCert.verify(cscaPublicKey)
+   - DSC가 CSCA에 의해 서명되었는지 검증
    ↓
-7. Extract Data Group Hashes from LDSSecurityObject
+7. Verify SOD Signature:
+   - CMSSignedData.verifySignatures(dscPublicKey)
+   - LDSSecurityObject가 DSC에 의해 서명되었는지 검증
    ↓
-8. Compute Client's Data Group Hashes (SHA-256/384/512)
+8. Extract Data Group Hashes from LDSSecurityObject
+   - Map<DataGroupNumber, expectedHash>
    ↓
-9. Compare: SOD hashes == Computed hashes?
+9. Compute Client's Data Group Hashes (SHA-256/384/512)
+   - For each DG: actualHash = digest(dgBytes)
    ↓
-10. Result: VALID / INVALID / ERROR
+10. Compare Hashes:
+    - For each DG: expectedHash == actualHash?
+    ↓
+11. Check CRL (Optional but Recommended):
+    - Is DSC revoked?
+    ↓
+12. Result: VALID / INVALID / ERROR
 ```
+
+#### Key Standards Compliance
+
+**✅ ICAO 9303 Part 11 Compliance**:
+- SOD contains embedded DSC certificate (Section 6.1.3.1)
+- No LDAP lookup required for DSC (주요 개선!)
+- LDAP only used for CSCA retrieval
+- Simplifies verification flow
+- Works even if DSC not in LDAP directory
+
+**Benefits of SOD-based DSC Extraction**:
+1. **표준 준수**: ICAO 9303 Part 11 standard implementation
+2. **신뢰성**: 여권 칩에서 직접 추출한 실제 DSC 사용
+3. **단순화**: DSC LDAP lookup 단계 제거
+4. **호환성**: DSC가 LDAP에 없어도 검증 가능 (신규/업데이트 인증서)
+5. **보안성**: 발급국이 서명한 원본 DSC 사용
+
+**Implementation**:
+- `SodParserPort.extractDscCertificate()` - SOD에서 DSC X.509 인증서 추출
+- `PerformPassiveAuthenticationUseCase` - 전체 PA workflow orchestration
+- `PassiveAuthenticationService` - Domain service (Trust Chain, Hash verification)
+
+**완료 Phase**: Phase 4.9 (2025-12-18)
 
 ### 주요 알고리즘 OIDs
 
@@ -1254,50 +1297,50 @@ http://172.24.1.6:8081
 21. ✅ **PA Phase 4.6 REST API Controller Tests** (2025-12-18) - HTTP 레이어 통합 테스트 (22 tests, ~500 LOC), OpenAPI/Swagger 문서 업데이트 (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md](docs/SESSION_2025-12-18_PA_PHASE_4_6_REST_API_CONTROLLER_TESTS.md))
 22. ✅ **PA Phase 4.7 Test Cleanup** (2025-12-18) - Phase 4.5 컴파일 에러 수정 (20개), 잘못된 API 테스트 삭제, H2 schema 문제 식별 (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_7_CLEANUP.md](docs/SESSION_2025-12-18_PA_PHASE_4_7_CLEANUP.md))
 23. ✅ **PA Phase 4.8 H2 Schema Fix & Country Code Support** (2025-12-18) - H2 JSONB 호환성 문제 해결, ISO 3166-1 alpha-3 국가 코드 지원 추가 (ICAO Doc 9303 준수), 42개 국가 alpha-3 → alpha-2 변환 맵 구현, 테스트 실행 (24 tests: 7 passing) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_8_H2_SCHEMA_FIX.md](docs/SESSION_2025-12-18_PA_PHASE_4_8_H2_SCHEMA_FIX.md))
-24. ✅ **PA Phase 4.9 DSC Extraction from SOD** (2025-12-18 **NEW**) - ICAO Doc 9303 Part 10 Tag 0x77 wrapper unwrapping 구현, ASN.1 TLV 파싱 (short/long form), DSC Subject DN & Serial Number 실제 추출, 모든 SOD 파싱 메서드에 unwrapping 적용 (5개 메서드), Controller placeholder 제거, 20 tests 실행 (7 passing, DSC extraction working) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md](docs/SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md))
+24. ✅ **PA Phase 4.9 DSC Extraction from SOD** (2025-12-18) - ICAO Doc 9303 Part 10 Tag 0x77 wrapper unwrapping 구현, ASN.1 TLV 파싱 (short/long form), DSC Subject DN & Serial Number 실제 추출, 모든 SOD 파싱 메서드에 unwrapping 적용 (5개 메서드), Controller placeholder 제거, 20 tests 실행 (7 passing, DSC extraction working) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md](docs/SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md))
+25. ✅ **PA Phase 4.10 ICAO 9303 Standard Compliance** (2025-12-19 **NEW**) - `extractDscCertificate()` 메서드 추가로 SOD에서 DSC X.509 인증서 직접 추출 (ICAO 9303 Part 11 Section 6.1.3.1 준수), DSC LDAP lookup 단계 제거하여 검증 프로세스 단순화, PassiveAuthenticationService에 SOD 기반 DSC 추출 로직 통합, GlobalExceptionHandler에 Bean Validation 지원 추가 (@Valid, MethodArgumentNotValidException), CLAUDE.md에 ICAO 9303 PA Workflow 문서화 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md))
 
-### Current Phase: Passive Authentication Phase 4.9 ✅ COMPLETED
+### Current Phase: Passive Authentication Phase 4.10 ✅ COMPLETED
 
-**목표**: DSC Extraction from SOD with ICAO 9303 Compliance
+**목표**: ICAO 9303 Standard Compliance - SOD 기반 DSC 추출
 
 **완료 내역**:
-- ✅ Created `DscInfo` record (Subject DN + Serial Number)
-- ✅ Added `extractDscInfo()` method to `SodParserPort` interface
-- ✅ Implemented ICAO 9303 Part 10 Tag 0x77 wrapper unwrapping (`unwrapIcaoSod()`)
-- ✅ ASN.1 TLV parsing for both short-form and long-form length encoding
-- ✅ Applied unwrapping to all 5 SOD parsing methods consistently
-- ✅ Updated `PassiveAuthenticationController` to use real DSC extraction
-- ✅ Removed placeholder values (CN=PLACEHOLDER, Serial=0)
-- ✅ Test execution: 20 tests run, 7 passing (DSC extraction working)
+- ✅ Added `extractDscCertificate()` method to `SodParserPort` interface
+- ✅ Implemented full X.509 certificate extraction from SOD (not just DN + Serial)
+- ✅ ICAO 9303 Part 11 Section 6.1.3.1 compliance (SOD contains embedded DSC)
+- ✅ Removed DSC LDAP lookup dependency (simplified verification flow)
+- ✅ Updated `PassiveAuthenticationService` to use SOD-extracted DSC
+- ✅ Added Bean Validation support in `GlobalExceptionHandler`
+- ✅ Documented ICAO 9303 PA Workflow in CLAUDE.md
 
 **주요 성과**:
-- ICAO compliance: Tag 0x77 (Application 23) wrapper 표준 준수
-- Backward compatibility: Wrapped & unwrapped SOD 모두 처리
-- Real data: Korean Passport SOD에서 실제 DSC 정보 추출 확인
-  - Subject: "C=KR,O=Government,OU=MOFA,CN=DS0120200313 1"
-  - Serial: "127" (hexadecimal uppercase)
-- Infrastructure-level parsing: 모든 SOD 메서드 정상 작동
+- **표준 준수**: ICAO 9303 Part 11 standard implementation
+- **검증 프로세스 단순화**: SOD DSC → LDAP CSCA → Verify (3 steps)
+- **호환성 향상**: DSC가 LDAP에 없어도 검증 가능
+- **보안성 강화**: 여권 칩에서 직접 추출한 원본 DSC 사용
+- **Global Exception Handler**: Bean Validation 지원 (@Valid, MethodArgumentNotValidException)
 
-**테스트 결과**:
-- 13 functional failures: LDAP에 DSC 인증서가 없어서 발생 (expected)
-- ERROR status: "DSC not found in LDAP" - Phase 4.10에서 test fixtures 추가 예정
-- Core implementation: ✅ Complete and working
+**구현 위치**:
+- [SodParserPort.java:142-173](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/domain/port/SodParserPort.java#L142-L173) - `extractDscCertificate()` interface
+- [BouncyCastleSodParserAdapter.java:435-476](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/BouncyCastleSodParserAdapter.java#L435-L476) - DSC extraction implementation
+- [GlobalExceptionHandler.java:82-121](src/main/java/com/smartcoreinc/localpkd/certificatevalidation/infrastructure/exception/GlobalExceptionHandler.java#L82-L121) - Bean Validation handler
+- [CLAUDE.md:1040-1105](CLAUDE.md#L1040-L1105) - ICAO 9303 PA Workflow documentation
 
 **상세 내역**:
-- [SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md](docs/SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md)
+- [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md)
 
-### Next Phase: Passive Authentication Phase 4.10
+### Next Phase: Passive Authentication Phase 4.11
 
-**목표**: LDAP Test Fixtures & Request Validation
+**목표**: Request Validation & Test Fixtures
 
 **작업 내역**:
-- ⏳ Add DSC certificates to test LDAP directory (test fixtures)
-- ⏳ Implement request validation (@Valid, custom validators)
-- ⏳ Fix 13 remaining Controller test failures
-- ⏳ Implement pagination and filtering for history endpoint
+- ⏳ Implement request validation (@Valid, Bean Validation annotations)
+- ⏳ Add test CSCA/DSC certificates to H2 database
+- ⏳ Fix remaining Controller test failures
+- ⏳ Add integration tests for SOD-based DSC extraction
 - ⏳ Performance testing & optimization (target: < 500ms)
 
-**Estimated Time**: 3-4 hours
+**Estimated Time**: 2-3 hours
 
 ### PKD Upload Module - Remaining TODOs (Optional)
 

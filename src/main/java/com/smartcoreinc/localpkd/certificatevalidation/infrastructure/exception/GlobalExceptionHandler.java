@@ -8,7 +8,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
@@ -16,7 +18,10 @@ import org.springframework.web.context.request.async.AsyncRequestNotUsableExcept
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * GlobalExceptionHandler - REST API 전역 예외 처리기
@@ -25,6 +30,7 @@ import java.util.UUID;
  *
  * <p><b>처리 대상 예외</b>:</p>
  * <ul>
+ *   <li>MethodArgumentNotValidException - Bean Validation 검증 오류 (@Valid) (400)</li>
  *   <li>IllegalArgumentException - 요청 파라미터 검증 오류 (400)</li>
  *   <li>DomainException - 도메인 규칙 위반 (400)</li>
  *   <li>BusinessException - 비즈니스 로직 오류 (400/404)</li>
@@ -61,6 +67,64 @@ import java.util.UUID;
 @Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * MethodArgumentNotValidException 처리 (Bean Validation)
+     *
+     * <p>@Valid 어노테이션이 붙은 요청 객체의 필드 검증 실패 시 발생</p>
+     *
+     * <p><b>검증 실패 예시</b>:</p>
+     * <ul>
+     *   <li>@NotBlank 필드가 비어있음</li>
+     *   <li>@Pattern 정규식 매칭 실패</li>
+     *   <li>@Size 길이 제한 위반</li>
+     *   <li>@NotNull 필드가 null</li>
+     * </ul>
+     *
+     * @param e 예외 객체
+     * @param request HTTP 요청
+     * @return 400 Bad Request 응답 (필드별 검증 오류 포함)
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationErrors(
+            MethodArgumentNotValidException e,
+            WebRequest request) {
+
+        Map<String, String> fieldErrors = e.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .collect(Collectors.toMap(
+                        FieldError::getField,
+                        error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid value",
+                        (existing, replacement) -> existing  // Keep first error if duplicates
+                ));
+
+        log.warn("Validation failed for fields: {}", fieldErrors.keySet());
+
+        // Build error message listing all validation failures
+        String message = "Request validation failed: " +
+                fieldErrors.entrySet().stream()
+                        .map(entry -> entry.getKey() + " - " + entry.getValue())
+                        .collect(Collectors.joining(", "));
+
+        ErrorResponse response = ErrorResponse.builder()
+                .success(false)
+                .error(ErrorResponse.Error.builder()
+                        .code("VALIDATION_ERROR")
+                        .message(message)
+                        .timestamp(LocalDateTime.now())
+                        .data(fieldErrors)  // Include field-specific errors as data
+                        .build())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .status(HttpStatus.BAD_REQUEST.value())
+                .traceId(UUID.randomUUID().toString())
+                .build();
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+    }
 
     /**
      * IllegalArgumentException 처리

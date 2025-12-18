@@ -138,4 +138,37 @@ public interface SodParserPort {
      * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException if DSC extraction fails or no DSC found
      */
     DscInfo extractDscInfo(byte[] sodBytes);
+
+    /**
+     * Extracts full Document Signer Certificate (DSC) from SOD.
+     * <p>
+     * <b>ICAO 9303 Passive Authentication Standard Approach</b>
+     * <p>
+     * According to ICAO Doc 9303 Part 11 (Passive Authentication), the SOD contains
+     * the complete DSC certificate in its CMS SignedData structure. This approach
+     * eliminates the need for LDAP lookup and uses the certificate directly from
+     * the passport chip.
+     * <p>
+     * <b>Benefits of this approach:</b>
+     * <ul>
+     *   <li>Works even if DSC is not in LDAP (e.g., new/updated certificates)</li>
+     *   <li>Uses the actual certificate from the passport chip</li>
+     *   <li>Simpler verification flow: SOD DSC → LDAP CSCA → Verify</li>
+     *   <li>Complies with ICAO 9303 standard implementation</li>
+     * </ul>
+     * <p>
+     * <b>Verification flow:</b>
+     * <pre>
+     * 1. Extract DSC from SOD (this method)
+     * 2. Extract CSCA DN from DSC issuer field
+     * 3. Retrieve CSCA from LDAP
+     * 4. Verify DSC signature using CSCA public key
+     * 5. Verify SOD signature using DSC public key
+     * </pre>
+     *
+     * @param sodBytes Binary SOD data (PKCS#7 SignedData)
+     * @return X509Certificate DSC certificate extracted from SOD
+     * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException if DSC extraction fails or no DSC found
+     */
+    java.security.cert.X509Certificate extractDscCertificate(byte[] sodBytes);
 }

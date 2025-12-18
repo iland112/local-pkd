@@ -470,7 +470,7 @@ class PassiveAuthenticationControllerTest {
                 .content(invalidRequest))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message", containsString("발급 국가 코드는 필수입니다")))
+            .andExpect(jsonPath("$.error.message", containsString("발급 국가 코드는 필수입니다")))
             .andDo(print());
     }
 
@@ -492,7 +492,7 @@ class PassiveAuthenticationControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message", containsString("ISO 3166-1 alpha-3")))
+            .andExpect(jsonPath("$.error.message", containsString("ISO 3166-1 alpha-3")))
             .andDo(print());
     }
 
@@ -517,7 +517,7 @@ class PassiveAuthenticationControllerTest {
                 .content(invalidRequest))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message", containsString("Invalid Data Group key: DG99")))
+            .andExpect(jsonPath("$.error.message", containsString("Invalid Data Group key: DG99")))
             .andDo(print());
     }
 
@@ -539,7 +539,7 @@ class PassiveAuthenticationControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message", containsString("최소 하나의 Data Group이 필요합니다")))
+            .andExpect(jsonPath("$.error.message", containsString("최소 하나의 Data Group이 필요합니다")))
             .andDo(print());
     }
 

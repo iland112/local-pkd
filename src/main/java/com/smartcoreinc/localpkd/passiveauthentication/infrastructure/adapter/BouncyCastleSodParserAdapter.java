@@ -431,4 +431,89 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
             );
         }
     }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>Implementation: ICAO 9303 Standard Approach</b></p>
+     * <p>
+     * This method extracts the complete DSC certificate from the SOD's CMS SignedData structure,
+     * following the ICAO 9303 Part 11 Passive Authentication specification.
+     * <p>
+     * <b>Why extract DSC from SOD instead of LDAP lookup?</b>
+     * <ol>
+     *   <li><b>ICAO 9303 Compliance:</b> The standard includes DSC in SOD for this purpose</li>
+     *   <li><b>Robustness:</b> Works even when LDAP doesn't have the DSC</li>
+     *   <li><b>Authenticity:</b> Uses the actual certificate from the passport chip</li>
+     *   <li><b>Simplicity:</b> Eliminates unnecessary LDAP lookup step</li>
+     * </ol>
+     * <p>
+     * <b>Processing steps:</b>
+     * <ol>
+     *   <li>Unwrap ICAO 9303 Tag 0x77 wrapper (if present)</li>
+     *   <li>Parse CMS SignedData structure</li>
+     *   <li>Extract certificates collection</li>
+     *   <li>Get first certificate (DSC)</li>
+     *   <li>Convert from BouncyCastle X509CertificateHolder to Java X509Certificate</li>
+     * </ol>
+     *
+     * @param sodBytes Binary SOD data (PKCS#7 SignedData, optionally wrapped with Tag 0x77)
+     * @return Java X509Certificate representing the DSC
+     * @throws InfrastructureException if extraction fails or no DSC found in SOD
+     */
+    @Override
+    public java.security.cert.X509Certificate extractDscCertificate(byte[] sodBytes) {
+        try {
+            log.debug("Extracting full DSC certificate from SOD");
+
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
+            // Parse CMS SignedData
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
+
+            // Extract certificates from SignedData
+            var certificates = cmsSignedData.getCertificates();
+            if (certificates == null || certificates.getMatches(null).isEmpty()) {
+                throw new InfrastructureException(
+                    "NO_DSC_IN_SOD",
+                    "No certificates found in SOD"
+                );
+            }
+
+            // Get first certificate (DSC)
+            var certIterator = certificates.getMatches(null).iterator();
+            if (!certIterator.hasNext()) {
+                throw new InfrastructureException(
+                    "NO_DSC_IN_SOD",
+                    "Certificate iterator is empty"
+                );
+            }
+
+            var certHolder = (org.bouncycastle.cert.X509CertificateHolder) certIterator.next();
+
+            // Convert BouncyCastle X509CertificateHolder to Java X509Certificate
+            java.security.cert.CertificateFactory certFactory =
+                java.security.cert.CertificateFactory.getInstance("X.509", "BC");
+
+            java.security.cert.X509Certificate x509Cert =
+                (java.security.cert.X509Certificate) certFactory.generateCertificate(
+                    new java.io.ByteArrayInputStream(certHolder.getEncoded())
+                );
+
+            log.info("Extracted DSC certificate - Subject: {}, Serial: {}, Issuer: {}",
+                x509Cert.getSubjectX500Principal().getName(),
+                x509Cert.getSerialNumber().toString(16).toUpperCase(),
+                x509Cert.getIssuerX500Principal().getName());
+
+            return x509Cert;
+
+        } catch (Exception e) {
+            throw new InfrastructureException(
+                "DSC_EXTRACT_ERROR",
+                "Failed to extract DSC certificate from SOD: " + e.getMessage(),
+                e
+            );
+        }
+    }
 }
