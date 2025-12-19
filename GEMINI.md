@@ -268,6 +268,145 @@ The high-priority issues from the last review (2025-11-26) have been resolved. T
 
 ---
 
-**Document Version**: 3.0
+## 📄 ICAO 9303 SOD (Security Object Document) 구조 및 파싱 가이드
+
+### SOD 개요
+
+SOD (Security Object Document)는 ePassport의 데이터 무결성을 보장하기 위한 핵심 데이터 구조입니다.
+
+- **표준**: ICAO Doc 9303 Part 10 (Logical Data Structure) & Part 11 (Passive Authentication)
+- **형식**: PKCS#7 CMS SignedData (RFC 5652)
+- **용도**: Passive Authentication (PA)
+- **서명자**: Document Signer Certificate (DSC)
+
+### EF.SOD 파일 구조 (ICAO 9303 Part 10)
+
+```
+Tag 0x77 (Application[23]) - ICAO EF.SOD wrapper
+  ├─ Length (TLV encoding)
+  │   ├─ Short form: 0x00-0x7F (length in lower 7 bits)
+  │   └─ Long form: 0x80-0xFF (number of octets in lower 7 bits)
+  │
+  └─ Value: CMS SignedData (Tag 0x30 SEQUENCE)
+       ├─ version (INTEGER)
+       ├─ digestAlgorithms (SET OF DigestAlgorithmIdentifier)
+       ├─ encapContentInfo (EncapsulatedContentInfo)
+       │   ├─ eContentType: id-icao-ldsSecurityObject (2.23.136.1.1.1)
+       │   └─ eContent: LDSSecurityObject (OCTET STRING)
+       │       ├─ version (INTEGER)
+       │       ├─ hashAlgorithm (DigestAlgorithmIdentifier)
+       │       └─ dataGroupHashValues (SEQUENCE OF DataGroupHash)
+       │           ├─ DataGroup 1 (MRZ) hash
+       │           ├─ DataGroup 2 (Face image) hash
+       │           └─ ... (other Data Groups)
+       │
+       ├─ certificates [0] IMPLICIT SEQUENCE OF Certificate
+       │   └─ DSC certificate (X.509) ← **여기서 DSC 추출**
+       │
+       └─ signerInfos (SET OF SignerInfo)
+           └─ SignerInfo
+               ├─ digestAlgorithm (e.g., SHA-256 OID)
+               ├─ signatureAlgorithm (e.g., RSA-PSS OID)
+               └─ signature (DSC's signature)
+```
+
+### ASN.1 TLV Length 인코딩
+
+**Short Form (0-127 bytes)**:
+```
+77 14 [20 bytes of data...]
+   └─ 0x14 = 20
+```
+
+**Long Form (128+ bytes)**:
+```
+77 82 07 3D [1853 bytes...]
+   │  │  └─ 0x073D = 1853 bytes (big-endian)
+   │  └─ 2 octets follow (0x82 = 0x80 | 0x02)
+   └─ Long form indicator
+```
+
+### 핵심 파싱 로직
+
+**1. Tag 0x77 Unwrapping**:
+```java
+// ICAO 9303 Tag 0x77 (Application[23]) wrapper 제거
+ASN1Primitive asn1 = new ASN1InputStream(sodBytes).readObject();
+if (asn1 instanceof ASN1TaggedObject tagged) {
+    // BERTags.APPLICATION, tagNo=23 확인
+    ASN1Primitive content = tagged.getBaseObject().toASN1Primitive();
+    byte[] cmsBytes = content.getEncoded(ASN1Encoding.DER);
+}
+```
+
+**2. DSC 추출 (SOD certificates[0]에서)**:
+```java
+CMSSignedData cms = new CMSSignedData(cmsBytes);
+X509CertificateHolder holder = cms.getCertificates().getMatches(null).iterator().next();
+X509Certificate dsc = CertificateFactory.getInstance("X.509", "BC")
+    .generateCertificate(new ByteArrayInputStream(holder.getEncoded()));
+```
+
+**3. 서명 검증**:
+```java
+SignerInformation signerInfo = cms.getSignerInfos().getSigners().iterator().next();
+boolean valid = signerInfo.verify(
+    new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(dscCertificate)
+);
+```
+
+### 알고리즘 OID 매핑
+
+**Hash Algorithms (digestAlgorithm)**:
+
+| OID | Algorithm |
+|-----|-----------|
+| 2.16.840.1.101.3.4.2.1 | SHA-256 |
+| 2.16.840.1.101.3.4.2.2 | SHA-384 |
+| 2.16.840.1.101.3.4.2.3 | SHA-512 |
+
+**Encryption Algorithms (encryptionAlgOID)**:
+
+| OID | Algorithm |
+|-----|-----------|
+| 1.2.840.113549.1.1.1 | RSA |
+| 1.2.840.113549.1.1.10 | RSA-PSS |
+| 1.2.840.10045.2.1 | ECDSA |
+
+### ⚠️ 주의사항 및 일반적인 실수
+
+1. **extractSignatureAlgorithm 오류**:
+   - ❌ `signerInfo.getDigestAlgorithmID()` - 이것은 해시 알고리즘!
+   - ✅ `signerInfo.getEncryptionAlgOID()` - 이것이 서명(암호화) 알고리즘
+
+2. **Tag 0x77 처리**:
+   - EF.SOD 파일은 항상 Tag 0x77 (Application[23])로 시작
+   - CMS 데이터 추출 전에 반드시 unwrapping 필요
+
+3. **DSC 추출 방식**:
+   - ✅ SOD의 certificates[0]에서 직접 추출 (ICAO 표준)
+   - ❌ LDAP에서 DSC를 검색하는 방식은 불필요
+
+4. **CSCA 조회**:
+   - DSC의 Issuer DN으로 LDAP에서 CSCA 검색
+   - DSC.verify(CSCA.getPublicKey()) 로 Trust Chain 검증
+
+### Passive Authentication 전체 흐름
+
+```
+1. Client → API: SOD + Data Groups
+2. unwrapIcaoSod(SOD) → CMS SignedData 추출
+3. extractDscCertificate(SOD) → DSC 추출 (from certificates[0])
+4. DSC Issuer DN → LDAP에서 CSCA 검색
+5. DSC.verify(CSCA.publicKey) → Trust Chain 검증
+6. verifySignature(SOD, DSC) → SOD 서명 검증
+7. parseDataGroupHashes(SOD) → 예상 해시값 추출
+8. 각 DG 실제 해시 계산 후 비교
+9. Result: VALID / INVALID / ERROR
+```
+
+---
+
+**Document Version**: 4.0
 **Status**: STABLE
-**Last Review**: 2025-12-06
+**Last Review**: 2025-12-19
