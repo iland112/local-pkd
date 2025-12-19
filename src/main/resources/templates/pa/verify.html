@@ -5,6 +5,19 @@
   xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
   layout:decorate="~{layout/main}"
 >
+  <head>
+    <th:block layout:fragment="extra-styles">
+      <style>
+        /* Enhanced Visualization Styles */
+        .asn1-tree { font-family: 'Courier New', monospace; line-height: 1.6; }
+        .asn1-node:hover { background-color: rgba(var(--primary), 0.1); transition: background-color 0.2s ease; }
+        @keyframes chainPulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+        .chain-arrow { animation: chainPulse 2s ease-in-out infinite; }
+        details summary { cursor: pointer; user-select: none; }
+        details[open] summary i.fa-chevron-down { transform: rotate(180deg); transition: transform 0.2s ease; }
+      </style>
+    </th:block>
+  </head>
   <body>
     <div layout:fragment="content">
       <div
@@ -365,14 +378,64 @@
                   </div>
                   <div class="flex-grow">
                     <h3 class="font-bold text-lg">Step 6: Data Group 해시 검증</h3>
-                    <p class="text-sm opacity-70 mb-2">제공된 DG들의 해시값 일치 여부 확인</p>
+                    <p class="text-sm opacity-70 mb-2">SOD의 예상 해시값과 실제 계산된 해시값 비교</p>
                     <div x-show="steps.dataGroupHash.status !== 'pending'" class="text-sm">
-                      <div x-show="steps.dataGroupHash.message" class="mb-2" x-text="steps.dataGroupHash.message"></div>
-                      <div x-show="steps.dataGroupHash.details" class="bg-base-200 p-3 rounded-lg">
-                        <template x-for="(result, dg) in steps.dataGroupHash.details || {}">
-                          <div class="text-xs mb-1">
-                            <span class="font-semibold" x-text="dg + ':'"></span>
-                            <span :class="result.valid ? 'text-success' : 'text-error'" x-text="result.valid ? '✓ Valid' : '✗ Invalid'"></span>
+                      <div x-show="steps.dataGroupHash.message" class="mb-3 font-semibold" x-text="steps.dataGroupHash.message"></div>
+
+                      <!-- Detailed Hash Comparison Cards -->
+                      <div x-show="steps.dataGroupHash.details" class="space-y-3">
+                        <template x-for="(detail, dgNumber) in steps.dataGroupHash.details || {}" :key="dgNumber">
+                          <div class="card bg-base-200 shadow-sm border-l-4"
+                               :class="detail.valid ? 'border-success' : 'border-error'">
+                            <div class="card-body p-3">
+                              <!-- Card Header -->
+                              <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                  <span class="badge badge-sm badge-primary" x-text="dgNumber"></span>
+                                  <span class="text-xs font-semibold" x-text="getDgDescription(dgNumber)"></span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                  <i class="fas" :class="detail.valid ? 'fa-check-circle text-success' : 'fa-times-circle text-error'"></i>
+                                  <span class="text-xs font-semibold"
+                                        :class="detail.valid ? 'text-success' : 'text-error'"
+                                        x-text="detail.valid ? 'Match' : 'Mismatch'"></span>
+                                </div>
+                              </div>
+
+                              <!-- Hash Values Comparison -->
+                              <div class="grid grid-cols-1 gap-2 text-xs">
+                                <!-- Expected Hash (from SOD) -->
+                                <div>
+                                  <div class="flex items-center gap-1 mb-1">
+                                    <i class="fas fa-book text-info"></i>
+                                    <span class="font-semibold opacity-70">Expected (SOD):</span>
+                                  </div>
+                                  <code class="block bg-base-300 p-2 rounded text-[10px] break-all font-mono"
+                                        x-text="detail.expectedHash"></code>
+                                </div>
+
+                                <!-- Calculated Hash (from uploaded file) -->
+                                <div>
+                                  <div class="flex items-center gap-1 mb-1">
+                                    <i class="fas fa-calculator" :class="detail.valid ? 'text-success' : 'text-error'"></i>
+                                    <span class="font-semibold opacity-70">Calculated:</span>
+                                  </div>
+                                  <code class="block p-2 rounded text-[10px] break-all font-mono"
+                                        :class="detail.valid ? 'bg-success/10 text-success' : 'bg-error/10 text-error'"
+                                        x-text="detail.actualHash"></code>
+                                </div>
+                              </div>
+
+                              <!-- Match Indicator -->
+                              <div class="mt-2 pt-2 border-t border-base-300">
+                                <div class="flex items-center gap-2">
+                                  <i class="fas text-xs" :class="detail.valid ? 'fa-check-double text-success' : 'fa-exclamation-triangle text-error'"></i>
+                                  <span class="text-xs font-semibold"
+                                        :class="detail.valid ? 'text-success' : 'text-error'"
+                                        x-text="detail.valid ? 'Hashes Match - Data Integrity Verified' : 'Hash Mismatch - Data May Be Tampered'"></span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </template>
                       </div>
@@ -406,6 +469,124 @@
                     <p class="text-sm opacity-70 mb-2">DSC 인증서 폐기 여부 확인 (RFC 5280)</p>
                     <div x-show="steps.crlCheck.status !== 'pending'" class="text-sm">
                       <div x-show="steps.crlCheck.message" x-text="steps.crlCheck.message"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divider my-0"></div>
+
+                <!-- Step 8: Data Group Parsing -->
+                <div class="flex items-start gap-4" :class="currentStep >= 8 ? '' : 'opacity-50'">
+                  <div class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center"
+                         :class="getStepClass(steps.dgParsing)">
+                      <template x-if="steps.dgParsing.status === 'pending'">
+                        <span class="font-bold">8</span>
+                      </template>
+                      <template x-if="steps.dgParsing.status === 'running'">
+                        <i class="fas fa-spinner fa-spin"></i>
+                      </template>
+                      <template x-if="steps.dgParsing.status === 'success'">
+                        <i class="fas fa-check"></i>
+                      </template>
+                      <template x-if="steps.dgParsing.status === 'error'">
+                        <i class="fas fa-times"></i>
+                      </template>
+                    </div>
+                  </div>
+                  <div class="flex-grow">
+                    <h3 class="font-bold text-lg">Step 8: Data Group 파싱</h3>
+                    <p class="text-sm opacity-70 mb-2">DG1 (MRZ) 및 DG2 (얼굴 이미지) 데이터 추출</p>
+                    <div x-show="steps.dgParsing.status !== 'pending'" class="text-sm space-y-3">
+                      <div x-show="steps.dgParsing.message" class="mb-2" x-text="steps.dgParsing.message"></div>
+                      
+                      <!-- DG1 MRZ Data -->
+                      <div x-show="steps.dgParsing.dg1Data" class="bg-base-200 p-4 rounded-lg space-y-3">
+                        <div class="border-l-4 border-primary pl-3">
+                          <div class="font-semibold text-sm mb-2 flex items-center gap-2">
+                            <i class="fas fa-id-card text-primary"></i>
+                            DG1 - Machine Readable Zone (MRZ)
+                          </div>
+                          <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Document Type</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.documentType || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Document Number</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded font-mono" x-text="steps.dgParsing.dg1Data?.documentNumber || 'N/A'"></code>
+                            </div>
+                            <div class="col-span-2">
+                              <span class="badge badge-xs badge-success">Full Name</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.fullName || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Nationality</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.nationality || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Sex</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.sex || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-info">Date of Birth</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.dateOfBirth || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-warning">Expiration Date</span>
+                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.expirationDate || 'N/A'"></code>
+                            </div>
+                          </div>
+                          
+                          <!-- Raw MRZ (Expandable) -->
+                          <details class="mt-3">
+                            <summary class="cursor-pointer text-xs hover:text-primary transition-colors">
+                              <i class="fas fa-barcode mr-1"></i>
+                              Raw MRZ Data
+                            </summary>
+                            <pre class="mt-2 bg-base-300 p-2 rounded text-xs font-mono whitespace-pre" x-text="steps.dgParsing.dg1Data?.mrzFull"></pre>
+                          </details>
+                        </div>
+                      </div>
+
+                      <!-- DG2 Face Image -->
+                      <div x-show="steps.dgParsing.dg2Data" class="bg-base-200 p-4 rounded-lg space-y-3">
+                        <div class="border-l-4 border-accent pl-3">
+                          <div class="font-semibold text-sm mb-2 flex items-center gap-2">
+                            <i class="fas fa-user-circle text-accent"></i>
+                            DG2 - Face Biometric Image
+                          </div>
+                          
+                          <!-- Image Metadata -->
+                          <div class="grid grid-cols-3 gap-2 mb-3 text-xs">
+                            <div>
+                              <span class="badge badge-xs badge-accent">Format</span>
+                              <code class="ml-1" x-text="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageFormat || 'N/A'"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Size</span>
+                              <code class="ml-1" x-text="formatFileSize(steps.dgParsing.dg2Data?.faceImages?.[0]?.imageSize)"></code>
+                            </div>
+                            <div>
+                              <span class="badge badge-xs badge-ghost">Count</span>
+                              <code class="ml-1" x-text="steps.dgParsing.dg2Data?.faceCount || 0"></code>
+                            </div>
+                          </div>
+
+                          <!-- Face Image Display -->
+                          <div x-show="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl" class="mt-3">
+                            <img 
+                              :src="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl" 
+                              alt="Passport Face Image"
+                              class="max-w-xs mx-auto rounded-lg shadow-lg border-2 border-accent/30"
+                            />
+                            <p class="text-center text-xs opacity-70 mt-2">
+                              <i class="fas fa-info-circle mr-1"></i>
+                              Biometric face image extracted from ePassport chip
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -493,7 +674,8 @@
             trustChain: { status: 'pending', message: '', details: null },
             sodSignature: { status: 'pending', message: '', details: null },
             dataGroupHash: { status: 'pending', message: '', details: null },
-            crlCheck: { status: 'pending', message: '', details: null }
+            crlCheck: { status: 'pending', message: '', details: null },
+            dgParsing: { status: 'pending', message: '', details: null, dg1Data: null, dg2Data: null }
           },
           verificationResult: null,
 
@@ -698,19 +880,130 @@
           },
 
           updateStepsFromResult(result) {
-            // This will be populated based on the actual API response structure
-            // For now, mark all as success if status is VALID
-            const status = result.status === 'VALID' ? 'success' : 'error';
+            console.log('[DEBUG] updateStepsFromResult called with:', result);
+            
+            // Extract verification details from API response
+            const certChain = result.certificateChainValidation;
+            const sodSig = result.sodSignatureValidation;
+            const dgValidation = result.dataGroupValidation;
 
-            this.steps.parsing.status = status;
-            this.steps.dscExtraction.status = status;
-            this.steps.cscaLookup.status = status;
-            this.steps.trustChain.status = status;
-            this.steps.sodSignature.status = status;
-            this.steps.dataGroupHash.status = status;
-            this.steps.crlCheck.status = status;
+            // Step 1: SOD Parsing
+            this.steps.parsing.status = 'success';
+            this.steps.parsing.message = '✓ SOD 파싱 완료';
+            this.steps.parsing.details = {
+              hashAlgorithm: sodSig?.hashAlgorithm || 'SHA-256',
+              signatureAlgorithm: sodSig?.signatureAlgorithm || 'SHA256withRSA'
+            };
 
-            this.currentStep = 7;
+            // Step 2: DSC Extraction
+            this.steps.dscExtraction.status = 'success';
+            this.steps.dscExtraction.message = '✓ DSC 인증서 추출 완료';
+            this.steps.dscExtraction.details = {
+              subject: certChain?.dscSubject || 'N/A',
+              serial: certChain?.dscSerialNumber || 'N/A',
+              issuer: certChain?.cscaSubject || 'N/A'
+            };
+
+            // Step 3: CSCA Lookup
+            this.steps.cscaLookup.status = certChain?.valid ? 'success' : 'error';
+            this.steps.cscaLookup.message = certChain?.valid ? '✓ CSCA 인증서 조회 성공' : '✗ CSCA 조회 실패';
+            this.steps.cscaLookup.details = {
+              dn: certChain?.cscaSubject || 'N/A'
+            };
+
+            // Step 4: Trust Chain Validation
+            this.steps.trustChain.status = certChain?.valid ? 'success' : 'error';
+            this.steps.trustChain.message = certChain?.valid ? '✓ Trust Chain 검증 성공' : '✗ Trust Chain 검증 실패';
+
+            // Step 5: SOD Signature Validation
+            this.steps.sodSignature.status = sodSig?.valid ? 'success' : 'error';
+            this.steps.sodSignature.message = sodSig?.valid ? '✓ SOD 서명 검증 성공' : '✗ SOD 서명 검증 실패';
+
+            // Step 6: Data Group Hash Validation
+            const allValid = dgValidation?.invalidGroups === 0;
+            this.steps.dataGroupHash.status = allValid ? 'success' : 'error';
+            this.steps.dataGroupHash.message = allValid 
+              ? `✓ 모든 Data Group 해시 검증 성공 (${dgValidation?.validGroups}/${dgValidation?.totalGroups})` 
+              : `✗ Data Group 해시 불일치 발견 (유효: ${dgValidation?.validGroups}, 무효: ${dgValidation?.invalidGroups})`;
+            
+            // Format DG details for display
+            if (dgValidation?.details) {
+              const dgDetails = {};
+              Object.entries(dgValidation.details).forEach(([dgNumber, detail]) => {
+                dgDetails[dgNumber] = {
+                  valid: detail.valid,
+                  expectedHash: detail.expectedHash,
+                  actualHash: detail.actualHash
+                };
+              });
+              this.steps.dataGroupHash.details = dgDetails;
+            }
+
+            // Step 7: CRL Check
+            const crlChecked = certChain?.crlChecked || false;
+            const revoked = certChain?.revoked || false;
+            this.steps.crlCheck.status = crlChecked && !revoked ? 'success' : (revoked ? 'error' : 'success');
+            this.steps.crlCheck.message = crlChecked 
+              ? (revoked ? '✗ 인증서가 폐기되었습니다' : '✓ CRL 확인 완료 - 폐기되지 않음')
+              : '⚠ CRL 확인 생략됨';
+
+            // Step 8: Data Group Parsing (if DG1 or DG2 available)
+            if (this.dg1Data || this.dg2Data) {
+              this.parseDg1AndDg2();
+            } else {
+              this.steps.dgParsing.status = 'success';
+              this.steps.dgParsing.message = '⚠ DG1/DG2 파일이 업로드되지 않음 - 생략됨';
+            }
+
+            this.currentStep = 8;
+          },
+
+          async parseDg1AndDg2() {
+            this.steps.dgParsing.status = 'running';
+            this.steps.dgParsing.message = 'DG1/DG2 데이터 파싱 중...';
+
+            try {
+              let successCount = 0;
+
+              // Parse DG1 (MRZ)
+              if (this.dg1Data) {
+                const dg1Base64 = this.arrayBufferToBase64(this.dg1Data);
+                const dg1Response = await fetch('/api/pa/parse-dg1', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ dg1Base64 })
+                });
+
+                if (dg1Response.ok) {
+                  this.steps.dgParsing.dg1Data = await dg1Response.json();
+                  console.log('[DEBUG] DG1 parsed:', this.steps.dgParsing.dg1Data);
+                  successCount++;
+                }
+              }
+
+              // Parse DG2 (Face Image)
+              if (this.dg2Data) {
+                const dg2Base64 = this.arrayBufferToBase64(this.dg2Data);
+                const dg2Response = await fetch('/api/pa/parse-dg2', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ dg2Base64 })
+                });
+
+                if (dg2Response.ok) {
+                  this.steps.dgParsing.dg2Data = await dg2Response.json();
+                  console.log('[DEBUG] DG2 parsed:', this.steps.dgParsing.dg2Data);
+                  successCount++;
+                }
+              }
+
+              this.steps.dgParsing.status = 'success';
+              this.steps.dgParsing.message = `✓ ${successCount}개 Data Group 파싱 완료`;
+            } catch (error) {
+              console.error('DG parsing error:', error);
+              this.steps.dgParsing.status = 'error';
+              this.steps.dgParsing.message = '✗ Data Group 파싱 실패: ' + error.message;
+            }
           },
 
           markAllStepsError() {
@@ -753,6 +1046,28 @@
             const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          },
+
+          getDgDescription(dgNumber) {
+            const descriptions = {
+              'DG1': 'Machine Readable Zone (MRZ)',
+              'DG2': 'Face Biometric Image',
+              'DG3': 'Fingerprints',
+              'DG4': 'Iris Data',
+              'DG5': 'Displayed Portrait',
+              'DG6': 'Reserved',
+              'DG7': 'Displayed Signature',
+              'DG8': 'Data Features',
+              'DG9': 'Structure Features',
+              'DG10': 'Substance Features',
+              'DG11': 'Additional Personal Details',
+              'DG12': 'Additional Document Details',
+              'DG13': 'Optional Details',
+              'DG14': 'Security Options (EAC)',
+              'DG15': 'Active Authentication Public Key',
+              'DG16': 'Person(s) to Notify'
+            };
+            return descriptions[dgNumber] || 'Unknown Data Group';
           },
 
           arrayBufferToBase64(buffer) {

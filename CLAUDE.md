@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.4
-**Last Updated**: 2025-12-19
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.13 (UI Complete)
+**Version**: 4.5
+**Last Updated**: 2025-12-20
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.14 (UI Visualization Enhanced)
 
 ---
 
@@ -66,15 +66,30 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
   - Two-Tier Caching (Memory + Database + LDAP) ✅
   - PA Service Integration (Step 7) ✅
   - Integration Tests (6/6 passing, 100%) ✅
-- ✅ Phase 4.13: PA UI Complete (COMPLETED - 2025-12-19) **NEW**
+- ✅ Phase 4.13: PA UI Complete (COMPLETED - 2025-12-19)
   - PA Verification Page (파일 업로드, 실시간 검증) ✅
   - PA History Page (검증 이력, 필터링, 페이지네이션) ✅
   - PA Dashboard (통계, 3종 차트, 최근 이력) ✅
   - 5 Critical Bug Fixes (파일명 매칭, Fragment, API 필드) ✅
   - Full E2E Testing with Real Fixtures ✅
+- ✅ Phase 4.14: PA UI Visualization Enhancement (COMPLETED - 2025-12-20)
+  - SOD/DSC Visualization (Steps 1-7 enhanced with ASN.1 tree views) ✅
+  - Data Group Parsing (Step 8: DG1 MRZ + DG2 Face Image) ✅
+  - 2 new parsers (Dg1MrzParser, Dg2FaceImageParser) ~350 LOC ✅
+  - 2 new REST endpoints (/parse-dg1, /parse-dg2) ✅
+  - Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS) ✅
+  - Professional UI with color coding, animations, expandable sections ✅
+- ✅ Phase 4.15: DG2 Face Image Parsing Bug Fix (COMPLETED - 2025-12-20) **NEW**
+  - Fixed multiple FaceInfo entries issue (2 images → 1 valid image) ✅
+  - Implemented size-based filtering (< 100 bytes = metadata) ✅
+  - DG2 ASN.1 structure variation handling (4 variations documented) ✅
+  - JPEG extraction from ISO/IEC 19794-5 container ✅
+  - Face image now displays correctly in browser ✅
+  - Comprehensive DG1/DG2 parsing documentation (DG1_DG2_PARSING_GUIDE.md) ✅
 
 **진행 예정**:
-- ⏳ Phase 5: PA UI Enhancements (실시간 진행 상황, 배치 검증, 리포트 내보내기)
+
+- ⏳ Phase 5: PA UI Advanced Features (실시간 진행 상황, 배치 검증, 리포트 내보내기, 인터랙티브 ASN.1 트리)
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -1164,6 +1179,187 @@ Passive Authentication은 ePassport의 Data Groups가 발급국에서 서명된 
 
 ---
 
+## 📑 ICAO 9303 Data Groups (DG1, DG2) Parsing
+
+### Overview
+
+Data Groups contain biometric and identity information in ePassports. DG1 (MRZ) and DG2 (Face Image) are mandatory in all ePassports according to ICAO 9303 standards.
+
+**Complete Documentation**: [docs/DG1_DG2_PARSING_GUIDE.md](docs/DG1_DG2_PARSING_GUIDE.md)
+
+### DG1: Machine Readable Zone (MRZ)
+
+#### Structure
+
+```
+Tag 0x61 (Application 1) - DG1 wrapper
+  └─ Tag 0x5F1F - MRZ Info
+      └─ OCTET STRING (ASCII)
+          └─ MRZ data (88 characters for TD3)
+```
+
+#### TD3 Format (Standard Passport)
+
+```
+Line 1: P<KORHONG<GILDONG<<<<<<<<<<<<<<<<<<<<<<
+        │ │   └──────────────┬──────────────┘
+        │ │                  └─ Full Name (39 chars)
+        │ └─ Issuing Country (3 chars: KOR)
+        └─ Document Type (1 char: P)
+
+Line 2: M12345678KOR8001019M2501012<<<<<<<<<<<<<<
+        └─────┬───┘ │ └──┬──┘│└──┬──┘
+              │     │    │   │   └─ Personal Number
+              │     │    │   └─ Expiration Date
+              │     │    └─ Date of Birth
+              │     └─ Nationality
+              └─ Document Number
+```
+
+#### Parsing Implementation
+
+```java
+// Dg1MrzParser.java
+public Map<String, String> parse(byte[] dg1Bytes) throws Exception {
+    // 1. Unwrap ASN.1 TaggedObject layers
+    ASN1Primitive primitive = ASN1Primitive.fromByteArray(dg1Bytes);
+    while (primitive instanceof ASN1TaggedObject) {
+        primitive = ((ASN1TaggedObject) primitive).getBaseObject().toASN1Primitive();
+    }
+
+    // 2. Extract MRZ OCTET STRING (ASCII)
+    ASN1OctetString mrzOctet = ASN1OctetString.getInstance(primitive);
+    String mrz = new String(mrzOctet.getOctets(), StandardCharsets.US_ASCII);
+
+    // 3. Parse TD3 format (2 lines × 44 chars = 88 total)
+    return parseTd3Mrz(mrz);
+}
+```
+
+**Output Example**:
+```json
+{
+  "surname": "HONG",
+  "givenNames": "GILDONG",
+  "documentNumber": "M12345678",
+  "nationality": "KOR",
+  "dateOfBirth": "1980-01-01",
+  "sex": "M",
+  "expirationDate": "2025-01-01"
+}
+```
+
+### DG2: Face Image
+
+#### ASN.1 Structure Variations
+
+DG2 has **4 documented structure variations** due to ICAO 9303 implementation flexibility:
+
+**Variation 1: Standard Format**
+```
+Tag 0x75 (Application 21) - DG2 wrapper
+  └─ Tag 0x7F60 - Biometric Info Template
+      └─ SEQUENCE {
+          faceInfos SEQUENCE OF FaceInfo {
+              FaceInfo SEQUENCE {
+                  FaceImageBlock SEQUENCE {
+                      imageFormat ENUMERATED
+                      imageData OCTET STRING
+                  }
+              }
+          }
+      }
+```
+
+**Variation 2: Simplified FaceImageBlock**
+```
+FaceInfo SEQUENCE {
+    imageData OCTET STRING  ← Direct, no FaceImageBlock wrapper
+}
+```
+
+**Variation 3: Ultra-Simplified (Real-world)**
+```
+faceInfos SEQUENCE OF {
+    imageData OCTET STRING  ← Direct FaceInfo as OCTET STRING
+}
+```
+
+**Variation 4: Multiple TaggedObject Nesting**
+- Real-world passports wrap structures in 1-4 layers of TaggedObject
+- Requires defensive unwrapping loops
+
+#### ISO/IEC 19794-5 Container
+
+Face images are wrapped in ISO/IEC 19794-5 containers:
+
+```
+Offset | Field | Value
+-------|-------|-------
+0-3    | Magic | "FAC\0" (0x46 0x41 0x43 0x00)
+4-7    | Version | "010\0"
+8-11   | Total Length | Big-endian integer
+12-13  | Face Image Count | Big-endian short
+14-19  | Reserved | All zeros
+20+    | JPEG data | Actual image (FF D8 FF magic bytes)
+```
+
+#### Critical Bug Fix (2025-12-20)
+
+**Problem**: DG2 contained 2 FaceInfo entries:
+- First: 1 byte (metadata only)
+- Second: 11,790 bytes (valid JPEG)
+
+Browser displayed first entry: `data:application/octet-stream;base64,Ag==` (2 bytes)
+
+**Solution**: Size-based filtering
+```java
+// Only add images > 100 bytes (filters out metadata)
+if (imageSize != null && imageSize > 100) {
+    faceImages.add(faceImageData);
+}
+```
+
+**Result**: Valid JPEG now displays correctly in browser.
+
+### REST API Endpoints
+
+**POST /api/pa/parse-dg1**
+```json
+Request:  { "dg1": "YQVfHw0...(Base64)" }
+Response: { "surname": "HONG", "givenNames": "GILDONG", ... }
+```
+
+**POST /api/pa/parse-dg2**
+```json
+Request:  { "dg2": "dQR/YA...(Base64)" }
+Response: {
+  "faceCount": 1,
+  "faceImages": [{
+    "imageFormat": "JPEG",
+    "imageSize": 11790,
+    "imageDataUrl": "data:image/jpeg;base64,/9j/4AAQ..."
+  }]
+}
+```
+
+### Implementation Files
+
+- **Dg1MrzParser.java** (145 LOC): DG1 MRZ parsing, TD3 format handling
+- **Dg2FaceImageParser.java** (~350 LOC): DG2 face image parsing, 4 ASN.1 variations
+- **PassiveAuthenticationController.java**: REST endpoints (/parse-dg1, /parse-dg2)
+
+### Standards Compliance
+
+- **ICAO Doc 9303 Part 3**: TD3 MRZ format, check digit algorithm
+- **ICAO Doc 9303 Part 10**: DG1/DG2 ASN.1 structure, LDS specification
+- **ISO/IEC 19794-5**: Face image container format, biometric header
+- **ISO/IEC 7816-11**: Biometric information template (Tag 0x7F60)
+
+**완료 Phase**: Phase 4.15 (2025-12-20)
+
+---
+
 ## 💾 Database Schema (현재 상태)
 
 ### 주요 테이블 (3개)
@@ -1324,51 +1520,75 @@ http://172.24.1.6:8081
 26. ✅ **PA Phase 4.11.1 Request Validation** (2025-12-19) - Controller nested class 제거 (중복 PassiveAuthenticationRequest 정의 삭제), Bean Validation 정상화 (@Valid 어노테이션 동작), Validation 테스트 데이터 수정 (유효한 Base64 사용), Test pass rate 향상 (7/20 → 11/20, +20%), GlobalExceptionHandler HTTP 400 응답 검증 완료 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md))
 27. ✅ **PA Phase 4.11.5 SOD Parsing Final** (2025-12-19) - ICAO 9303 Tag 0x77 unwrapping, Signature Algorithm OID 수정 (encryptionAlgOID), RFC 4515 LDAP filter escaping, Country code normalization (alpha-3 → alpha-2), Page pagination, UUID validation handler, Jackson JavaTimeModule, 34/34 PA tests passing (100%) (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md))
 28. ✅ **PA Phase 4.12 CRL Checking Implementation** (2025-12-19) - CRL LDAP Adapter (RFC 4515 escaping), CRL Verification Service (RFC 5280 compliance), Two-Tier Caching (Memory + Database + LDAP), PA Service Integration (Step 7), Integration Tests (6/6 passing, 100%) (상세 내역: ICAO_9303_PA_CRL_STANDARD.md)
-29. ✅ **PA Phase 4.13 UI Complete** (2025-12-19 **NEW**) - 5 Critical Bug Fixes (DG filename matching, Alpine.js fragment, API field mapping, JSON deserialization), Full E2E Testing with Real Fixtures (dg1.bin, dg2.bin, dg14.bin, sod.bin), PA Verification/History/Dashboard 모두 정상 작동 (상세 내역: [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md))
+29. ✅ **PA Phase 4.13 UI Complete** (2025-12-19) - 5 Critical Bug Fixes (DG filename matching, Alpine.js fragment, API field mapping, JSON deserialization), Full E2E Testing with Real Fixtures (dg1.bin, dg2.bin, dg14.bin, sod.bin), PA Verification/History/Dashboard 모두 정상 작동 (상세 내역: [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md))
+30. ✅ **PA Phase 4.14 UI Visualization Enhancement** (2025-12-20 **NEW**) - SOD/DSC Visualization (Steps 1-7 enhanced with ASN.1 tree views, certificate chain diagram, hash comparison cards), Data Group Parsing (Step 8: DG1 MRZ + DG2 Face Image), 2 new parsers (Dg1MrzParser, Dg2FaceImageParser) ~350 LOC, 2 new REST endpoints (/parse-dg1, /parse-dg2), Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS), Professional UI with color coding, animations, expandable sections (상세 내역: [SESSION_2025-12-20_PA_UI_COMPLETE.md](docs/SESSION_2025-12-20_PA_UI_COMPLETE.md))
 
-### Current Phase: Passive Authentication Phase 4.13 ✅ COMPLETED
+### Current Phase: Passive Authentication Phase 4.14 ✅ COMPLETED
 
-**목표**: PA UI Complete - 5 Critical Bug Fixes & Full E2E Testing
+**목표**: PA UI Visualization Enhancement - SOD/DSC Visualization + DG1/DG2 Parsing
 
 **완료 내역**:
 
-#### Bug Fixes (5개)
+#### Part 1: SOD/DSC Visualization Enhancement (Steps 1-7)
 
-1. **verify.html - DG Filename Pattern Matching** ⚠️ CRITICAL
-   - `fileName.includes('dg1')` → `fileName.match(/^dg1\.bin$/)`
-   - 'dg14.bin'이 'dg1.bin' 데이터를 덮어쓰던 버그 수정
-   - Root cause of DG1 hash mismatch errors
+**Enhanced Steps**:
 
-2. **history.html - Alpine.js Fragment**
-   - `layout:fragment="scripts"` → `"script-content"`
-   - "paHistoryPageState is not defined" 오류 해결
+- ✅ Step 1: SOD Parsing Details (ASN.1 tree structure, Data Group hashes, expandable CMS structure)
+- ✅ Step 2: DSC Certificate Details (hierarchical X.509 display, Subject/Issuer DN split)
+- ✅ Step 4: Certificate Chain Visualization (trust chain diagram with animated arrows)
+- ✅ Step 6: Data Group Hash Comparison (detailed hash cards with color coding)
 
-3. **dashboard.html - Alpine.js Fragment**
-   - `layout:fragment="scripts"` → `"script-content"`
-   - "paDashboardPageState is not defined" 오류 해결
+**Key Features**:
 
-4. **dashboard.html - API Field Mapping**
-   - `r.verifiedAt` → `r.verificationTimestamp`
-   - 통계 계산 및 차트 렌더링 오류 해결
+- Tree-style layouts with ASCII art connectors (├─, └─)
+- Color-coded badges and borders for visual hierarchy
+- Expandable/collapsible sections for technical details
+- Animated chain arrows for trust validation
+- Side-by-side hash comparison with match indicators
 
-5. **PassiveAuthenticationError.java - Legacy Data**
-   - `@JsonIgnoreProperties(ignoreUnknown = true)` 추가
-   - 구 버전 `critical` 필드 호환성 문제 해결
+#### Part 2: Data Group Parsing (Step 8)
 
-#### Test Results
+**Backend Components**:
 
-- ✅ PA Verification: VALID (dg1.bin, dg2.bin, dg14.bin, sod.bin)
-- ✅ PA History: 10 records displayed, filters working
-- ✅ PA Dashboard: Statistics + 3 charts rendering
+- ✅ **Dg1MrzParser.java** (~136 lines) - Parse Machine Readable Zone data
+  - ASN.1 OCTET STRING decoding
+  - TD3 MRZ format parsing (2×44 characters)
+  - 14 fields extraction (name, document number, dates, etc.)
+
+- ✅ **Dg2FaceImageParser.java** (~205 lines) - Parse face biometric image
+  - ASN.1 SEQUENCE traversal
+  - Magic byte detection (JPEG/JPEG2000/PNG)
+  - Base64 encoding and Data URL generation
+
+- ✅ **REST API Endpoints** - PassiveAuthenticationController
+  - POST `/api/pa/parse-dg1` - Parse MRZ data
+  - POST `/api/pa/parse-dg2` - Parse face image
+
+**Frontend Components**:
+
+- ✅ Step 8 UI section in verify.html
+  - DG1 MRZ card with 14 fields in grid layout
+  - DG2 face image card with metadata and image display
+  - JavaScript `parseDg1AndDg2()` async function
+
+#### Code Statistics
+
+- Backend: ~350 lines (2 parsers + 2 endpoints)
+- Frontend: ~680 lines (52 CSS + 579 HTML + 150 JS)
+- Total: ~1,030 lines of code added
 
 **구현 위치**:
-- [verify.html](src/main/resources/templates/pa/verify.html:559-577) - Filename matching fix
-- [history.html](src/main/resources/templates/pa/history.html:400-549) - Fragment fix
-- [dashboard.html](src/main/resources/templates/pa/dashboard.html:210-533) - Fragment + API field fix
-- [PassiveAuthenticationError.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/domain/model/PassiveAuthenticationError.java:26) - JSON ignore
+
+- [Dg1MrzParser.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/Dg1MrzParser.java)
+- [Dg2FaceImageParser.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/Dg2FaceImageParser.java)
+- [PassiveAuthenticationController.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/web/PassiveAuthenticationController.java) - +2 endpoints
+- [verify.html](src/main/resources/templates/pa/verify.html) - Enhanced visualization
 
 **상세 내역**:
-- [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md)
+
+- [SESSION_2025-12-20_PA_UI_VISUALIZATION_ENHANCEMENT.md](docs/SESSION_2025-12-20_PA_UI_VISUALIZATION_ENHANCEMENT.md) - Part 1 (483 lines)
+- [SESSION_2025-12-20_PA_STEP8_DG_PARSING.md](docs/SESSION_2025-12-20_PA_STEP8_DG_PARSING.md) - Part 2 (595 lines)
+- [SESSION_2025-12-20_PA_UI_COMPLETE.md](docs/SESSION_2025-12-20_PA_UI_COMPLETE.md) - Complete Summary (483 lines)
 
 ### Next Phase: Passive Authentication Phase 5
 

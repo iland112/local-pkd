@@ -6,6 +6,8 @@ import com.smartcoreinc.localpkd.passiveauthentication.application.response.Pass
 import com.smartcoreinc.localpkd.passiveauthentication.application.usecase.GetPassiveAuthenticationHistoryUseCase;
 import com.smartcoreinc.localpkd.passiveauthentication.application.usecase.PerformPassiveAuthenticationUseCase;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroupNumber;
+import com.smartcoreinc.localpkd.passiveauthentication.infrastructure.adapter.Dg1MrzParser;
+import com.smartcoreinc.localpkd.passiveauthentication.infrastructure.adapter.Dg2FaceImageParser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,6 +46,8 @@ public class PassiveAuthenticationController {
     private final PerformPassiveAuthenticationUseCase performPassiveAuthenticationUseCase;
     private final GetPassiveAuthenticationHistoryUseCase getPassiveAuthenticationHistoryUseCase;
     private final com.smartcoreinc.localpkd.passiveauthentication.domain.port.SodParserPort sodParserPort;
+    private final Dg1MrzParser dg1MrzParser;
+    private final Dg2FaceImageParser dg2FaceImageParser;
 
     /**
      * Performs Passive Authentication verification for ePassport data.
@@ -369,6 +374,87 @@ public class PassiveAuthenticationController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Parses Data Group 1 (MRZ) from base64 encoded binary.
+     *
+     * @param request Request containing DG1 base64 data
+     * @return Parsed MRZ information
+     */
+    @Operation(
+        summary = "DG1 MRZ 파싱",
+        description = "Data Group 1 (Machine Readable Zone) 데이터를 파싱하여 여권 정보 추출"
+    )
+    @ApiResponse(responseCode = "200", description = "DG1 파싱 성공")
+    @ApiResponse(responseCode = "400", description = "잘못된 DG1 데이터")
+    @PostMapping("/parse-dg1")
+    public ResponseEntity<Map<String, String>> parseDg1(@RequestBody Map<String, String> request) {
+        try {
+            String dg1Base64 = request.get("dg1Base64");
+            if (dg1Base64 == null || dg1Base64.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "DG1 data is required"));
+            }
+
+            byte[] dg1Bytes = java.util.Base64.getDecoder().decode(dg1Base64);
+            Map<String, String> mrzData = dg1MrzParser.parse(dg1Bytes);
+
+            log.info("DG1 parsed successfully: {} fields extracted", mrzData.size());
+            return ResponseEntity.ok(mrzData);
+        } catch (Exception e) {
+            log.error("DG1 parsing failed", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "DG1 parsing failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Parses Data Group 2 (Face Image) from base64 encoded binary.
+     *
+     * @param request Request containing DG2 base64 data
+     * @return Parsed face image information including data URL for display
+     */
+    @Operation(
+        summary = "DG2 얼굴 이미지 파싱",
+        description = "Data Group 2 (Face Biometric) 데이터를 파싱하여 얼굴 이미지 추출"
+    )
+    @ApiResponse(responseCode = "200", description = "DG2 파싱 성공")
+    @ApiResponse(responseCode = "400", description = "잘못된 DG2 데이터")
+    @PostMapping("/parse-dg2")
+    public ResponseEntity<Map<String, Object>> parseDg2(@RequestBody Map<String, String> request) {
+        try {
+            String dg2Base64 = request.get("dg2Base64");
+            if (dg2Base64 == null || dg2Base64.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "DG2 data is required"));
+            }
+
+            byte[] dg2Bytes = java.util.Base64.getDecoder().decode(dg2Base64);
+            Map<String, Object> faceData = dg2FaceImageParser.parse(dg2Bytes);
+
+            // Convert image bytes to data URL for HTML display
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> faceImages = (List<Map<String, Object>>) faceData.get("faceImages");
+            if (faceImages != null && !faceImages.isEmpty()) {
+                Map<String, Object> firstFace = faceImages.get(0);
+                byte[] imageBytes = (byte[]) firstFace.get("imageData");
+                String imageFormat = (String) firstFace.get("imageFormat");
+                String dataUrl = dg2FaceImageParser.toDataUrl(imageBytes, imageFormat);
+                firstFace.put("imageDataUrl", dataUrl);
+                firstFace.remove("imageData"); // Remove binary data from response
+            }
+
+            // Log detailed face image info for debugging
+            if (faceImages != null && !faceImages.isEmpty()) {
+                Map<String, Object> firstFace = faceImages.get(0);
+                log.info("DG2 parsed successfully: {} face image(s) extracted - Format: {}, Size: {} bytes",
+                    faceData.get("faceCount"), firstFace.get("imageFormat"), firstFace.get("imageSize"));
+            } else {
+                log.info("DG2 parsed successfully: {} face image(s) extracted", faceData.get("faceCount"));
+            }
+            return ResponseEntity.ok(faceData);
+        } catch (Exception e) {
+            log.error("DG2 parsing failed", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "DG2 parsing failed: " + e.getMessage()));
+        }
     }
 
 }
