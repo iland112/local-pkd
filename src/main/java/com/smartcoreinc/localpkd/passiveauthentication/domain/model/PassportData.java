@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -72,6 +74,7 @@ public class PassportData extends AggregateRoot<PassportDataId> {
     @Column(name = "verification_status", length = 20, insertable = false, updatable = false)
     private PassiveAuthenticationStatus verificationStatus;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_request_data", columnDefinition = "JSONB")
     private String rawRequestData;
 
