@@ -35,7 +35,7 @@ import java.util.UUID;
 
 @Tag(name = "Passive Authentication API", description = "전자여권 무결성 검증 REST API (ICAO 9303 기반)")
 @RestController
-@RequestMapping("/api/v1/pa")
+@RequestMapping("/api/pa")
 @RequiredArgsConstructor
 @Slf4j
 public class PassiveAuthenticationController {
