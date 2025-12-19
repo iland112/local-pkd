@@ -547,6 +547,7 @@
             try {
               for (const file of files) {
                 const fileName = file.name.toLowerCase();
+                console.log('[DEBUG] Processing file:', file.name, 'Size:', file.size, 'bytes');
 
                 // Detect file type based on filename
                 if (fileName.includes('sod') && fileName.endsWith('.bin')) {
@@ -628,6 +629,16 @@
             this.currentStep = 1;
 
             try {
+              // Debug: Calculate hashes BEFORE Base64 encoding
+              if (this.dg1Data) {
+                const dg1Hash = await this.calculateSha256(this.dg1Data);
+                console.log('[DEBUG] DG1 SHA-256 BEFORE Base64:', dg1Hash);
+              }
+              if (this.dg2Data) {
+                const dg2Hash = await this.calculateSha256(this.dg2Data);
+                console.log('[DEBUG] DG2 SHA-256 BEFORE Base64:', dg2Hash);
+              }
+
               // Prepare request data
               const requestData = {
                 sod: this.arrayBufferToBase64(this.sodData),
@@ -635,10 +646,14 @@
               };
 
               if (this.dg1Data) {
-                requestData.dataGroups['DG1'] = this.arrayBufferToBase64(this.dg1Data);
+                const base64 = this.arrayBufferToBase64(this.dg1Data);
+                console.log('[DEBUG] DG1 Base64 length:', base64.length);
+                requestData.dataGroups['DG1'] = base64;
               }
               if (this.dg2Data) {
-                requestData.dataGroups['DG2'] = this.arrayBufferToBase64(this.dg2Data);
+                const base64 = this.arrayBufferToBase64(this.dg2Data);
+                console.log('[DEBUG] DG2 Base64 length:', base64.length);
+                requestData.dataGroups['DG2'] = base64;
               }
 
               // Call verification API
