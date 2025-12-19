@@ -244,7 +244,7 @@
 
             try {
               // Load recent verifications
-              const historyResponse = await fetch('/api/v1/pa/history?size=100&sort=verifiedAt,desc');
+              const historyResponse = await fetch('/api/pa/history?size=100&sort=verifiedAt,desc');
               if (historyResponse.ok) {
                 const historyData = await historyResponse.json();
                 this.recentVerifications = historyData.content || [];
