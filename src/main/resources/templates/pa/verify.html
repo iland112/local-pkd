@@ -557,11 +557,19 @@
                 } else if (fileName.includes('dg1') && fileName.endsWith('.bin')) {
                   this.dg1File = file;
                   this.dg1Data = await file.arrayBuffer();
+                  // Debug: Calculate SHA-256 hash of uploaded DG1
+                  const hash = await this.calculateSha256(this.dg1Data);
+                  console.log('[DEBUG] DG1 File SHA-256:', hash);
+                  console.log('[DEBUG] DG1 File Size:', file.size, 'bytes');
                   this.uploadedFiles.push({ type: 'DG1', name: file.name, size: file.size });
                   this.dgFiles.push({ number: 1, name: file.name });
                 } else if (fileName.includes('dg2') && fileName.endsWith('.bin')) {
                   this.dg2File = file;
                   this.dg2Data = await file.arrayBuffer();
+                  // Debug: Calculate SHA-256 hash of uploaded DG2
+                  const hash = await this.calculateSha256(this.dg2Data);
+                  console.log('[DEBUG] DG2 File SHA-256:', hash);
+                  console.log('[DEBUG] DG2 File Size:', file.size, 'bytes');
                   this.uploadedFiles.push({ type: 'DG2', name: file.name, size: file.size });
                   this.dgFiles.push({ number: 2, name: file.name });
                 } else if (fileName.startsWith('dg') && fileName.endsWith('.bin')) {
@@ -723,6 +731,12 @@
           },
 
           // Utility functions
+          async calculateSha256(arrayBuffer) {
+            const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          },
+
           arrayBufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
             let binary = '';
