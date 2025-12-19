@@ -11,6 +11,8 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,6 +55,7 @@ public class PassiveAuthenticationResult {
     @Column(name = "invalid_data_groups")
     private int invalidDataGroups;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "errors", columnDefinition = "JSONB")
     private String errorsJson;  // Serialized List<PassiveAuthenticationError>
 
