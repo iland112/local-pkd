@@ -452,7 +452,7 @@
               if (this.filters.country) params.append('issuingCountry', this.filters.country);
               if (this.filters.status) params.append('status', this.filters.status);
 
-              const response = await fetch(`/api/v1/pa/history?${params.toString()}`);
+              const response = await fetch(`/api/pa/history?${params.toString()}`);
 
               if (!response.ok) {
                 throw new Error('Failed to load history');
