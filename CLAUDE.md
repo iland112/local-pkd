@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.3
+**Version**: 4.4
 **Last Updated**: 2025-12-19
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.12 (Completed)
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.13 (UI Complete)
 
 ---
 
@@ -66,9 +66,15 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
   - Two-Tier Caching (Memory + Database + LDAP) ✅
   - PA Service Integration (Step 7) ✅
   - Integration Tests (6/6 passing, 100%) ✅
+- ✅ Phase 4.13: PA UI Complete (COMPLETED - 2025-12-19) **NEW**
+  - PA Verification Page (파일 업로드, 실시간 검증) ✅
+  - PA History Page (검증 이력, 필터링, 페이지네이션) ✅
+  - PA Dashboard (통계, 3종 차트, 최근 이력) ✅
+  - 5 Critical Bug Fixes (파일명 매칭, Fragment, API 필드) ✅
+  - Full E2E Testing with Real Fixtures ✅
 
 **진행 예정**:
-- ⏳ Phase 4.13: PA UI (전자여권 판독 & PA 수행, PA 수행 이력/통계)
+- ⏳ Phase 5: PA UI Enhancements (실시간 진행 상황, 배치 검증, 리포트 내보내기)
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -1268,7 +1274,7 @@ http://172.24.1.6:8081
 
 ---
 
-## 📊 Current Status (2025-12-18)
+## 📊 Current Status (2025-12-19)
 
 ### Completed Phases ✅
 
@@ -1316,72 +1322,66 @@ http://172.24.1.6:8081
 24. ✅ **PA Phase 4.9 DSC Extraction from SOD** (2025-12-18) - ICAO Doc 9303 Part 10 Tag 0x77 wrapper unwrapping 구현, ASN.1 TLV 파싱 (short/long form), DSC Subject DN & Serial Number 실제 추출, 모든 SOD 파싱 메서드에 unwrapping 적용 (5개 메서드), Controller placeholder 제거, 20 tests 실행 (7 passing, DSC extraction working) (상세 내역: [SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md](docs/SESSION_2025-12-18_PA_PHASE_4_9_DSC_EXTRACTION.md))
 25. ✅ **PA Phase 4.10 ICAO 9303 Standard Compliance** (2025-12-19) - `extractDscCertificate()` 메서드 추가로 SOD에서 DSC X.509 인증서 직접 추출 (ICAO 9303 Part 11 Section 6.1.3.1 준수), DSC LDAP lookup 단계 제거하여 검증 프로세스 단순화, PassiveAuthenticationService에 SOD 기반 DSC 추출 로직 통합, GlobalExceptionHandler에 Bean Validation 지원 추가 (@Valid, MethodArgumentNotValidException), CLAUDE.md에 ICAO 9303 PA Workflow 문서화 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md](docs/SESSION_2025-12-19_PA_PHASE_4_10_ICAO_COMPLIANCE.md))
 26. ✅ **PA Phase 4.11.1 Request Validation** (2025-12-19) - Controller nested class 제거 (중복 PassiveAuthenticationRequest 정의 삭제), Bean Validation 정상화 (@Valid 어노테이션 동작), Validation 테스트 데이터 수정 (유효한 Base64 사용), Test pass rate 향상 (7/20 → 11/20, +20%), GlobalExceptionHandler HTTP 400 응답 검증 완료 (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_REQUEST_VALIDATION.md))
-27. ✅ **PA Phase 4.11.5 SOD Parsing Final** (2025-12-19 **NEW**) - ICAO 9303 Tag 0x77 unwrapping, Signature Algorithm OID 수정 (encryptionAlgOID), RFC 4515 LDAP filter escaping, Country code normalization (alpha-3 → alpha-2), Page pagination, UUID validation handler, Jackson JavaTimeModule, 34/34 PA tests passing (100%) (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md))
+27. ✅ **PA Phase 4.11.5 SOD Parsing Final** (2025-12-19) - ICAO 9303 Tag 0x77 unwrapping, Signature Algorithm OID 수정 (encryptionAlgOID), RFC 4515 LDAP filter escaping, Country code normalization (alpha-3 → alpha-2), Page pagination, UUID validation handler, Jackson JavaTimeModule, 34/34 PA tests passing (100%) (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md))
+28. ✅ **PA Phase 4.12 CRL Checking Implementation** (2025-12-19) - CRL LDAP Adapter (RFC 4515 escaping), CRL Verification Service (RFC 5280 compliance), Two-Tier Caching (Memory + Database + LDAP), PA Service Integration (Step 7), Integration Tests (6/6 passing, 100%) (상세 내역: ICAO_9303_PA_CRL_STANDARD.md)
+29. ✅ **PA Phase 4.13 UI Complete** (2025-12-19 **NEW**) - 5 Critical Bug Fixes (DG filename matching, Alpine.js fragment, API field mapping, JSON deserialization), Full E2E Testing with Real Fixtures (dg1.bin, dg2.bin, dg14.bin, sod.bin), PA Verification/History/Dashboard 모두 정상 작동 (상세 내역: [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md))
 
-### Current Phase: Passive Authentication Phase 4.11.5 ✅ COMPLETED
+### Current Phase: Passive Authentication Phase 4.13 ✅ COMPLETED
 
-**목표**: SOD Parsing & Controller Test Fixes - ICAO 9303 완전 준수
+**목표**: PA UI Complete - 5 Critical Bug Fixes & Full E2E Testing
 
 **완료 내역**:
-- ✅ ICAO 9303 Tag 0x77 wrapper unwrapping 구현
-- ✅ Signature Algorithm OID 추출 수정 (digestAlgOID → encryptionAlgOID)
-- ✅ RFC 4515 LDAP filter escaping 구현
-- ✅ Country code normalization (alpha-3 → alpha-2)
-- ✅ History endpoint Page pagination 구현
-- ✅ UUID validation exception handler 추가
-- ✅ Jackson JavaTimeModule 설정
-- ✅ 34/34 PA tests passing (100%)
 
-**주요 성과**:
-- **Test Improvement**: 20/20 Controller tests + 14 additional tests
-- **ICAO Compliance**: Full ICAO 9303 Part 10/11 compliance
-- **Standards**: RFC 4514, RFC 4515, RFC 5652 compliance
+#### Bug Fixes (5개)
+
+1. **verify.html - DG Filename Pattern Matching** ⚠️ CRITICAL
+   - `fileName.includes('dg1')` → `fileName.match(/^dg1\.bin$/)`
+   - 'dg14.bin'이 'dg1.bin' 데이터를 덮어쓰던 버그 수정
+   - Root cause of DG1 hash mismatch errors
+
+2. **history.html - Alpine.js Fragment**
+   - `layout:fragment="scripts"` → `"script-content"`
+   - "paHistoryPageState is not defined" 오류 해결
+
+3. **dashboard.html - Alpine.js Fragment**
+   - `layout:fragment="scripts"` → `"script-content"`
+   - "paDashboardPageState is not defined" 오류 해결
+
+4. **dashboard.html - API Field Mapping**
+   - `r.verifiedAt` → `r.verificationTimestamp`
+   - 통계 계산 및 차트 렌더링 오류 해결
+
+5. **PassiveAuthenticationError.java - Legacy Data**
+   - `@JsonIgnoreProperties(ignoreUnknown = true)` 추가
+   - 구 버전 `critical` 필드 호환성 문제 해결
+
+#### Test Results
+
+- ✅ PA Verification: VALID (dg1.bin, dg2.bin, dg14.bin, sod.bin)
+- ✅ PA History: 10 records displayed, filters working
+- ✅ PA Dashboard: Statistics + 3 charts rendering
 
 **구현 위치**:
-- [BouncyCastleSodParserAdapter.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/BouncyCastleSodParserAdapter.java) - SOD parsing
-- [UnboundIdLdapCscaAdapter.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/adapter/UnboundIdLdapCscaAdapter.java) - LDAP CSCA lookup
-- [PassiveAuthenticationController.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/web/PassiveAuthenticationController.java) - REST API
+- [verify.html](src/main/resources/templates/pa/verify.html:559-577) - Filename matching fix
+- [history.html](src/main/resources/templates/pa/history.html:400-549) - Fragment fix
+- [dashboard.html](src/main/resources/templates/pa/dashboard.html:210-533) - Fragment + API field fix
+- [PassiveAuthenticationError.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/domain/model/PassiveAuthenticationError.java:26) - JSON ignore
 
 **상세 내역**:
-- [SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md)
+- [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md)
 
-### Next Phase: Passive Authentication Phase 4.12 & 5
+### Next Phase: Passive Authentication Phase 5
 
-**Phase 4.12: CRL Checking 구현** (⚠️ **ICAO 9303 표준 준수 필수**)
-
-**📖 필수 문서**: [ICAO_9303_PA_CRL_STANDARD.md](docs/ICAO_9303_PA_CRL_STANDARD.md)
+**Phase 5: PA UI Enhancements** (향후 작업)
 
 **구현 항목**:
 
-- ⏳ CRL LDAP Adapter 구현 (CrlLdapPort, UnboundIdCrlLdapAdapter)
-- ⏳ CRL 검증 서비스 (CrlVerificationService)
-  - CRL 서명 검증 (CSCA public key)
-  - CRL 만료 검증 (thisUpdate, nextUpdate)
-  - DSC 폐기 여부 확인 (serial number)
-- ⏳ CRL 캐싱 전략 (In-memory + Database)
-- ⏳ PassiveAuthenticationService 통합 (Step 7)
-- ⏳ CRL 검증 테스트 작성 (5+ scenarios)
-
-**표준 준수**:
-
-- ICAO Doc 9303 Part 11 & 12
-- RFC 5280 (X.509 CRL Profile)
-- RFC 4515 (LDAP Filter Escaping)
-
-**Phase 5: PA UI 구현**
-- ⏳ 전자여권 판독 & PA 수행 화면
-  - SOD 파일 업로드 또는 Base64 입력
-  - Data Group 입력 (DG1, DG2 등)
-  - PA 검증 실행 버튼
-  - 검증 결과 표시 (성공/실패, 상세 정보)
-- ⏳ PA 수행 이력 화면
-  - 검증 이력 목록 (페이지네이션)
-  - 필터링 (국가, 상태, 날짜)
-  - 상세 정보 조회
-- ⏳ PA 통계 Dashboard
-  - 일별/월별 검증 건수
-  - 국가별 검증 통계
-  - 성공/실패 비율 차트
+- ⏳ 실시간 검증 진행 상황 (SSE 기반)
+- ⏳ 배치 검증 지원 (여러 여권 동시 검증)
+- ⏳ 고급 필터링 (날짜 범위, 복수 국가, 상태 조합)
+- ⏳ 검증 리포트 내보내기 (PDF, CSV)
+- ⏳ 통계 대시보드 개선 (주간/월간 트렌드, 국가별 성공률)
+- ⏳ Active Authentication 지원 (향후)
 
 ### PKD Upload Module - Remaining TODOs (Optional)
 
