@@ -755,10 +755,8 @@
 
           arrayBufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
+            // Use Array.from to avoid UTF-16 encoding issues
+            const binary = String.fromCharCode(...bytes);
             return btoa(binary);
           },
 
