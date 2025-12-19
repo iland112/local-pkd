@@ -4,8 +4,12 @@ import com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroupNum
 import com.smartcoreinc.localpkd.passiveauthentication.domain.port.SodParserPort;
 import com.smartcoreinc.localpkd.shared.exception.InfrastructureException;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.ASN1TaggedObject;
+import org.bouncycastle.asn1.BERTags;
 import org.bouncycastle.asn1.icao.DataGroupHash;
 import org.bouncycastle.asn1.icao.LDSSecurityObject;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayInputStream;
 import java.security.PublicKey;
 import java.security.Security;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -188,6 +193,62 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
     /**
      * {@inheritDoc}
      *
+     * <p><b>Recommended Implementation (matching sod_example)</b></p>
+     * <p>Implementation notes:
+     * <ul>
+     *   <li>Parses PKCS#7 SignedData</li>
+     *   <li>Extracts SignerInfo from SignedData</li>
+     *   <li>Builds SignerInformationVerifier with DSC X509 certificate</li>
+     *   <li>Verifies signature using Bouncy Castle (like SODSignatureVerifier.java)</li>
+     * </ul>
+     */
+    @Override
+    public boolean verifySignature(byte[] sodBytes, X509Certificate dscCertificate) {
+        try {
+            log.debug("Verifying SOD signature with DSC X509 certificate");
+
+            // Remove ICAO 9303 Tag 0x77 wrapper if present
+            byte[] cmsBytes = unwrapIcaoSod(sodBytes);
+
+            // Parse CMS SignedData
+            CMSSignedData cmsSignedData = new CMSSignedData(cmsBytes);
+
+            // Extract SignerInfo
+            SignerInformationStore signerInfos = cmsSignedData.getSignerInfos();
+            if (signerInfos.size() == 0) {
+                log.error("No SignerInfo found in SOD");
+                return false;
+            }
+
+            SignerInformation signerInfo = signerInfos.getSigners().iterator().next();
+
+            // Verify signature (like sod_example/SODSignatureVerifier.java)
+            boolean valid = signerInfo.verify(
+                new JcaSimpleSignerInfoVerifierBuilder()
+                    .setProvider("BC")
+                    .build(dscCertificate)
+            );
+
+            if (valid) {
+                log.info("SOD signature verification succeeded with DSC certificate");
+            } else {
+                log.error("SOD signature verification failed with DSC certificate");
+            }
+
+            return valid;
+
+        } catch (Exception e) {
+            throw new InfrastructureException(
+                "SOD_SIGNATURE_VERIFY_ERROR",
+                "Failed to verify SOD signature with DSC certificate: " + e.getMessage(),
+                e
+            );
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * <p>Implementation notes:
      * <ul>
      *   <li>Extracts LDSSecurityObject from SOD</li>
@@ -238,8 +299,15 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
      * <p>Implementation notes:
      * <ul>
      *   <li>Extracts SignerInfo from SOD</li>
-     *   <li>Gets SignatureAlgorithmIdentifier</li>
+     *   <li>Gets SignatureAlgorithmIdentifier from encryptionAlgOID</li>
+     *   <li>Combines with digestAlgorithmID to determine full signature algorithm</li>
      *   <li>Maps OID to algorithm name (SHA256withRSA, etc.)</li>
+     * </ul>
+     *
+     * <p><b>IMPORTANT:</b> CMS SignerInfo contains:
+     * <ul>
+     *   <li>digestAlgorithmID - Hash algorithm (SHA-256, SHA-384, etc.)</li>
+     *   <li>signatureAlgorithm (encryptionAlgOID) - Signature algorithm (RSA, ECDSA, etc.)</li>
      * </ul>
      */
     @Override
@@ -264,18 +332,17 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
 
             SignerInformation signerInfo = signerInfos.getSigners().iterator().next();
 
-            // Get signature algorithm identifier
-            AlgorithmIdentifier signatureAlgorithm = signerInfo.getDigestAlgorithmID();
-            String oid = signatureAlgorithm.getAlgorithm().getId();
-
-            // Map OID to algorithm name
-            String algorithmName = SIGNATURE_ALGORITHM_NAMES.get(oid);
-            if (algorithmName == null) {
-                log.warn("Unknown signature algorithm OID: {}", oid);
-                algorithmName = "UNKNOWN(" + oid + ")";
-            }
-
-            log.info("Extracted signature algorithm: {} (OID: {})", algorithmName, oid);
+            // Get encryption algorithm OID (this is the actual signature algorithm, e.g., RSA, ECDSA)
+            String encryptionAlgOid = signerInfo.getEncryptionAlgOID();
+            
+            // Get digest algorithm OID (hash algorithm)
+            String digestAlgOid = signerInfo.getDigestAlgorithmID().getAlgorithm().getId();
+            
+            // Combine to get full signature algorithm name
+            String algorithmName = deriveSignatureAlgorithmName(digestAlgOid, encryptionAlgOid);
+            
+            log.info("Extracted signature algorithm: {} (Digest OID: {}, Encryption OID: {})", 
+                algorithmName, digestAlgOid, encryptionAlgOid);
             return algorithmName;
 
         } catch (Exception e) {
@@ -285,6 +352,61 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
                 e
             );
         }
+    }
+
+
+    /**
+     * Derives the full signature algorithm name from digest and encryption algorithm OIDs.
+     *
+     * <p>CMS SignedData stores digest and encryption algorithms separately.
+     * This method combines them to produce standard algorithm names like "SHA256withRSA".
+     *
+     * <p>Common OID mappings:
+     * <ul>
+     *   <li>RSA encryption: 1.2.840.113549.1.1.1</li>
+     *   <li>RSA with SHA-256: 1.2.840.113549.1.1.11</li>
+     *   <li>ECDSA with SHA-256: 1.2.840.10045.4.3.2</li>
+     * </ul>
+     *
+     * @param digestOid Digest algorithm OID (e.g., SHA-256)
+     * @param encryptionOid Encryption algorithm OID (e.g., RSA, ECDSA)
+     * @return Full signature algorithm name (e.g., "SHA256withRSA")
+     */
+    private String deriveSignatureAlgorithmName(String digestOid, String encryptionOid) {
+        // First, check if encryptionOid is a full signature algorithm OID
+        String directMatch = SIGNATURE_ALGORITHM_NAMES.get(encryptionOid);
+        if (directMatch != null) {
+            return directMatch;
+        }
+
+        // Map digest OID to prefix
+        String digestPrefix = switch (digestOid) {
+            case "1.3.14.3.2.26" -> "SHA1";       // SHA-1 (deprecated)
+            case "2.16.840.1.101.3.4.2.1" -> "SHA256";
+            case "2.16.840.1.101.3.4.2.2" -> "SHA384";
+            case "2.16.840.1.101.3.4.2.3" -> "SHA512";
+            default -> "UNKNOWN";
+        };
+
+        // Map encryption OID to suffix
+        String encryptionSuffix = switch (encryptionOid) {
+            // RSA encryption (raw)
+            case "1.2.840.113549.1.1.1" -> "RSA";
+            // RSA OAEP
+            case "1.2.840.113549.1.1.7" -> "RSA-OAEP";
+            // RSA PSS
+            case "1.2.840.113549.1.1.10" -> "RSA-PSS";
+            // ECDSA (unrestricted)
+            case "1.2.840.10045.2.1" -> "ECDSA";
+            // DSA
+            case "1.2.840.10040.4.1" -> "DSA";
+            default -> {
+                log.warn("Unknown encryption algorithm OID: {}", encryptionOid);
+                yield "UNKNOWN(" + encryptionOid + ")";
+            }
+        };
+
+        return digestPrefix + "with" + encryptionSuffix;
     }
 
     /**
@@ -298,7 +420,7 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
      *   └─ Value: CMS SignedData (Tag 0x30 SEQUENCE)
      * </pre>
      * <p>
-     * This method removes the 0x77 wrapper to extract the pure CMS SignedData bytes.
+     * This method uses ASN.1 parsing (like sod_example) to properly handle the ICAO wrapper.
      *
      * @param sodBytes SOD bytes potentially wrapped with Tag 0x77
      * @return Pure CMS SignedData bytes (starts with Tag 0x30)
@@ -308,37 +430,42 @@ public class BouncyCastleSodParserAdapter implements SodParserPort {
             return sodBytes;
         }
 
-        // Check if first byte is Tag 0x77 (ICAO EF.SOD wrapper)
-        if ((sodBytes[0] & 0xFF) != 0x77) {
-            // No wrapper, return as-is
-            log.debug("SOD does not have Tag 0x77 wrapper, using raw bytes");
-            return sodBytes;
+        try (ASN1InputStream asn1InputStream = new ASN1InputStream(sodBytes)) {
+            ASN1Primitive asn1Primitive = asn1InputStream.readObject();
+
+            // Check if wrapped with ICAO Tag 0x77
+            if (!(asn1Primitive instanceof ASN1TaggedObject tagged)) {
+                // Already unwrapped CMS data (starts with SEQUENCE)
+                log.debug("SOD does not have Tag 0x77 wrapper, using raw bytes");
+                return sodBytes;
+            }
+
+            // Verify ICAO EF.SOD Application[23] tag
+            if (tagged.getTagClass() != BERTags.APPLICATION || tagged.getTagNo() != 23) {
+                throw new InfrastructureException(
+                    "INVALID_SOD_FORMAT",
+                    String.format("Invalid EF.SOD tag: class=%d, number=%d (expected APPLICATION[23])",
+                        tagged.getTagClass(), tagged.getTagNo())
+                );
+            }
+
+            log.debug("SOD has Tag 0x77 wrapper, unwrapping using ASN.1 parsing...");
+
+            // Extract CMS ContentInfo (EXPLICIT tagging)
+            ASN1Primitive content = tagged.getBaseObject().toASN1Primitive();
+            byte[] cmsBytes = content.getEncoded(ASN1Encoding.DER);
+
+            log.debug("Unwrapped SOD: {} bytes (was {} bytes with wrapper)", cmsBytes.length, sodBytes.length);
+
+            return cmsBytes;
+
+        } catch (Exception e) {
+            throw new InfrastructureException(
+                "SOD_UNWRAP_ERROR",
+                "Failed to unwrap ICAO Tag 0x77: " + e.getMessage(),
+                e
+            );
         }
-
-        log.debug("SOD has Tag 0x77 wrapper, unwrapping...");
-
-        // Parse TLV structure to skip wrapper
-        int offset = 1; // Skip tag byte
-
-        // Parse length byte(s)
-        int lengthByte = sodBytes[offset++] & 0xFF;
-
-        if ((lengthByte & 0x80) == 0) {
-            // Short form: length is in the lower 7 bits
-            // Content starts immediately after length byte
-        } else {
-            // Long form: number of subsequent octets is in lower 7 bits
-            int numOctets = lengthByte & 0x7F;
-            offset += numOctets; // Skip length octets
-        }
-
-        // Extract CMS SignedData (everything after TLV header)
-        byte[] cmsBytes = new byte[sodBytes.length - offset];
-        System.arraycopy(sodBytes, offset, cmsBytes, 0, cmsBytes.length);
-
-        log.debug("Unwrapped SOD: {} bytes (was {} bytes with wrapper)", cmsBytes.length, sodBytes.length);
-
-        return cmsBytes;
     }
 
     /**

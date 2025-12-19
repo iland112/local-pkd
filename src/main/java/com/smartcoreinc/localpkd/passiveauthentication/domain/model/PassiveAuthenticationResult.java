@@ -56,7 +56,9 @@ public class PassiveAuthenticationResult {
     @Column(name = "errors", columnDefinition = "JSONB")
     private String errorsJson;  // Serialized List<PassiveAuthenticationError>
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+        .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     /**
      * Create a VALID result (all verifications passed).

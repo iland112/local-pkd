@@ -71,6 +71,31 @@ public interface SodParserPort {
     boolean verifySignature(byte[] sodBytes, PublicKey dscPublicKey);
 
     /**
+     * Verifies SOD signature using DSC X509 certificate (recommended).
+     * <p>
+     * This is the recommended method for SOD signature verification as it accepts
+     * the complete DSC certificate, matching the sod_example implementation pattern.
+     * <p>
+     * Verification steps:
+     * 1. Extract SignerInfo from CMSSignedData
+     * 2. Build SignerInformationVerifier with DSC certificate
+     * 3. Verify signature using Bouncy Castle
+     * <p>
+     * This method is preferred over {@link #verifySignature(byte[], PublicKey)} because:
+     * <ul>
+     *   <li>Matches ICAO 9303 reference implementation</li>
+     *   <li>Used by sod_example (SODSignatureVerifier.java)</li>
+     *   <li>Provides better compatibility with CMS signature verification</li>
+     * </ul>
+     *
+     * @param sodBytes Binary SOD data (PKCS#7 SignedData)
+     * @param dscCertificate DSC X509 certificate for verification
+     * @return true if signature is valid, false otherwise
+     * @throws com.smartcoreinc.localpkd.shared.exception.InfrastructureException if verification process fails
+     */
+    boolean verifySignature(byte[] sodBytes, java.security.cert.X509Certificate dscCertificate);
+
+    /**
      * Extracts hash algorithm identifier from SOD.
      * <p>
      * SOD contains a DigestAlgorithmIdentifier which specifies the hash algorithm

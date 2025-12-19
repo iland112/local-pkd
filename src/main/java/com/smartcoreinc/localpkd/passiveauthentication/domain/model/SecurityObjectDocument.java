@@ -75,11 +75,14 @@ public class SecurityObjectDocument {
             throw new DomainException("INVALID_SOD", "SOD data cannot be null or empty");
         }
 
-        // Basic validation: SOD should start with PKCS#7 SignedData tag (0x30)
-        if (sodBytes[0] != 0x30) {
+        // Valid SOD formats:
+        // 1. ICAO 9303 EF.SOD: starts with Tag 0x77 (Application[23])
+        // 2. Raw CMS SignedData: starts with Tag 0x30 (SEQUENCE)
+        int firstByte = sodBytes[0] & 0xFF;
+        if (firstByte != 0x30 && firstByte != 0x77) {
             throw new DomainException(
                 "INVALID_SOD_FORMAT",
-                "SOD data does not appear to be valid PKCS#7 SignedData (expected tag 0x30)"
+                String.format("SOD data does not appear to be valid (expected tag 0x30 or 0x77, got 0x%02X)", firstByte)
             );
         }
     }
