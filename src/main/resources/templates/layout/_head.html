@@ -325,7 +325,7 @@
                   try {
                       const canvas = document.getElementById(canvasId);
                       if (!canvas) {
-                          console.warn(`Canvas element with id '${canvasId}' not found`);
+                          // Silently return null if canvas not found (chart not needed on this page)
                           return null;
                       }
                       const ctx = canvas.getContext('2d');

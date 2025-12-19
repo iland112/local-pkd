@@ -31,18 +31,58 @@
                     <i class="fas fa-home"></i>
                     대시보드
                 </a>
-                <a href="/file/upload"
-                   th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'file-upload' ? 'bg-primary text-primary-content' : 'text-base-content hover:text-primary hover:bg-base-200')"
-                >
-                    <i class="fas fa-file-upload"></i>
-                    파일 업로드
-                </a>
-                <a href="/upload-history"
-                   th:class="'px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 ' + (${currentPage} == 'upload-history' ? 'bg-primary text-primary-content' : 'text-base-content hover:text-primary hover:bg-base-200')"
-                >
-                    <i class="fas fa-history"></i>
-                    업로드 이력
-                </a>
+
+                <!-- PKD Upload 드롭다운 -->
+                <div class="dropdown dropdown-hover">
+                    <label tabindex="0" class="px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 text-base-content hover:text-primary hover:bg-base-200 cursor-pointer">
+                        <i class="fas fa-database"></i>
+                        PKD Upload
+                        <i class="fas fa-chevron-down text-xs"></i>
+                    </label>
+                    <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-300">
+                        <li>
+                            <a href="/file/upload">
+                                <i class="fas fa-file-upload"></i>
+                                파일 업로드
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/upload-history">
+                                <i class="fas fa-history"></i>
+                                업로드 이력
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Passive Authentication 드롭다운 -->
+                <div class="dropdown dropdown-hover">
+                    <label tabindex="0" class="px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 text-base-content hover:text-primary hover:bg-base-200 cursor-pointer">
+                        <i class="fas fa-passport"></i>
+                        PA 검증
+                        <i class="fas fa-chevron-down text-xs"></i>
+                    </label>
+                    <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-300">
+                        <li>
+                            <a href="/pa/verify">
+                                <i class="fas fa-check-circle"></i>
+                                PA 검증 수행
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/pa/history">
+                                <i class="fas fa-history"></i>
+                                검증 이력
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/pa/dashboard">
+                                <i class="fas fa-chart-line"></i>
+                                통계 대시보드
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <!-- 우측 유틸리티 메뉴 -->
@@ -109,6 +149,8 @@
               대시보드
             </a>
         </li>
+
+        <div class="divider">PKD Upload</div>
         <li>
             <a href="/file/upload" th:classappend="${currentPage} == 'file-upload' ? 'active' : ''">
               <i class="fas fa-file-upload"></i>
@@ -121,6 +163,27 @@
               업로드 이력
             </a>
         </li>
+
+        <div class="divider">Passive Authentication</div>
+        <li>
+            <a href="/pa/verify" th:classappend="${currentPage} == 'pa-verify' ? 'active' : ''">
+              <i class="fas fa-check-circle"></i>
+              PA 검증 수행
+            </a>
+        </li>
+        <li>
+            <a href="/pa/history" th:classappend="${currentPage} == 'pa-history' ? 'active' : ''">
+              <i class="fas fa-history"></i>
+              검증 이력
+            </a>
+        </li>
+        <li>
+            <a href="/pa/dashboard" th:classappend="${currentPage} == 'pa-dashboard' ? 'active' : ''">
+              <i class="fas fa-chart-line"></i>
+              통계 대시보드
+            </a>
+        </li>
+
         <div class="divider"></div>
         <li>
             <a @click="showSystemInfo()">
@@ -136,7 +199,7 @@
         </li>
         <li>
             <button @click="$store.theme.toggle()">
-              <i class="fas" :class="$store.theme.darkMode ? 'fa-moon' : 'fa-sun'"></i>
+              <i class="fas fa-spinner" :class="$store.theme.darkMode ? 'fa-moon' : 'fa-sun'"></i>
               <span x-text="$store.theme.darkMode ? '다크 모드' : '라이트 모드'"></span>
             </button>
         </li>
