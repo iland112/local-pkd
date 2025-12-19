@@ -1,8 +1,9 @@
 package com.smartcoreinc.localpkd.passiveauthentication.application.usecase;
 
-import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import com.smartcoreinc.localpkd.passiveauthentication.application.command.PerformPassiveAuthenticationCommand;
+import com.smartcoreinc.localpkd.passiveauthentication.domain.model.CrlCheckResult;
+import com.smartcoreinc.localpkd.passiveauthentication.domain.service.CrlVerificationService;
+import com.smartcoreinc.localpkd.passiveauthentication.infrastructure.cache.CrlCacheService;
 import com.smartcoreinc.localpkd.passiveauthentication.application.exception.PassiveAuthenticationApplicationException;
 import com.smartcoreinc.localpkd.passiveauthentication.application.response.CertificateChainValidationDto;
 import com.smartcoreinc.localpkd.passiveauthentication.application.response.DataGroupValidationDto;
@@ -27,8 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -80,9 +79,10 @@ import java.util.Map;
 public class PerformPassiveAuthenticationUseCase {
 
     private final LdapCscaRepository ldapCscaRepository;
-    private final CertificateRevocationListRepository crlRepository;
     private final SodParserPort sodParser;
     private final PassportDataRepository passportDataRepository;
+    private final CrlCacheService crlCacheService;
+    private final CrlVerificationService crlVerificationService;
 
     /**
      * Executes the Passive Authentication verification process.
@@ -299,22 +299,30 @@ public class PerformPassiveAuthenticationUseCase {
             ));
         }
 
-        // Check CRL (optional - DSC may not have CRL in LDAP)
-        try {
-            var crl = crlRepository.findByIssuerNameAndCountry(cscaSubjectDn, countryCode);
+        // Phase 4.12: CRL Check (RFC 5280, ICAO 9303 Part 12)
+        // Check if DSC certificate is revoked by querying CRL from LDAP/Cache
+        CrlCheckResult crlCheckResult = performCrlCheck(dscX509, cscaX509, cscaSubjectDn, countryCode);
+        crlChecked = !crlCheckResult.hasCrlVerificationFailed();
+        revoked = crlCheckResult.isCertificateRevoked();
 
-            if (crl.isPresent()) {
-                crlChecked = true;
-                // Note: CRL check for SOD-extracted DSC is informational only
-                // We don't have DSC serial number in CRL database
-                log.debug("CRL found for CSCA: {}", cscaSubjectDn);
-            } else {
-                log.debug("No CRL found for CSCA: {}", cscaSubjectDn);
-            }
-
-        } catch (Exception e) {
-            log.warn("CRL check failed", e);
-            validationErrors.append("CRL check failed: ").append(e.getMessage()).append("; ");
+        if (crlCheckResult.isCertificateRevoked()) {
+            log.warn("DSC certificate is REVOKED: serial={}, revocationDate={}, reason={}",
+                dscSerialNumber, crlCheckResult.getRevocationDate(), crlCheckResult.getRevocationReasonText());
+            validationErrors.append("Certificate is revoked: ")
+                .append(crlCheckResult.getRevocationReasonText())
+                .append(" (").append(crlCheckResult.getRevocationDate()).append("); ");
+            errors.add(PassiveAuthenticationError.critical(
+                "CERTIFICATE_REVOKED",
+                String.format("DSC certificate is revoked: %s (Date: %s)",
+                    crlCheckResult.getRevocationReasonText(), crlCheckResult.getRevocationDate())
+            ));
+            chainValid = false;  // Revoked certificate invalidates chain
+        } else if (crlCheckResult.hasCrlVerificationFailed()) {
+            log.warn("CRL verification failed: {}", crlCheckResult.getErrorMessage());
+            validationErrors.append("CRL check failed: ").append(crlCheckResult.getErrorMessage()).append("; ");
+            // Note: CRL verification failure does not invalidate the chain, but is logged
+        } else {
+            log.debug("CRL check passed: DSC certificate is not revoked");
         }
 
         return new CertificateChainValidationDto(
@@ -551,5 +559,65 @@ public class PerformPassiveAuthenticationUseCase {
         }
 
         return PassiveAuthenticationStatus.VALID;
+    }
+
+    /**
+     * Performs CRL (Certificate Revocation List) check for the DSC certificate.
+     *
+     * <p>Implementation follows RFC 5280 and ICAO 9303 Part 12:</p>
+     * <ol>
+     *   <li>Retrieve CRL from LDAP/Cache using CSCA DN and country code</li>
+     *   <li>Verify CRL signature using CSCA public key</li>
+     *   <li>Verify CRL freshness (thisUpdate, nextUpdate)</li>
+     *   <li>Check if DSC serial number is in revoked list</li>
+     * </ol>
+     *
+     * <p>Architecture: Two-tier caching strategy</p>
+     * <ul>
+     *   <li>Tier 1: In-Memory Cache (fast, volatile)</li>
+     *   <li>Tier 2: Database Cache (persistent, fallback)</li>
+     *   <li>Tier 3: LDAP (primary source, slow)</li>
+     * </ul>
+     *
+     * @param dscX509 DSC certificate (to be checked)
+     * @param cscaX509 CSCA certificate (CRL issuer)
+     * @param cscaSubjectDn CSCA Subject DN
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @return CrlCheckResult with verification outcome
+     * @since Phase 4.12
+     */
+    private CrlCheckResult performCrlCheck(
+        X509Certificate dscX509,
+        X509Certificate cscaX509,
+        String cscaSubjectDn,
+        String countryCode
+    ) {
+        log.debug("Starting CRL check for DSC certificate: serial={}", dscX509.getSerialNumber());
+
+        try {
+            // Step 1: Retrieve CRL from LDAP/Cache (two-tier caching)
+            java.util.Optional<java.security.cert.X509CRL> crlOpt =
+                crlCacheService.getCrl(cscaSubjectDn, countryCode);
+
+            if (crlOpt.isEmpty()) {
+                log.debug("CRL not available for CSCA: {}, country: {}", cscaSubjectDn, countryCode);
+                return CrlCheckResult.unavailable(
+                    String.format("CRL not found in LDAP for CSCA: %s (country: %s)", cscaSubjectDn, countryCode)
+                );
+            }
+
+            java.security.cert.X509CRL crl = crlOpt.get();
+            log.debug("CRL retrieved successfully. Issuer: {}, thisUpdate: {}, nextUpdate: {}",
+                crl.getIssuerX500Principal().getName(), crl.getThisUpdate(), crl.getNextUpdate());
+
+            // Step 2-4: Verify CRL and check revocation status
+            return crlVerificationService.verifyCertificate(dscX509, crl, cscaX509);
+
+        } catch (Exception e) {
+            log.error("CRL check failed with exception: serial={}", dscX509.getSerialNumber(), e);
+            return CrlCheckResult.invalid(
+                "CRL verification failed: " + e.getMessage()
+            );
+        }
     }
 }

@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.2
+**Version**: 4.3
 **Last Updated**: 2025-12-19
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.11.5 (Completed)
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.12 (Completed)
 
 ---
 
@@ -49,6 +49,7 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
   - OpenAPI/Swagger Documentation ✅
 
 **완료된 추가 기능**:
+
 - ✅ Phase 4.7: Fix Phase 4.5 Errors & Test Cleanup (COMPLETED - 2025-12-18)
 - ✅ Phase 4.8: H2 Schema Fix & Country Code Support (COMPLETED - 2025-12-18)
 - ✅ Phase 4.9: DSC Extraction from SOD with ICAO 9303 Compliance (COMPLETED - 2025-12-18)
@@ -59,10 +60,15 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
   - ICAO 9303 Tag 0x77 unwrapping
   - RFC 4515 LDAP filter escaping
   - Country code normalization (alpha-3 → alpha-2)
+- ✅ Phase 4.12: CRL Checking Implementation (COMPLETED - 2025-12-19)
+  - CRL LDAP Adapter (RFC 4515 escaping) ✅
+  - CRL Verification Service (RFC 5280 compliance) ✅
+  - Two-Tier Caching (Memory + Database + LDAP) ✅
+  - PA Service Integration (Step 7) ✅
+  - Integration Tests (6/6 passing, 100%) ✅
 
 **진행 예정**:
-- ⏳ Phase 4.12: CRL Checking 구현
-- ⏳ Phase 5: PA UI (전자여권 판독 & PA 수행, PA 수행 이력/통계)
+- ⏳ Phase 4.13: PA UI (전자여권 판독 & PA 수행, PA 수행 이력/통계)
 
 **Tech Stack**:
 - Backend: Spring Boot 3.5.5, Java 21, PostgreSQL 15.14
@@ -522,6 +528,7 @@ mcp__playwright__browser_snapshot()  # UI 상태 캡처
 
 | 문서 | 용도 | 위치 |
 |------|--------|------|
+| **ICAO_9303_PA_CRL_STANDARD** | **ICAO 9303 PA + CRL 표준 절차 (Phase 4.12 필수)** | **docs/ICAO_9303_PA_CRL_STANDARD.md** |
 | **PROJECT_SUMMARY** | 프로젝트 전체 개요 (DB, API, 완료 Phase) | docs/PROJECT_SUMMARY_2025-11-21.md |
 | **TODO_ANALYSIS** | 105개 TODO 분석 (High/Medium/Low 우선순위) | docs/TODO_ANALYSIS.md |
 | **CODE_CLEANUP_REPORT** | 최근 코드 정리 내역 (제거 파일, 빌드 결과) | docs/CODE_CLEANUP_REPORT_2025-11-21.md |
@@ -1340,11 +1347,26 @@ http://172.24.1.6:8081
 
 ### Next Phase: Passive Authentication Phase 4.12 & 5
 
-**Phase 4.12: CRL Checking 구현**
-- ⏳ CRL 조회 로직 구현 (LDAP에서 CRL 조회)
-- ⏳ DSC 인증서 폐기 여부 확인
-- ⏳ CRL 캐싱 전략 구현
-- ⏳ CRL 검증 테스트 작성
+**Phase 4.12: CRL Checking 구현** (⚠️ **ICAO 9303 표준 준수 필수**)
+
+**📖 필수 문서**: [ICAO_9303_PA_CRL_STANDARD.md](docs/ICAO_9303_PA_CRL_STANDARD.md)
+
+**구현 항목**:
+
+- ⏳ CRL LDAP Adapter 구현 (CrlLdapPort, UnboundIdCrlLdapAdapter)
+- ⏳ CRL 검증 서비스 (CrlVerificationService)
+  - CRL 서명 검증 (CSCA public key)
+  - CRL 만료 검증 (thisUpdate, nextUpdate)
+  - DSC 폐기 여부 확인 (serial number)
+- ⏳ CRL 캐싱 전략 (In-memory + Database)
+- ⏳ PassiveAuthenticationService 통합 (Step 7)
+- ⏳ CRL 검증 테스트 작성 (5+ scenarios)
+
+**표준 준수**:
+
+- ICAO Doc 9303 Part 11 & 12
+- RFC 5280 (X.509 CRL Profile)
+- RFC 4515 (LDAP Filter Escaping)
 
 **Phase 5: PA UI 구현**
 - ⏳ 전자여권 판독 & PA 수행 화면
