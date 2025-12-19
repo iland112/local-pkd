@@ -27,7 +27,6 @@ import java.util.Map;
  */
 @Tag(name = "PA UI", description = "Passive Authentication UI 페이지 및 지원 API")
 @Controller
-@RequestMapping("/pa")
 @RequiredArgsConstructor
 @Slf4j
 public class PassiveAuthenticationUiController {
@@ -37,7 +36,7 @@ public class PassiveAuthenticationUiController {
     /**
      * PA Verify Page
      */
-    @GetMapping("/verify")
+    @GetMapping("/pa/verify")
     public String verifyPage() {
         return "pa/verify";
     }
@@ -45,7 +44,7 @@ public class PassiveAuthenticationUiController {
     /**
      * PA History Page
      */
-    @GetMapping("/history")
+    @GetMapping("/pa/history")
     public String historyPage() {
         return "pa/history";
     }
@@ -53,7 +52,7 @@ public class PassiveAuthenticationUiController {
     /**
      * PA Dashboard Page
      */
-    @GetMapping("/dashboard")
+    @GetMapping("/pa/dashboard")
     public String dashboardPage() {
         return "pa/dashboard";
     }
@@ -70,7 +69,7 @@ public class PassiveAuthenticationUiController {
         summary = "테스트 데이터 로드",
         description = "UI 테스트를 위한 실제 여권 칩 데이터 파일 제공 (SOD, DG1, DG2)"
     )
-    @GetMapping("/api/test-data/{scenario}")
+    @GetMapping("/api/pa/test-data/{scenario}")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> getTestData(
         @Parameter(description = "테스트 시나리오", example = "korean-passport")
@@ -138,7 +137,7 @@ public class PassiveAuthenticationUiController {
         summary = "SOD 파싱 (메타데이터 추출)",
         description = "검증 없이 SOD에서 DSC 정보, 해시 알고리즘, Data Group 목록 추출"
     )
-    @PostMapping("/api/parse-sod")
+    @PostMapping("/api/pa/parse-sod")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> parseSod(
         @RequestBody Map<String, String> request
