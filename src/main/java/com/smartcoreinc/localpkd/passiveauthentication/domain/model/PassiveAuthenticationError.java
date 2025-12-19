@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.passiveauthentication.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 @Getter
 @EqualsAndHashCode
 @NoArgsConstructor(access = AccessLevel.PROTECTED)  // For JPA
+@JsonIgnoreProperties(ignoreUnknown = true)  // Ignore unknown fields from old data
 public class PassiveAuthenticationError {
 
     /**

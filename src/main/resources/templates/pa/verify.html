@@ -556,7 +556,8 @@
                   this.sodData = await file.arrayBuffer();
                   this.uploadedFiles.push({ type: 'SOD', name: file.name, size: file.size });
                   await this.loadSodInfo();
-                } else if (fileName.includes('dg1') && fileName.endsWith('.bin')) {
+                } else if (fileName.match(/^dg1\.bin$/)) {
+                  // Exact match for dg1.bin (not dg10, dg11, dg14, etc.)
                   this.dg1File = file;
                   this.dg1Data = await file.arrayBuffer();
                   // Debug: Calculate SHA-256 hash of uploaded DG1
@@ -565,7 +566,8 @@
                   console.log('[DEBUG] DG1 File Size:', file.size, 'bytes');
                   this.uploadedFiles.push({ type: 'DG1', name: file.name, size: file.size });
                   this.dgFiles.push({ number: 1, name: file.name });
-                } else if (fileName.includes('dg2') && fileName.endsWith('.bin')) {
+                } else if (fileName.match(/^dg2\.bin$/)) {
+                  // Exact match for dg2.bin (not dg20, dg21, etc.)
                   this.dg2File = file;
                   this.dg2Data = await file.arrayBuffer();
                   // Debug: Calculate SHA-256 hash of uploaded DG2
@@ -575,8 +577,8 @@
                   this.uploadedFiles.push({ type: 'DG2', name: file.name, size: file.size });
                   this.dgFiles.push({ number: 2, name: file.name });
                 } else if (fileName.startsWith('dg') && fileName.endsWith('.bin')) {
-                  // Handle other DG files (dg3, dg4, etc.)
-                  const match = fileName.match(/dg(\d+)\.bin/);
+                  // Handle other DG files (dg3, dg4, ..., dg14, dg15, dg16, etc.)
+                  const match = fileName.match(/^dg(\d+)\.bin$/);
                   if (match) {
                     const dgNumber = parseInt(match[1]);
                     this.dgFiles.push({ number: dgNumber, name: file.name });
@@ -755,8 +757,11 @@
 
           arrayBufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
-            // Use Array.from to avoid UTF-16 encoding issues
-            const binary = String.fromCharCode(...bytes);
+            // Correct method: Use Array.from().map() to avoid UTF-16 encoding issues
+            // This prevents corruption of binary data with bytes >= 128
+            const binary = Array.from(bytes)
+              .map(byte => String.fromCharCode(byte))
+              .join('');
             return btoa(binary);
           },
 

@@ -397,8 +397,9 @@
     </div>
 
     <!-- Alpine.js Component Script -->
-    <script layout:fragment="scripts">
-      function paHistoryPageState() {
+    <th:block layout:fragment="script-content">
+      <script>
+        function paHistoryPageState() {
         return {
           // Data
           records: [],
@@ -545,6 +546,7 @@
           }
         };
       }
-    </script>
+      </script>
+    </th:block>
   </body>
 </html>

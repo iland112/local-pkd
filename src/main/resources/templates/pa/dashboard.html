@@ -207,8 +207,9 @@
     </div>
 
     <!-- Alpine.js Component Script -->
-    <script layout:fragment="scripts">
-      function paDashboardPageState() {
+    <th:block layout:fragment="script-content">
+      <script>
+        function paDashboardPageState() {
         return {
           // Data
           statistics: {
@@ -284,12 +285,12 @@
             // Today count
             const today = new Date().toISOString().split('T')[0];
             this.statistics.todayCount = records.filter(r =>
-              r.verifiedAt.startsWith(today)
+              r.verificationTimestamp && r.verificationTimestamp.startsWith(today)
             ).length;
 
             // Last verification
             if (records.length > 0) {
-              const last = new Date(records[0].verifiedAt);
+              const last = new Date(records[0].verificationTimestamp);
               const now = new Date();
               const diffMinutes = Math.floor((now - last) / 1000 / 60);
 
@@ -321,11 +322,13 @@
 
             // Count verifications per day
             this.recentVerifications.forEach(r => {
-              const dateStr = r.verifiedAt.split('T')[0];
-              if (dailyMap[dateStr]) {
-                if (r.status === 'VALID') dailyMap[dateStr].valid++;
-                else if (r.status === 'INVALID') dailyMap[dateStr].invalid++;
-                else if (r.status === 'ERROR') dailyMap[dateStr].error++;
+              if (r.verificationTimestamp) {
+                const dateStr = r.verificationTimestamp.split('T')[0];
+                if (dailyMap[dateStr]) {
+                  if (r.status === 'VALID') dailyMap[dateStr].valid++;
+                  else if (r.status === 'INVALID') dailyMap[dateStr].invalid++;
+                  else if (r.status === 'ERROR') dailyMap[dateStr].error++;
+                }
               }
             });
 
@@ -529,6 +532,7 @@
           }
         };
       }
-    </script>
+      </script>
+    </th:block>
   </body>
 </html>
