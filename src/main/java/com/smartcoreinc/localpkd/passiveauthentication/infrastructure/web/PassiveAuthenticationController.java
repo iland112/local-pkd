@@ -126,6 +126,18 @@ public class PassiveAuthenticationController {
             request.dataGroups().forEach((dgNumberStr, base64Data) -> {
                 DataGroupNumber dgNumber = DataGroupNumber.valueOf(dgNumberStr);
                 byte[] dgBytes = Base64.getDecoder().decode(base64Data);
+                
+                // Debug: Log hash of decoded data
+                try {
+                    java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+                    byte[] hash = digest.digest(dgBytes);
+                    String hashHex = bytesToHex(hash);
+                    log.debug("[DEBUG] {} decoded - Size: {} bytes, SHA-256: {}", 
+                        dgNumberStr, dgBytes.length, hashHex);
+                } catch (Exception e) {
+                    log.error("Hash calculation failed", e);
+                }
+                
                 dataGroupBytes.put(dgNumber, dgBytes);
             });
 
@@ -365,5 +377,19 @@ public class PassiveAuthenticationController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Converts byte array to hexadecimal string.
+     *
+     * @param bytes byte array
+     * @return hexadecimal string (lowercase)
+     */
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }
