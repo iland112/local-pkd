@@ -329,7 +329,7 @@ class PassiveAuthenticationControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("VALID"))
             .andExpect(jsonPath("$.verificationId").isNotEmpty())
-            .andExpect(jsonPath("$.issuingCountry").value("KOR"))
+            .andExpect(jsonPath("$.issuingCountry").value("KR"))
             .andExpect(jsonPath("$.documentNumber").value("M12345678"))
             .andExpect(jsonPath("$.certificateChainValidation.valid").value(true))
             .andExpect(jsonPath("$.sodSignatureValidation.valid").value(true))
@@ -395,12 +395,12 @@ class PassiveAuthenticationControllerTest {
         // Given: Perform a verification
         performVerificationAndGetId();
 
-        // When: GET /api/v1/pa/history?issuingCountry=KOR
+        // When: GET /api/v1/pa/history?issuingCountry=KR
         mockMvc.perform(get(API_BASE_PATH + "/history")
-                .param("issuingCountry", "KOR"))
-            // Then: All results should be KOR
+                .param("issuingCountry", "KR"))
+            // Then: All results should be KR (alpha-2 normalized)
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.content[*].issuingCountry", everyItem(equalTo("KOR"))))
+            .andExpect(jsonPath("$.content[*].issuingCountry", everyItem(equalTo("KR"))))
             .andDo(print());
     }
 
@@ -657,23 +657,24 @@ class PassiveAuthenticationControllerTest {
     }
 
     @Test
-    @DisplayName("POST /verify - DSC not found in LDAP should return 404")
-    void shouldReturn404WhenDscNotFound() throws Exception {
-        // Given: Request with DSC that doesn't exist in LDAP
+    @DisplayName("POST /verify - Verification succeeds even when DSC is not in database (ICAO 9303: DSC extracted from SOD)")
+    void shouldVerifySuccessfullyEvenWhenDscNotInDatabase() throws Exception {
+        // Given: Request with valid SOD (DSC is extracted from SOD per ICAO 9303)
         PassiveAuthenticationRequest request = buildValidRequest();
 
         // Clear all DSC certificates from database
+        // This should NOT affect verification because DSC is extracted from SOD
         certificateRepository.findAllByType(CertificateType.DSC)
             .forEach(cert -> certificateRepository.deleteById(cert.getId()));
 
         // When: POST /api/v1/pa/verify
+        // Then: Verification should proceed (DSC extracted from SOD per ICAO 9303 Part 11)
+        // Note: Actual verification result depends on CSCA availability in LDAP for trust chain
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-            // Then: Response should be 404 Not Found
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.errorCode").value("DSC_NOT_FOUND"))
-            .andExpect(jsonPath("$.errorMessage", containsString("DSC 인증서를 OpenLDAP에서 찾을 수 없습니다")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.verificationId").isNotEmpty())
             .andDo(print());
     }
 

@@ -13,8 +13,10 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
@@ -147,6 +149,47 @@ public class GlobalExceptionHandler {
                 .error(ErrorResponse.Error.builder()
                         .code("INVALID_REQUEST")
                         .message(e.getMessage())
+                        .timestamp(LocalDateTime.now())
+                        .build())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .status(HttpStatus.BAD_REQUEST.value())
+                .traceId(UUID.randomUUID().toString())
+                .build();
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+    }
+
+    /**
+     * MethodArgumentTypeMismatchException 처리
+     *
+     * <p>경로 변수나 요청 파라미터의 타입 변환 실패 시 발생 (예: UUID 형식 오류)</p>
+     *
+     * @param e 예외 객체
+     * @param request HTTP 요청
+     * @return 400 Bad Request 응답
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException e,
+            WebRequest request) {
+
+        String paramName = e.getName();
+        String requiredType = e.getRequiredType() != null ? e.getRequiredType().getSimpleName() : "unknown";
+        String actualValue = e.getValue() != null ? e.getValue().toString() : "null";
+
+        log.warn("Type mismatch - parameter: {}, required: {}, actual: {}", paramName, requiredType, actualValue);
+
+        String message = String.format("Invalid value '%s' for parameter '%s'. Expected type: %s",
+                actualValue, paramName, requiredType);
+
+        ErrorResponse response = ErrorResponse.builder()
+                .success(false)
+                .error(ErrorResponse.Error.builder()
+                        .code("INVALID_PARAMETER_FORMAT")
+                        .message(message)
                         .timestamp(LocalDateTime.now())
                         .build())
                 .path(request.getDescription(false).replace("uri=", ""))

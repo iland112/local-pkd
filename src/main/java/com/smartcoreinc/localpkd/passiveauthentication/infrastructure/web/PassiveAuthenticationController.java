@@ -218,24 +218,45 @@ public class PassiveAuthenticationController {
         }
     )
     @GetMapping("/history")
-    public ResponseEntity<java.util.List<PassiveAuthenticationResponse>> getHistory(
+    public ResponseEntity<org.springframework.data.domain.Page<PassiveAuthenticationResponse>> getHistory(
         @Parameter(description = "발급 국가 (ISO 3166-1 alpha-2)", example = "KR")
         @RequestParam(required = false) String issuingCountry,
 
         @Parameter(description = "검증 성공 여부", example = "true")
         @RequestParam(required = false) Boolean success,
 
+        @Parameter(description = "검증 결과 상태 (VALID, INVALID, ERROR)", example = "VALID")
+        @RequestParam(required = false) String status,
+
         @PageableDefault(size = 20, sort = "verifiedAt,desc") Pageable pageable
     ) {
-        log.info("Retrieving Passive Authentication history");
+        log.info("Retrieving Passive Authentication history - country: {}, success: {}, status: {}",
+            issuingCountry, success, status);
 
-        // TODO: Implement filtering and pagination
-        // For now, return all verifications
-        java.util.List<PassiveAuthenticationResponse> history = getPassiveAuthenticationHistoryUseCase.getAll();
+        // Get all verifications (filtering will be applied in-memory for now)
+        java.util.List<PassiveAuthenticationResponse> allHistory = getPassiveAuthenticationHistoryUseCase.getAll();
 
-        log.info("Retrieved {} verification records", history.size());
+        // Apply filters
+        java.util.List<PassiveAuthenticationResponse> filtered = allHistory.stream()
+            .filter(r -> issuingCountry == null || issuingCountry.equals(r.issuingCountry()))
+            .filter(r -> status == null || status.equals(r.status().name()))
+            .toList();
 
-        return ResponseEntity.ok(history);
+        // Apply pagination manually
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+
+        java.util.List<PassiveAuthenticationResponse> pageContent = start < filtered.size()
+            ? filtered.subList(start, end)
+            : java.util.Collections.emptyList();
+
+        org.springframework.data.domain.Page<PassiveAuthenticationResponse> page =
+            new org.springframework.data.domain.PageImpl<>(pageContent, pageable, filtered.size());
+
+        log.info("Retrieved {} verification records (page {} of {})",
+            pageContent.size(), pageable.getPageNumber(), page.getTotalPages());
+
+        return ResponseEntity.ok(page);
     }
 
     /**
