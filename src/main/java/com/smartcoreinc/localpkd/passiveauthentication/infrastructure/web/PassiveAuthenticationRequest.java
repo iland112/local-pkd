@@ -45,13 +45,11 @@ import java.util.Map;
 @Schema(description = "Passive Authentication 검증 요청")
 public record PassiveAuthenticationRequest(
 
-    @Schema(description = "여권 발급 국가 코드 (ISO 3166-1 alpha-3)", example = "KOR", required = true)
-    @NotBlank(message = "발급 국가 코드는 필수입니다")
+    @Schema(description = "여권 발급 국가 코드 (ISO 3166-1 alpha-3)", example = "KOR", required = false)
     @Pattern(regexp = "^[A-Z]{3}$", message = "발급 국가 코드는 ISO 3166-1 alpha-3 형식이어야 합니다 (예: KOR, USA, GBR)")
     String issuingCountry,
 
-    @Schema(description = "여권 번호", example = "M12345678", required = true)
-    @NotBlank(message = "여권 번호는 필수입니다")
+    @Schema(description = "여권 번호", example = "M12345678", required = false)
     @Size(min = 1, max = 20, message = "여권 번호는 1-20자여야 합니다")
     String documentNumber,
 

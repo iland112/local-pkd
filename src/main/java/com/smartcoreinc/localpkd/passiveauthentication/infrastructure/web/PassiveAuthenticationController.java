@@ -141,10 +141,23 @@ public class PassiveAuthenticationController {
             log.info("Extracted DSC from SOD - Subject: {}, Serial: {}",
                 dscInfo.subjectDn(), dscInfo.serialNumber());
 
+            // Extract country code from DSC Subject DN if not provided in request
+            String countryCode = request.issuingCountry();
+            if (countryCode == null || countryCode.isBlank()) {
+                // Extract country from DSC DN (e.g., "C=KR,O=Government,..." -> "KOR")
+                countryCode = extractCountryFromDN(dscInfo.subjectDn());
+            }
+
+            // Use placeholder document number if not provided
+            String docNumber = request.documentNumber();
+            if (docNumber == null || docNumber.isBlank()) {
+                docNumber = "UNKNOWN";
+            }
+
             // Build command using constructor (Record class)
             PerformPassiveAuthenticationCommand command = new PerformPassiveAuthenticationCommand(
-                CountryCode.of(request.issuingCountry()),
-                request.documentNumber(),
+                CountryCode.of(countryCode),
+                docNumber,
                 sodBytes,
                 dscInfo.subjectDn(),
                 dscInfo.serialNumber(),
@@ -305,6 +318,35 @@ public class PassiveAuthenticationController {
         PassiveAuthenticationResponse response = getPassiveAuthenticationHistoryUseCase.getById(verificationId);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Extracts country code from X.509 Distinguished Name.
+     * <p>
+     * Parses DN (e.g., "C=KR,O=Government,OU=MOFA,CN=DS...") and extracts
+     * the country component. CountryCode.of() will handle conversion if needed.
+     *
+     * @param dn X.509 Distinguished Name
+     * @return ISO 3166-1 country code (alpha-2 format, e.g., "KR")
+     * @throws IllegalArgumentException if country code cannot be extracted
+     */
+    private String extractCountryFromDN(String dn) {
+        if (dn == null || dn.isBlank()) {
+            throw new IllegalArgumentException("DN cannot be null or empty");
+        }
+
+        // Extract C=XX from DN (RFC 4514 format)
+        String[] parts = dn.split(",");
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (trimmed.startsWith("C=")) {
+                // Return the alpha-2 code as-is (e.g., "KR")
+                // CountryCode.of() will handle it
+                return trimmed.substring(2).trim();
+            }
+        }
+
+        throw new IllegalArgumentException("Country code not found in DN: " + dn);
     }
 
     /**

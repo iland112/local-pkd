@@ -622,15 +622,15 @@
             try {
               // Prepare request data
               const requestData = {
-                sodBase64: this.arrayBufferToBase64(this.sodData),
+                sod: this.arrayBufferToBase64(this.sodData),
                 dataGroups: {}
               };
 
               if (this.dg1Data) {
-                requestData.dataGroups['1'] = this.arrayBufferToBase64(this.dg1Data);
+                requestData.dataGroups['DG1'] = this.arrayBufferToBase64(this.dg1Data);
               }
               if (this.dg2Data) {
-                requestData.dataGroups['2'] = this.arrayBufferToBase64(this.dg2Data);
+                requestData.dataGroups['DG2'] = this.arrayBufferToBase64(this.dg2Data);
               }
 
               // Call verification API
