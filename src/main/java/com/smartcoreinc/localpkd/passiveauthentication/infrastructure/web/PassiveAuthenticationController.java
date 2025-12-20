@@ -457,4 +457,98 @@ public class PassiveAuthenticationController {
         }
     }
 
+    /**
+     * Retrieves and parses Data Groups for a specific verification.
+     *
+     * <p>This endpoint fetches stored DG data from the database and parses
+     * DG1 (MRZ) and DG2 (Face Image) for display in the history details dialog.</p>
+     *
+     * @param verificationId Verification UUID
+     * @return Parsed DG1 (MRZ fields) and DG2 (face image data URL)
+     */
+    @Operation(
+        summary = "검증 ID별 Data Group 조회",
+        description = "저장된 검증 결과에서 DG1(MRZ)과 DG2(얼굴 이미지)를 파싱하여 반환합니다."
+    )
+    @ApiResponse(responseCode = "200", description = "Data Group 조회 성공")
+    @ApiResponse(responseCode = "404", description = "검증 결과를 찾을 수 없음")
+    @GetMapping("/{verificationId}/datagroups")
+    public ResponseEntity<Map<String, Object>> getDataGroups(
+        @Parameter(description = "검증 ID (UUID)", example = "550e8400-e29b-41d4-a716-446655440000")
+        @PathVariable UUID verificationId
+    ) {
+        log.info("Retrieving data groups for verification ID: {}", verificationId);
+
+        try {
+            // Get PassportData from repository
+            com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassportData passportData =
+                getPassiveAuthenticationHistoryUseCase.getPassportDataById(verificationId);
+
+            if (passportData == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Map<String, Object> result = new HashMap<>();
+
+            // Parse DG1 if available
+            java.util.Optional<com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroup> dg1Opt =
+                passportData.getDataGroup(DataGroupNumber.DG1);
+            if (dg1Opt.isPresent()) {
+                try {
+                    byte[] dg1Content = dg1Opt.get().getContent();
+                    Map<String, String> mrzData = dg1MrzParser.parse(dg1Content);
+                    result.put("dg1", mrzData);
+                    log.debug("DG1 parsed: {} fields", mrzData.size());
+                } catch (Exception e) {
+                    log.warn("Failed to parse DG1 for verification {}: {}", verificationId, e.getMessage());
+                    result.put("dg1", null);
+                    result.put("dg1Error", e.getMessage());
+                }
+            }
+
+            // Parse DG2 if available
+            java.util.Optional<com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroup> dg2Opt =
+                passportData.getDataGroup(DataGroupNumber.DG2);
+            if (dg2Opt.isPresent()) {
+                try {
+                    byte[] dg2Content = dg2Opt.get().getContent();
+                    Map<String, Object> faceData = dg2FaceImageParser.parse(dg2Content);
+
+                    // Convert image bytes to data URL
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> faceImages = (List<Map<String, Object>>) faceData.get("faceImages");
+                    if (faceImages != null && !faceImages.isEmpty()) {
+                        Map<String, Object> firstFace = faceImages.get(0);
+                        byte[] imageBytes = (byte[]) firstFace.get("imageData");
+                        String imageFormat = (String) firstFace.get("imageFormat");
+                        String dataUrl = dg2FaceImageParser.toDataUrl(imageBytes, imageFormat);
+                        firstFace.put("imageDataUrl", dataUrl);
+                        firstFace.remove("imageData"); // Remove binary data
+                    }
+
+                    result.put("dg2", faceData);
+                    log.debug("DG2 parsed: {} face images", faceData.get("faceCount"));
+                } catch (Exception e) {
+                    log.warn("Failed to parse DG2 for verification {}: {}", verificationId, e.getMessage());
+                    result.put("dg2", null);
+                    result.put("dg2Error", e.getMessage());
+                }
+            }
+
+            result.put("verificationId", verificationId.toString());
+            result.put("hasDg1", dg1Opt.isPresent());
+            result.put("hasDg2", dg2Opt.isPresent());
+
+            log.info("Data groups retrieved for verification {}: DG1={}, DG2={}",
+                verificationId, dg1Opt.isPresent(), dg2Opt.isPresent());
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            log.error("Failed to retrieve data groups for verification {}: {}", verificationId, e.getMessage());
+            return ResponseEntity.internalServerError()
+                .body(Map.of("error", "Failed to retrieve data groups: " + e.getMessage()));
+        }
+    }
+
 }

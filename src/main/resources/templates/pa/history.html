@@ -228,7 +228,7 @@
 
                       <!-- Verified At -->
                       <td>
-                        <span class="text-sm" x-text="formatTimestamp(record.verifiedAt)"></span>
+                        <span class="text-sm" x-text="formatTimestamp(record.verificationTimestamp)"></span>
                       </td>
 
                       <!-- Requested By -->
@@ -352,7 +352,7 @@
                   </label>
                   <input
                     type="text"
-                    :value="formatTimestamp(selectedRecord?.verifiedAt)"
+                    :value="formatTimestamp(selectedRecord?.verificationTimestamp)"
                     readonly
                     class="input input-bordered input-sm"
                   />
@@ -368,6 +368,90 @@
                     readonly
                     class="input input-bordered input-sm"
                   />
+                </div>
+              </div>
+
+              <!-- DG1/DG2 Data Display (VALID records only) -->
+              <div x-show="selectedRecord?.status === 'VALID'">
+                <div class="divider">여권 데이터</div>
+
+                <!-- Loading indicator for DG data -->
+                <div x-show="dgLoading" class="flex justify-center py-4">
+                  <span class="loading loading-spinner loading-sm"></span>
+                  <span class="ml-2 text-sm">데이터 로딩 중...</span>
+                </div>
+
+                <!-- Error message for DG data -->
+                <div x-show="dgError && !dgLoading" class="alert alert-warning">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <span x-text="dgError"></span>
+                </div>
+
+                <!-- DG2 (Face Image) + DG1 (MRZ) - Side by Side Layout -->
+                <div x-show="!dgLoading && !dgError && (dgData?.hasDg1 || dgData?.hasDg2)" class="flex flex-row gap-3">
+                  <!-- DG2 Face Image (Left - Compact) -->
+                  <div x-show="dgData?.hasDg2 && dgData?.dg2?.faceImages?.[0]?.imageDataUrl" class="bg-base-200 p-3 rounded-lg flex-shrink-0 w-28">
+                    <div class="border-l-2 border-accent pl-2 h-full">
+                      <div class="font-semibold text-xs mb-2 flex items-center gap-1">
+                        <i class="fas fa-user-circle text-accent text-xs"></i>
+                        DG2
+                      </div>
+                      <div class="flex flex-col items-center">
+                        <img :src="dgData?.dg2?.faceImages?.[0]?.imageDataUrl"
+                             alt="Passport Face Image"
+                             class="w-20 h-24 object-cover rounded shadow border border-accent/30"/>
+                        <div class="mt-1 text-center text-[10px] opacity-70">
+                          <span class="badge badge-xs badge-accent" x-text="dgData?.dg2?.faceImages?.[0]?.imageFormat || 'N/A'"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- DG1 MRZ Data (Right - Expanded) -->
+                  <div x-show="dgData?.hasDg1 && dgData?.dg1" class="bg-base-200 p-3 rounded-lg flex-grow min-w-0">
+                    <div class="border-l-2 border-primary pl-2 h-full">
+                      <div class="font-semibold text-xs mb-2 flex items-center gap-1">
+                        <i class="fas fa-id-card text-primary text-xs"></i>
+                        DG1 - MRZ
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-primary">성</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.surname || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-primary">이름</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.givenNames || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-secondary">여권번호</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.documentNumber || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-secondary">국적</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.nationality || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-info">생년월일</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.dateOfBirth || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="badge badge-xs badge-info">성별</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.sex || '-'"></span>
+                        </div>
+                        <div class="flex items-center gap-1 col-span-2">
+                          <span class="badge badge-xs badge-warning">만료일</span>
+                          <span class="font-mono text-sm" x-text="dgData?.dg1?.expirationDate || '-'"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- No DG data available message -->
+                <div x-show="!dgLoading && !dgError && !dgData?.hasDg1 && !dgData?.hasDg2" class="text-center text-sm opacity-60 py-4">
+                  <i class="fas fa-info-circle mr-1"></i>
+                  저장된 DG 데이터가 없습니다.
                 </div>
               </div>
 
@@ -404,6 +488,11 @@
           // Data
           records: [],
           selectedRecord: null,
+
+          // DG Data for detail modal
+          dgData: null,
+          dgLoading: false,
+          dgError: null,
 
           // Pagination
           currentPage: 0,
@@ -447,7 +536,7 @@
               const params = new URLSearchParams({
                 page: this.currentPage,
                 size: this.pageSize,
-                sort: 'verifiedAt,desc'
+                sort: 'completedAt,desc'
               });
 
               if (this.filters.country) params.append('issuingCountry', this.filters.country);
@@ -530,14 +619,45 @@
             }
           },
 
-          viewDetails(record) {
+          async viewDetails(record) {
             this.selectedRecord = record;
+            this.dgData = null;
+            this.dgError = null;
             this.$refs.detailsModal.showModal();
+
+            // Load DG data for VALID records
+            if (record.status === 'VALID' && record.verificationId) {
+              await this.loadDgData(record.verificationId);
+            }
+          },
+
+          async loadDgData(verificationId) {
+            this.dgLoading = true;
+            this.dgError = null;
+
+            try {
+              const response = await fetch(`/api/pa/${verificationId}/datagroups`);
+
+              if (!response.ok) {
+                throw new Error('Failed to load DG data');
+              }
+
+              this.dgData = await response.json();
+              console.log('DG data loaded:', this.dgData);
+
+            } catch (error) {
+              console.error('Failed to load DG data:', error);
+              this.dgError = 'DG 데이터를 불러올 수 없습니다: ' + error.message;
+            } finally {
+              this.dgLoading = false;
+            }
           },
 
           closeDetailsModal() {
             this.$refs.detailsModal.close();
             this.selectedRecord = null;
+            this.dgData = null;
+            this.dgError = null;
           },
 
           formatTimestamp(timestamp) {

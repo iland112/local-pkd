@@ -81,6 +81,19 @@ public class GetPassiveAuthenticationHistoryUseCase {
     }
 
     /**
+     * Retrieves PassportData domain entity by ID for accessing raw DG data.
+     *
+     * @param verificationId Verification UUID
+     * @return PassportData or null if not found
+     */
+    public PassportData getPassportDataById(UUID verificationId) {
+        log.debug("Retrieving PassportData by ID: {}", verificationId);
+
+        return passportDataRepository.findById(PassportDataId.of(verificationId.toString()))
+            .orElse(null);
+    }
+
+    /**
      * Retrieves all verifications.
      *
      * @return List of PassiveAuthenticationResponse

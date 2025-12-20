@@ -497,93 +497,82 @@
                   <div class="flex-grow">
                     <h3 class="font-bold text-lg">Step 8: Data Group 파싱</h3>
                     <p class="text-sm opacity-70 mb-2">DG1 (MRZ) 및 DG2 (얼굴 이미지) 데이터 추출</p>
-                    <div x-show="steps.dgParsing.status !== 'pending'" class="text-sm space-y-3">
-                      <div x-show="steps.dgParsing.message" class="mb-2" x-text="steps.dgParsing.message"></div>
-                      
-                      <!-- DG1 MRZ Data -->
-                      <div x-show="steps.dgParsing.dg1Data" class="bg-base-200 p-4 rounded-lg space-y-3">
-                        <div class="border-l-4 border-primary pl-3">
-                          <div class="font-semibold text-sm mb-2 flex items-center gap-2">
-                            <i class="fas fa-id-card text-primary"></i>
-                            DG1 - Machine Readable Zone (MRZ)
-                          </div>
-                          <div class="grid grid-cols-2 gap-3 text-xs">
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Document Type</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.documentType || 'N/A'"></code>
+                    <div x-show="steps.dgParsing.status !== 'pending'" class="text-sm">
+                      <div x-show="steps.dgParsing.message" class="mb-3" x-text="steps.dgParsing.message"></div>
+
+                      <!-- DG2 (Face Image) + DG1 (MRZ) - Side by Side Layout -->
+                      <div class="flex flex-row gap-3">
+
+                        <!-- DG2 Face Image (Left - Compact) -->
+                        <div x-show="steps.dgParsing.dg2Data" class="bg-base-200 p-3 rounded-lg flex-shrink-0 w-28">
+                          <div class="border-l-2 border-accent pl-2 h-full">
+                            <div class="font-semibold text-xs mb-2 flex items-center gap-1">
+                              <i class="fas fa-user-circle text-accent text-xs"></i>
+                              DG2
                             </div>
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Document Number</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded font-mono" x-text="steps.dgParsing.dg1Data?.documentNumber || 'N/A'"></code>
-                            </div>
-                            <div class="col-span-2">
-                              <span class="badge badge-xs badge-success">Full Name</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.fullName || 'N/A'"></code>
-                            </div>
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Nationality</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.nationality || 'N/A'"></code>
-                            </div>
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Sex</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.sex || 'N/A'"></code>
-                            </div>
-                            <div>
-                              <span class="badge badge-xs badge-info">Date of Birth</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.dateOfBirth || 'N/A'"></code>
-                            </div>
-                            <div>
-                              <span class="badge badge-xs badge-warning">Expiration Date</span>
-                              <code class="ml-1 bg-base-300 px-2 py-1 rounded" x-text="steps.dgParsing.dg1Data?.expirationDate || 'N/A'"></code>
+
+                            <!-- Face Image Display (Small) -->
+                            <div x-show="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl" class="flex flex-col items-center">
+                              <img
+                                :src="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl"
+                                alt="Passport Face Image"
+                                class="w-20 h-24 object-cover rounded shadow border border-accent/30"
+                              />
+                              <div class="mt-1 text-center text-[10px] opacity-70">
+                                <span class="badge badge-xs badge-accent" x-text="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageFormat || 'N/A'"></span>
+                              </div>
                             </div>
                           </div>
-                          
-                          <!-- Raw MRZ (Expandable) -->
-                          <details class="mt-3">
-                            <summary class="cursor-pointer text-xs hover:text-primary transition-colors">
-                              <i class="fas fa-barcode mr-1"></i>
-                              Raw MRZ Data
-                            </summary>
-                            <pre class="mt-2 bg-base-300 p-2 rounded text-xs font-mono whitespace-pre" x-text="steps.dgParsing.dg1Data?.mrzFull"></pre>
-                          </details>
                         </div>
-                      </div>
 
-                      <!-- DG2 Face Image -->
-                      <div x-show="steps.dgParsing.dg2Data" class="bg-base-200 p-4 rounded-lg space-y-3">
-                        <div class="border-l-4 border-accent pl-3">
-                          <div class="font-semibold text-sm mb-2 flex items-center gap-2">
-                            <i class="fas fa-user-circle text-accent"></i>
-                            DG2 - Face Biometric Image
-                          </div>
-                          
-                          <!-- Image Metadata -->
-                          <div class="grid grid-cols-3 gap-2 mb-3 text-xs">
-                            <div>
-                              <span class="badge badge-xs badge-accent">Format</span>
-                              <code class="ml-1" x-text="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageFormat || 'N/A'"></code>
+                        <!-- DG1 MRZ Data (Right - Expanded) -->
+                        <div x-show="steps.dgParsing.dg1Data" class="bg-base-200 p-3 rounded-lg flex-grow min-w-0">
+                          <div class="border-l-2 border-primary pl-2 h-full">
+                            <div class="font-semibold text-xs mb-2 flex items-center gap-1">
+                              <i class="fas fa-id-card text-primary text-xs"></i>
+                              DG1 - MRZ
                             </div>
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Size</span>
-                              <code class="ml-1" x-text="formatFileSize(steps.dgParsing.dg2Data?.faceImages?.[0]?.imageSize)"></code>
-                            </div>
-                            <div>
-                              <span class="badge badge-xs badge-ghost">Count</span>
-                              <code class="ml-1" x-text="steps.dgParsing.dg2Data?.faceCount || 0"></code>
-                            </div>
-                          </div>
 
-                          <!-- Face Image Display -->
-                          <div x-show="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl" class="mt-3">
-                            <img 
-                              :src="steps.dgParsing.dg2Data?.faceImages?.[0]?.imageDataUrl" 
-                              alt="Passport Face Image"
-                              class="max-w-xs mx-auto rounded-lg shadow-lg border-2 border-accent/30"
-                            />
-                            <p class="text-center text-xs opacity-70 mt-2">
-                              <i class="fas fa-info-circle mr-1"></i>
-                              Biometric face image extracted from ePassport chip
-                            </p>
+                            <!-- MRZ Data Grid (Compact but readable) -->
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                              <div class="col-span-2">
+                                <span class="badge badge-xs badge-success">Name</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm font-semibold" x-text="steps.dgParsing.dg1Data?.fullName || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-primary">Doc No.</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded font-mono text-sm font-semibold" x-text="steps.dgParsing.dg1Data?.documentNumber || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-ghost">Nation</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm font-semibold" x-text="steps.dgParsing.dg1Data?.nationality || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-info">Birth</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm" x-text="steps.dgParsing.dg1Data?.dateOfBirth || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-warning">Expiry</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm" x-text="steps.dgParsing.dg1Data?.expirationDate || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-ghost">Sex</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm" x-text="steps.dgParsing.dg1Data?.sex || 'N/A'"></code>
+                              </div>
+                              <div>
+                                <span class="badge badge-xs badge-ghost">Type</span>
+                                <code class="ml-1 bg-base-300 px-2 py-1 rounded text-sm" x-text="steps.dgParsing.dg1Data?.documentType || 'N/A'"></code>
+                              </div>
+                            </div>
+
+                            <!-- Raw MRZ (Expandable) -->
+                            <details class="mt-2">
+                              <summary class="cursor-pointer text-xs hover:text-primary transition-colors">
+                                <i class="fas fa-barcode mr-1"></i>
+                                Raw MRZ
+                              </summary>
+                              <pre class="mt-1 bg-base-300 p-2 rounded text-xs font-mono whitespace-pre overflow-x-auto" x-text="steps.dgParsing.dg1Data?.mrzFull"></pre>
+                            </details>
                           </div>
                         </div>
                       </div>
@@ -620,7 +609,7 @@
                   </div>
                   <div class="stat bg-base-200 rounded-lg p-4">
                     <div class="stat-title text-xs">검증 시각</div>
-                    <div class="stat-value text-sm" x-text="formatTimestamp(verificationResult?.verifiedAt)"></div>
+                    <div class="stat-value text-sm" x-text="formatTimestamp(verificationResult?.verificationTimestamp)"></div>
                   </div>
                 </div>
 

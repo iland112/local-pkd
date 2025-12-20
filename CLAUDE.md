@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.5
+**Version**: 4.6
 **Last Updated**: 2025-12-20
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.14 (UI Visualization Enhanced)
+**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.16 (History DG Display)
 
 ---
 
@@ -79,13 +79,19 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능을 구현합니다
   - 2 new REST endpoints (/parse-dg1, /parse-dg2) ✅
   - Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS) ✅
   - Professional UI with color coding, animations, expandable sections ✅
-- ✅ Phase 4.15: DG2 Face Image Parsing Bug Fix (COMPLETED - 2025-12-20) **NEW**
+- ✅ Phase 4.15: DG2 Face Image Parsing Bug Fix (COMPLETED - 2025-12-20)
   - Fixed multiple FaceInfo entries issue (2 images → 1 valid image) ✅
   - Implemented size-based filtering (< 100 bytes = metadata) ✅
   - DG2 ASN.1 structure variation handling (4 variations documented) ✅
   - JPEG extraction from ISO/IEC 19794-5 container ✅
   - Face image now displays correctly in browser ✅
   - Comprehensive DG1/DG2 parsing documentation (DG1_DG2_PARSING_GUIDE.md) ✅
+- ✅ Phase 4.16: PA History DG Display (COMPLETED - 2025-12-20) **NEW**
+  - New API endpoint: GET /api/pa/{verificationId}/datagroups ✅
+  - History details dialog shows DG1/DG2 for VALID records ✅
+  - Async DG data loading with loading indicator ✅
+  - Compact side-by-side layout (DG2 face + DG1 MRZ) ✅
+  - Fixed verificationTimestamp field mapping in history.html ✅
 
 **진행 예정**:
 
@@ -1521,13 +1527,56 @@ http://172.24.1.6:8081
 27. ✅ **PA Phase 4.11.5 SOD Parsing Final** (2025-12-19) - ICAO 9303 Tag 0x77 unwrapping, Signature Algorithm OID 수정 (encryptionAlgOID), RFC 4515 LDAP filter escaping, Country code normalization (alpha-3 → alpha-2), Page pagination, UUID validation handler, Jackson JavaTimeModule, 34/34 PA tests passing (100%) (상세 내역: [SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md](docs/SESSION_2025-12-19_PA_PHASE_4_11_5_SOD_PARSING_FINAL.md))
 28. ✅ **PA Phase 4.12 CRL Checking Implementation** (2025-12-19) - CRL LDAP Adapter (RFC 4515 escaping), CRL Verification Service (RFC 5280 compliance), Two-Tier Caching (Memory + Database + LDAP), PA Service Integration (Step 7), Integration Tests (6/6 passing, 100%) (상세 내역: ICAO_9303_PA_CRL_STANDARD.md)
 29. ✅ **PA Phase 4.13 UI Complete** (2025-12-19) - 5 Critical Bug Fixes (DG filename matching, Alpine.js fragment, API field mapping, JSON deserialization), Full E2E Testing with Real Fixtures (dg1.bin, dg2.bin, dg14.bin, sod.bin), PA Verification/History/Dashboard 모두 정상 작동 (상세 내역: [SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md](docs/SESSION_2025-12-19_PA_UI_FIXES_COMPLETE.md))
-30. ✅ **PA Phase 4.14 UI Visualization Enhancement** (2025-12-20 **NEW**) - SOD/DSC Visualization (Steps 1-7 enhanced with ASN.1 tree views, certificate chain diagram, hash comparison cards), Data Group Parsing (Step 8: DG1 MRZ + DG2 Face Image), 2 new parsers (Dg1MrzParser, Dg2FaceImageParser) ~350 LOC, 2 new REST endpoints (/parse-dg1, /parse-dg2), Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS), Professional UI with color coding, animations, expandable sections (상세 내역: [SESSION_2025-12-20_PA_UI_COMPLETE.md](docs/SESSION_2025-12-20_PA_UI_COMPLETE.md))
+30. ✅ **PA Phase 4.14 UI Visualization Enhancement** (2025-12-20) - SOD/DSC Visualization (Steps 1-7 enhanced with ASN.1 tree views, certificate chain diagram, hash comparison cards), Data Group Parsing (Step 8: DG1 MRZ + DG2 Face Image), 2 new parsers (Dg1MrzParser, Dg2FaceImageParser) ~350 LOC, 2 new REST endpoints (/parse-dg1, /parse-dg2), Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS), Professional UI with color coding, animations, expandable sections (상세 내역: [SESSION_2025-12-20_PA_UI_COMPLETE.md](docs/SESSION_2025-12-20_PA_UI_COMPLETE.md))
+31. ✅ **PA Phase 4.16 History DG Display** (2025-12-20 **NEW**) - New API endpoint GET /api/pa/{verificationId}/datagroups, History details dialog shows DG1/DG2 for VALID records, Async DG data loading with loading indicator, Fixed verificationTimestamp field mapping (상세 내역: [SESSION_2025-12-20_PA_HISTORY_DG_DISPLAY.md](docs/SESSION_2025-12-20_PA_HISTORY_DG_DISPLAY.md))
 
-### Current Phase: Passive Authentication Phase 4.14 ✅ COMPLETED
+### Current Phase: Passive Authentication Phase 4.16 ✅ COMPLETED
+
+**목표**: PA History 페이지 DG1/DG2 표시 기능 추가
+
+**완료 내역**:
+
+#### PA History DG Display Feature
+
+**Backend 변경**:
+
+- ✅ **New API Endpoint**: `GET /api/pa/{verificationId}/datagroups`
+  - 저장된 DG 데이터를 조회하여 파싱된 결과 반환
+  - DG1 (MRZ) + DG2 (Face Image) 데이터 포함
+
+- ✅ **UseCase 메서드 추가**: `getPassportDataById()`
+  - PassportData 도메인 엔티티 직접 조회
+  - DG 바이너리 데이터 접근 가능
+
+**Frontend 변경**:
+
+- ✅ **History 상세 다이얼로그 개선**
+  - VALID 레코드 상세 보기 시 DG 데이터 자동 로드
+  - 로딩 인디케이터 및 에러 처리
+  - DG2 (얼굴 이미지) + DG1 (MRZ) 가로 배치
+
+- ✅ **verificationTimestamp 필드 매핑 수정**
+  - 테이블 행, 상세 모달, 정렬 파라미터 3곳 수정
+
+**Code Statistics**:
+
+- Backend: ~80 lines added
+- Frontend: ~115 lines added
+- Total: ~195 lines of code
+
+**구현 위치**:
+
+- [PassiveAuthenticationController.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/infrastructure/web/PassiveAuthenticationController.java) - +1 endpoint
+- [GetPassiveAuthenticationHistoryUseCase.java](src/main/java/com/smartcoreinc/localpkd/passiveauthentication/application/usecase/GetPassiveAuthenticationHistoryUseCase.java) - +1 method
+- [history.html](src/main/resources/templates/pa/history.html) - DG display section
+
+---
+
+### Previous Phase: Passive Authentication Phase 4.14 ✅ COMPLETED
 
 **목표**: PA UI Visualization Enhancement - SOD/DSC Visualization + DG1/DG2 Parsing
 
-**완료 내역**:
+**Phase 4.14 완료 내역**:
 
 #### Part 1: SOD/DSC Visualization Enhancement (Steps 1-7)
 
