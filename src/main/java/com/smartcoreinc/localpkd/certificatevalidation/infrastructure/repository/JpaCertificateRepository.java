@@ -232,6 +232,20 @@ public class JpaCertificateRepository implements CertificateRepository {
         return certificates;
     }
 
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Certificate> findAllById(List<CertificateId> ids) {
+        if (ids == null || ids.isEmpty()) {
+            log.debug("findAllById called with empty/null ids list");
+            return List.of();
+        }
+        log.debug("Finding {} certificates by ID", ids.size());
+        List<Certificate> certificates = jpaRepository.findAllById(ids);
+        log.debug("Found {} certificates out of {} requested", certificates.size(), ids.size());
+        return certificates;
+    }
+
     // ========== Phase 2 - Master List & Source Tracking Query Methods ==========
 
     /**

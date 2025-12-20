@@ -355,6 +355,18 @@ public interface CertificateRepository {
      */
     List<CountryCount> countCertificatesByCountry();
 
+
+    /**
+     * ID 목록으로 Certificate 일괄 조회
+     *
+     * <p>비동기 LDAP 업로드 시 배치 ID 목록으로 인증서를 조회합니다.</p>
+     * <p>MSA 전환 대비: RabbitMQ 메시지에서 받은 ID 목록으로 조회</p>
+     *
+     * @param ids Certificate ID 목록
+     * @return Certificate 목록 (존재하는 것만 반환)
+     */
+    List<Certificate> findAllById(List<CertificateId> ids);
+
     /**
      * 인증서 타입별 Certificate 목록 조회
      *

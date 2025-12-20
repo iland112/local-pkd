@@ -220,6 +220,18 @@ public interface CertificateRevocationListRepository {
      */
     boolean existsByIssuerNameAndCountry(String issuerName, String countryCode);
 
+
+    /**
+     * ID 목록으로 CRL 일괄 조회
+     *
+     * <p>비동기 LDAP 업로드 시 배치 ID 목록으로 CRL을 조회합니다.</p>
+     * <p>MSA 전환 대비: RabbitMQ 메시지에서 받은 ID 목록으로 조회</p>
+     *
+     * @param ids CRL ID 목록
+     * @return CRL 목록 (존재하는 것만 반환)
+     */
+    List<CertificateRevocationList> findAllById(List<CrlId> ids);
+
     /**
      * CRL ID로 삭제
      *

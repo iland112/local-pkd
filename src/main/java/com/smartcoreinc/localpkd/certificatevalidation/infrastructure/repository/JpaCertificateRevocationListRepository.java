@@ -364,6 +364,20 @@ public class JpaCertificateRevocationListRepository implements CertificateRevoca
         return jpaRepository.existsByIssuerName_ValueAndCountryCode_Value(issuerName, countryCode);
     }
 
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CertificateRevocationList> findAllById(List<CrlId> ids) {
+        if (ids == null || ids.isEmpty()) {
+            log.debug("findAllById called with empty/null ids list");
+            return List.of();
+        }
+        log.debug("Finding {} CRLs by ID", ids.size());
+        List<CertificateRevocationList> crls = jpaRepository.findAllById(ids);
+        log.debug("Found {} CRLs out of {} requested", crls.size(), ids.size());
+        return crls;
+    }
+
     /**
      * CRL ID로 삭제
      *
