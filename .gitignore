@@ -41,7 +41,9 @@ node
 *.gz
 *.tmp
 localpkd.*.*
-/log/
+log/
 
-/data/
-/logs/
+data/
+data/uploads/
+logs/
+
