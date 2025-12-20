@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 4.6
+**Version**: 4.7
 **Last Updated**: 2025-12-20
-**Status**: Production Ready (PKD Upload Complete) + Passive Authentication Phase 4.16 (History DG Display)
+**Status**: Production Ready (PKD Upload Complete + Event-Driven LDAP) + Passive Authentication Phase 4.16 (History DG Display)
 
 ---
 
@@ -1543,7 +1543,17 @@ http://172.24.1.6:8081
     - 테스트 결과: File Upload 62개, File Parsing 16개, Cert Validation Domain 31개, Repository 5개 = **114개 성공**
     - (상세 내역: [SESSION_2025-12-20_INTERLEAVED_BATCH_PROCESSING.md](docs/SESSION_2025-12-20_INTERLEAVED_BATCH_PROCESSING.md))
 
-### Current Phase: Interleaved Batch Processing ✅ COMPLETED
+33. ✅ **Event-Driven Architecture for Async LDAP Uploads** (2025-12-20) - MSA 전환 대비 비동기 LDAP 업로드 아키텍처:
+    - `LdapBatchUploadEvent` 도메인 이벤트 - RabbitMQ 전환 대비 Serializable 구현
+    - `AsyncLdapUploadHandler` 비동기 핸들러 - 전용 스레드 풀에서 LDAP 업로드 처리
+    - `LdapUploadAsyncConfig` 스레드 풀 설정 - Core: 4, Max: 8, Queue: 200
+    - `ValidateCertificatesUseCase` 수정 - 동기 LDAP 호출 → 비동기 이벤트 발행
+    - `CertificateRepository/CertificateRevocationListRepository` - `findAllById()` 메서드 추가
+    - 멱등성 보장: batchId 기반 중복 처리 방지
+    - MSA 전환 준비: RabbitMQ Exchange/Routing Key 설계 완료
+    - (상세 내역: [SESSION_2025-12-20_EVENT_DRIVEN_LDAP_ARCHITECTURE.md](docs/SESSION_2025-12-20_EVENT_DRIVEN_LDAP_ARCHITECTURE.md))
+
+### Current Phase: Event-Driven LDAP Architecture ✅ COMPLETED
 
 **목표**: PA History 페이지 DG1/DG2 표시 기능 추가
 
