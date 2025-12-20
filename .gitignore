@@ -33,10 +33,10 @@ build/
 .vscode/
 
 # Excludes for npm
-node_modules
-node
+node_modules/
+/node/
 
-# Exclude for applicaiton log files
+# Exclude for application log files
 *.log
 *.gz
 *.tmp
@@ -47,3 +47,13 @@ localpkd.*.*
 /logs/
 /data/
 /tmp/
+
+# Playwright test artifacts
+/playwright-report/
+/test-results/
+
+# Large test data files (ICAO PKD)
+*.ldif
+*.ml
+!src/main/resources/data/test-*.ldif
+!src/test/resources/**/*.ldif
