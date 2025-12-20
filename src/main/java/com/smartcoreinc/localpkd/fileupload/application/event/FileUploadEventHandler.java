@@ -74,30 +74,37 @@ public class FileUploadEventHandler {
                 throw new RuntimeException("Parsing failed: " + parseResponse.errorMessage());
             }
 
-            // 2. Validate Certificates
-            // LDIF(NC-DATA 포함)처럼 Certificate 테이블에 아직 저장되지 않은 경우에도
-            // ParsedFile에 추출된 인증서가 있으면 항상 검증 단계를 수행하도록 조건을 제거한다.
+            // 2. Validate Certificates + LDAP Upload (Interleaved Batch Processing)
+            // ValidateCertificatesUseCase now performs LDAP upload during batch processing
             ParsedFile parsedFile = parsedFileRepository.findByUploadId(uploadedFile.getId())
                 .orElseThrow(() -> new DomainException("PARSED_FILE_NOT_FOUND", "Parsed file not found for uploadId: " + uploadedFile.getId().getId()));
 
             CertificatesValidatedResponse validationResponse = validateCertificates(
                 uploadedFile.getId().getId(),
-                parsedFile.getId().getId(), // Pass parsedFileId
+                parsedFile.getId().getId(),
                 parseResponse.certificateCount(),
-                parseResponse.crlCount() // Pass crlCount
+                parseResponse.crlCount()
             );
             if (!validationResponse.success()) {
                throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
             }
 
-            // 3. Upload to LDAP
-            com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse ldapResponse = uploadToLdap(
-                uploadedFile,
-                validationResponse
+            // 3. Update status to COMPLETED (LDAP upload already done in validation step)
+            // Note: Interleaved Batch Processing uploads to LDAP during certificate/CRL validation
+            uploadedFile.updateStatusToCompleted();
+            uploadedFileRepository.save(uploadedFile);
+
+            log.info("File processing completed for uploadId={} (Interleaved Batch Processing)", uploadedFile.getId().getId());
+
+            // Send final completion progress
+            progressService.sendProgress(
+                ProcessingProgress.builder()
+                    .uploadId(uploadedFile.getId().getId())
+                    .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
+                    .percentage(100)
+                    .message("파일 처리 완료 (Interleaved Batch Processing)")
+                    .build()
             );
-            if (!ldapResponse.success()) {
-                throw new RuntimeException("LDAP upload failed: " + ldapResponse.errorMessage());
-            }
 
         } catch (Exception e) {
             log.error("Failed to process file for uploadId: {}", event.uploadId().getId(), e);

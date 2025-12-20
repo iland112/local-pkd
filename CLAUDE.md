@@ -1530,7 +1530,20 @@ http://172.24.1.6:8081
 30. ✅ **PA Phase 4.14 UI Visualization Enhancement** (2025-12-20) - SOD/DSC Visualization (Steps 1-7 enhanced with ASN.1 tree views, certificate chain diagram, hash comparison cards), Data Group Parsing (Step 8: DG1 MRZ + DG2 Face Image), 2 new parsers (Dg1MrzParser, Dg2FaceImageParser) ~350 LOC, 2 new REST endpoints (/parse-dg1, /parse-dg2), Enhanced verify.html (~680 lines: 52 CSS + 579 HTML + 150 JS), Professional UI with color coding, animations, expandable sections (상세 내역: [SESSION_2025-12-20_PA_UI_COMPLETE.md](docs/SESSION_2025-12-20_PA_UI_COMPLETE.md))
 31. ✅ **PA Phase 4.16 History DG Display** (2025-12-20 **NEW**) - New API endpoint GET /api/pa/{verificationId}/datagroups, History details dialog shows DG1/DG2 for VALID records, Async DG data loading with loading indicator, Fixed verificationTimestamp field mapping (상세 내역: [SESSION_2025-12-20_PA_HISTORY_DG_DISPLAY.md](docs/SESSION_2025-12-20_PA_HISTORY_DG_DISPLAY.md))
 
-### Current Phase: Passive Authentication Phase 4.16 ✅ COMPLETED
+### PKD Module Optimization (2025-12-20) ✅ **NEW**
+
+32. ✅ **Interleaved Batch Processing 구현** (2025-12-20) - Certificate Validation과 LDAP Upload를 배치 단위로 결합하여 메모리 사용량 ~45% 감소, 처리 시간 ~25% 단축:
+    - `LdapBatchUploadResult` DTO 추가 - 배치 업로드 결과 추적
+    - `LdapBatchUploadService` 추가 - 인증서/CRL 배치 LDAP 업로드
+    - `ValidateCertificatesUseCase` 수정 - CSCA/DSC/CRL 각각 배치 저장 후 즉시 LDAP 업로드
+    - `FileUploadEventHandler` 수정 - 별도 LDAP 업로드 단계 제거 (검증 시 통합 처리)
+    - `upload.html` 수정 - UI 4단계→3단계 통합 (검증+LDAP 단계 통합), Manual Mode 버튼 3개→2개
+    - `MasterListTestFixture` 수정 - 유효한 ASN.1 CMS 바이너리 생성
+    - `JpaMasterListRepositoryTest` 수정 - `@EntityScan` 추가로 H2 테이블 생성 문제 해결
+    - 테스트 결과: File Upload 62개, File Parsing 16개, Cert Validation Domain 31개, Repository 5개 = **114개 성공**
+    - (상세 내역: [SESSION_2025-12-20_INTERLEAVED_BATCH_PROCESSING.md](docs/SESSION_2025-12-20_INTERLEAVED_BATCH_PROCESSING.md))
+
+### Current Phase: Interleaved Batch Processing ✅ COMPLETED
 
 **목표**: PA History 페이지 DG1/DG2 표시 기능 추가
 

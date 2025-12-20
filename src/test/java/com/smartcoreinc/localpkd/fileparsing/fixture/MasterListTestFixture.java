@@ -154,14 +154,34 @@ public class MasterListTestFixture {
     /**
      * CMS Binary Data 생성 (테스트용 더미 데이터)
      *
+     * <p>CMS 형식은 ASN.1 SEQUENCE (0x30)로 시작해야 합니다.
+     * 테스트용으로 유효한 ASN.1 구조의 더미 데이터를 생성합니다.</p>
+     *
      * @param size 바이트 크기
      * @return CmsBinaryData
      */
     private static CmsBinaryData createCmsBinaryData(int size) {
+        if (size < 100) {
+            size = 100; // Minimum size for valid CMS
+        }
+
         byte[] dummyData = new byte[size];
-        for (int i = 0; i < size; i++) {
+
+        // ASN.1 SEQUENCE tag (0x30) - CMS starts with this
+        dummyData[0] = 0x30;
+
+        // ASN.1 long-form length encoding
+        // 0x82 means 2 octets follow for length
+        dummyData[1] = (byte) 0x82;
+        int contentLength = size - 4; // minus header bytes
+        dummyData[2] = (byte) ((contentLength >> 8) & 0xFF);
+        dummyData[3] = (byte) (contentLength & 0xFF);
+
+        // Fill remaining bytes with test data
+        for (int i = 4; i < size; i++) {
             dummyData[i] = (byte) (i % 256);
         }
+
         return CmsBinaryData.of(dummyData);
     }
 

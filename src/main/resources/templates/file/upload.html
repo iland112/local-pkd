@@ -168,42 +168,32 @@
                         </template>
                       </div>
                     </li>
-                    <li class="step mb-4" :class="{
-                          'step-primary': validateStage.status === 'IN_PROGRESS',
-                          'step-success': validateStage.status === 'COMPLETED',
-                          'step-error': validateStage.status === 'FAILED'
-                        }">
-                      <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title">인증서 검증</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="validateStage.message"></div>
-                        <progress class="progress progress-primary w-full" :value="validateStage.percentage" max="100" x-show="validateStage.percentage > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="validateStage.percentage > 0" x-text="validateStage.percentage + '%'"></div>
-                        <template x-if="validateStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="validateStage.details"></div>
-                        </template>
-                      </div>
-                    </li>
+                    <!-- 인증서 검증 + LDAP 저장 (Interleaved Batch Processing) -->
                     <li class="step" :class="{
-                          'step-primary': ldapStage.status === 'IN_PROGRESS',
+                          'step-primary': validateStage.status === 'IN_PROGRESS' || ldapStage.status === 'IN_PROGRESS',
                           'step-success': ldapStage.status === 'COMPLETED',
-                          'step-error': ldapStage.status === 'FAILED'
+                          'step-error': validateStage.status === 'FAILED' || ldapStage.status === 'FAILED'
                         }">
                       <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title">LDAP 저장</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="ldapStage.message"></div>
-                        <progress class="progress progress-primary w-full" :value="ldapStage.percentage" max="100" x-show="ldapStage.percentage > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="ldapStage.percentage > 0" x-text="ldapStage.percentage + '%'"></div>
-                        <template x-if="ldapStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="ldapStage.details"></div>
+                        <div class="step-title">인증서 검증 + LDAP 저장</div>
+                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="getIntegratedStageMessage()"></div>
+                        <progress class="progress progress-primary w-full" :value="getIntegratedStagePercentage()" max="100" x-show="getIntegratedStagePercentage() > 0"></progress>
+                        <div class="text-xs font-mono w-full" x-show="getIntegratedStagePercentage() > 0" x-text="getIntegratedStagePercentage() + '%'"></div>
+                        <template x-if="validateStage.details || ldapStage.details">
+                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full">
+                            <div x-show="validateStage.details" x-html="validateStage.details"></div>
+                            <div x-show="ldapStage.details" class="mt-1 pt-1 border-t border-base-300" x-html="ldapStage.details"></div>
+                          </div>
                         </template>
                       </div>
                     </li>
                   </ul>
 
-                  <!-- Manual Mode Control Panel -->
+                  <!-- Manual Mode Control Panel (Interleaved Batch Processing) -->
                   <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-6 border-t pt-4" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
                     <h4 class="font-bold text-md mb-3">수동 처리 제어</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <p class="text-xs opacity-70 mb-3">검증 단계에서 LDAP 저장이 함께 수행됩니다 (Interleaved Batch Processing)</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <!-- Parse Button -->
                         <button
                             :disabled="parsingCompleted || parsingInProgress"
@@ -215,35 +205,21 @@
                                 'loading': parsingInProgress
                             }">
                             <i x-show="!parsingInProgress" class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
-                            <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '파싱 시작')"></span>
+                            <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '1. 파싱 시작')"></span>
                         </button>
 
-                        <!-- Validate Button -->
+                        <!-- Validate + LDAP Button (Integrated) -->
                         <button
-                            :disabled="!parsingCompleted || validationCompleted || validationInProgress"
+                            :disabled="!parsingCompleted || ldapCompleted || validationInProgress || ldapInProgress"
                             @click="triggerValidate()"
                             class="btn btn-sm"
                             :class="{
-                                'btn-success': validationCompleted,
-                                'btn-primary': parsingCompleted && !validationCompleted && !validationInProgress,
-                                'loading': validationInProgress
-                            }">
-                            <i x-show="!validationInProgress" class="fas" :class="{'fa-check-circle': validationCompleted, 'fa-play': !validationCompleted}"></i>
-                            <span x-text="validationCompleted ? '검증 완료' : (validationInProgress ? '검증 중...' : '검증 시작')"></span>
-                        </button>
-
-                        <!-- LDAP Upload Button -->
-                        <button
-                            :disabled="!validationCompleted || ldapCompleted || ldapInProgress"
-                            @click="triggerLdapUpload()"
-                            class="btn btn-sm"
-                            :class="{
                                 'btn-success': ldapCompleted,
-                                'btn-primary': validationCompleted && !ldapCompleted && !ldapInProgress,
-                                'loading': ldapInProgress
+                                'btn-primary': parsingCompleted && !ldapCompleted && !validationInProgress && !ldapInProgress,
+                                'loading': validationInProgress || ldapInProgress
                             }">
-                            <i x-show="!ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
-                            <span x-text="ldapCompleted ? 'LDAP 저장 완료' : (ldapInProgress ? 'LDAP 저장 중...' : 'LDAP 저장 시작')"></span>
+                            <i x-show="!validationInProgress && !ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
+                            <span x-text="ldapCompleted ? '검증 + LDAP 완료' : ((validationInProgress || ldapInProgress) ? '검증 + LDAP 저장 중...' : '2. 검증 + LDAP 저장')"></span>
                         </button>
                     </div>
                   </div>
@@ -680,6 +656,37 @@
             triggerParse() { this.triggerManualStep('PARSE'); },
             triggerValidate() { this.triggerManualStep('VALIDATE'); },
             triggerLdapUpload() { this.triggerManualStep('UPLOAD_TO_LDAP'); },
+
+            // Helper functions for Interleaved Batch Processing UI
+            getIntegratedStageMessage() {
+                // 검증 + LDAP 통합 단계 메시지
+                if (this.ldapStage.status === 'COMPLETED') {
+                    return '검증 및 LDAP 저장 완료';
+                } else if (this.ldapStage.status === 'IN_PROGRESS') {
+                    return this.ldapStage.message || 'LDAP 저장 중...';
+                } else if (this.validateStage.status === 'IN_PROGRESS') {
+                    return this.validateStage.message || '인증서 검증 중...';
+                } else if (this.validateStage.status === 'COMPLETED') {
+                    return 'LDAP 저장 대기 중...';
+                } else if (this.validateStage.status === 'FAILED' || this.ldapStage.status === 'FAILED') {
+                    return this.validateStage.message || this.ldapStage.message || '처리 실패';
+                }
+                return '파싱 완료 대기 중';
+            },
+
+            getIntegratedStagePercentage() {
+                // 검증 + LDAP 통합 단계 진행률 (검증 50% + LDAP 50%)
+                if (this.ldapStage.status === 'COMPLETED') {
+                    return 100;
+                } else if (this.ldapStage.status === 'IN_PROGRESS') {
+                    return 50 + Math.round(this.ldapStage.percentage / 2);
+                } else if (this.validateStage.status === 'IN_PROGRESS') {
+                    return Math.round(this.validateStage.percentage / 2);
+                } else if (this.validateStage.status === 'COMPLETED') {
+                    return 50;
+                }
+                return 0;
+            },
 
             formatStageDetails(progress) {
                 if (!progress) return '';
