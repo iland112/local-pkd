@@ -7,11 +7,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
-import jakarta.annotation.PostConstruct; // Import PostConstruct
+import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
 
 /**
@@ -72,6 +80,23 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
     // ICAO PKD 원본 Base DN
     private static final String ICAO_BASE_DN = "dc=icao,dc=int";
+
+    /**
+     * 생성된 부모 엔트리 캐시 (성능 최적화)
+     * - 매 업로드마다 동일한 부모 DN을 반복 체크하는 것을 방지
+     * - 배치 시작 시 clearParentCache()로 초기화
+     */
+    private final Set<String> createdParentDnCache = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 이미 존재하는 것으로 확인된 DN 캐시 (중복 체크 최적화)
+     */
+    private final Set<String> existingDnCache = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 병렬 LDAP 업로드를 위한 스레드 풀 크기
+     */
+    private static final int PARALLEL_UPLOAD_THREADS = 8;
 
     /**
      * LDAP 연결 수립 (Connection Pool 생성)
@@ -254,37 +279,223 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
     }
 
     /**
-     * LDIF 엔트리 배치 추가
+     * LDIF 엔트리 배치 추가 (병렬 처리 최적화)
+     *
+     * <p><b>성능 최적화</b>:</p>
+     * <ul>
+     *   <li>Phase 1: 부모 엔트리 캐싱 - 중복 LDAP 조회 제거</li>
+     *   <li>Phase 2: 병렬 처리 - 다중 스레드로 동시 업로드</li>
+     *   <li>Phase 3: 중복 체크 캐싱 - 이미 확인된 DN 스킵</li>
+     * </ul>
      *
      * @param ldifEntries LDIF 엔트리 텍스트 목록
      * @return 추가 성공 횟수
      */
     public int addLdifEntriesBatch(List<String> ldifEntries) {
-        log.info("=== LDIF Batch Add started: {} entries ===", ldifEntries.size());
+        if (ldifEntries == null || ldifEntries.isEmpty()) {
+            return 0;
+        }
 
-        int successCount = 0;
-        int skipCount = 0;
-        int errorCount = 0;
+        long startTime = System.currentTimeMillis();
+        log.info("=== LDIF Batch Add started: {} entries (Parallel Mode) ===", ldifEntries.size());
 
-        for (int i = 0; i < ldifEntries.size(); i++) {
-            String ldifEntry = ldifEntries.get(i);
+        // 캐시 초기화 (새 배치 시작)
+        clearCaches();
+
+        // Phase 1: 모든 엔트리 사전 파싱 및 부모 DN 수집
+        List<ParsedLdifEntry> parsedEntries = new ArrayList<>();
+        Set<String> allParentDns = ConcurrentHashMap.newKeySet();
+
+        for (String ldifEntryText : ldifEntries) {
             try {
-                boolean success = addLdifEntry(ldifEntry);
-                if (success) {
-                    successCount++;
-                } else {
-                    skipCount++;
+                ParsedLdifEntry parsed = parseLdifEntry(ldifEntryText);
+                if (parsed != null) {
+                    parsedEntries.add(parsed);
+                    collectParentDns(parsed.convertedDn, allParentDns);
                 }
             } catch (Exception e) {
-                log.warn("Failed to add LDIF entry [{}]: {}", i + 1, e.getMessage());
-                errorCount++;
+                log.debug("Failed to parse LDIF entry: {}", e.getMessage());
             }
         }
 
-        log.info("LDIF Batch Add completed: {} success, {} skipped, {} errors",
-            successCount, skipCount, errorCount);
+        log.info("Parsed {} entries, {} unique parent DNs to check",
+            parsedEntries.size(), allParentDns.size());
 
-        return successCount;
+        // Phase 2: 부모 엔트리 순차 생성 (계층 구조 보장)
+        ensureAllParentEntriesExist(allParentDns);
+
+        // Phase 3: 데이터 엔트리 병렬 업로드
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger skipCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+
+        int poolSize = Math.min(PARALLEL_UPLOAD_THREADS,
+            connectionPool.getMaximumAvailableConnections());
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+
+        List<CompletableFuture<Void>> futures = parsedEntries.stream()
+            .map(parsed -> CompletableFuture.runAsync(() -> {
+                try {
+                    boolean success = addParsedEntry(parsed);
+                    if (success) {
+                        successCount.incrementAndGet();
+                    } else {
+                        skipCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to add entry: {}", e.getMessage());
+                    errorCount.incrementAndGet();
+                }
+            }, executor))
+            .collect(Collectors.toList());
+
+        // 모든 작업 완료 대기
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        executor.shutdown();
+        try {
+            executor.awaitTermination(5, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Executor interrupted during shutdown");
+        }
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.info("=== LDIF Batch Add completed in {}ms: {} success, {} skipped, {} errors ===",
+            elapsed, successCount.get(), skipCount.get(), errorCount.get());
+
+        return successCount.get();
+    }
+
+    /**
+     * LDIF 엔트리 사전 파싱 (DN 변환 포함)
+     */
+    private ParsedLdifEntry parseLdifEntry(String ldifEntryText) throws LDAPException, IOException {
+        LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(ldifEntryText.getBytes()));
+        try {
+            Entry entry = ldifReader.readEntry();
+            if (entry == null) {
+                return null;
+            }
+
+            String originalDn = entry.getDN();
+            String convertedDn = convertDn(originalDn);
+
+            return new ParsedLdifEntry(convertedDn, entry.getAttributes());
+        } catch (com.unboundid.ldif.LDIFException e) {
+            throw new LDAPException(ResultCode.DECODING_ERROR, "LDIF parsing error: " + e.getMessage(), e);
+        } finally {
+            try {
+                ldifReader.close();
+            } catch (IOException e) {
+                log.debug("Failed to close LDIF reader", e);
+            }
+        }
+    }
+
+    /**
+     * 파싱된 엔트리 추가 (부모 체크 없이)
+     */
+    private boolean addParsedEntry(ParsedLdifEntry parsed) throws LDAPException {
+        // 캐시된 중복 체크
+        if (existingDnCache.contains(parsed.convertedDn)) {
+            return false;
+        }
+
+        // LDAP 중복 체크
+        if (isDuplicateEntry(parsed.convertedDn)) {
+            existingDnCache.add(parsed.convertedDn);
+            return false;
+        }
+
+        // LDAP 추가
+        Entry entry = new Entry(parsed.convertedDn, parsed.attributes);
+        LDAPConnection connection = connectionPool.getConnection();
+        try {
+            AddRequest addRequest = new AddRequest(entry);
+            LDAPResult result = connection.add(addRequest);
+
+            if (result.getResultCode() == ResultCode.SUCCESS) {
+                log.debug("Entry added: {}", parsed.convertedDn);
+                return true;
+            } else if (result.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
+                existingDnCache.add(parsed.convertedDn);
+                return false;
+            } else {
+                log.debug("Failed to add entry: {} ({})", parsed.convertedDn, result.getResultCode());
+                return false;
+            }
+        } finally {
+            connectionPool.releaseConnection(connection);
+        }
+    }
+
+    /**
+     * DN에서 모든 부모 DN 수집
+     */
+    private void collectParentDns(String dn, Set<String> parentDns) {
+        try {
+            DN parsedDn = new DN(dn);
+            DN parent = parsedDn.getParent();
+
+            while (parent != null && !parent.toString().equals(targetBaseDn)) {
+                parentDns.add(parent.toString());
+                parent = parent.getParent();
+            }
+        } catch (LDAPException e) {
+            log.debug("Failed to collect parent DNs for: {}", dn);
+        }
+    }
+
+    /**
+     * 모든 부모 엔트리 생성 (계층 구조 순서 보장)
+     */
+    private void ensureAllParentEntriesExist(Set<String> parentDns) {
+        // DN 길이 순으로 정렬 (짧은 것 먼저 = 상위 계층 먼저)
+        List<String> sortedDns = parentDns.stream()
+            .sorted((a, b) -> Integer.compare(a.length(), b.length()))
+            .collect(Collectors.toList());
+
+        for (String parentDn : sortedDns) {
+            if (createdParentDnCache.contains(parentDn)) {
+                continue; // 이미 생성됨
+            }
+
+            if (!isDuplicateEntry(parentDn)) {
+                try {
+                    createOrganizationalEntry(new DN(parentDn));
+                } catch (LDAPException e) {
+                    if (e.getResultCode() != ResultCode.ENTRY_ALREADY_EXISTS) {
+                        log.debug("Failed to create parent: {}", parentDn);
+                    }
+                }
+            }
+            createdParentDnCache.add(parentDn);
+        }
+
+        log.info("Parent entries ensured: {} DNs processed", sortedDns.size());
+    }
+
+    /**
+     * 캐시 초기화 (새 배치 시작 시 호출)
+     */
+    public void clearCaches() {
+        createdParentDnCache.clear();
+        existingDnCache.clear();
+        log.debug("LDAP caches cleared");
+    }
+
+    /**
+     * 파싱된 LDIF 엔트리 (내부 사용)
+     */
+    private static class ParsedLdifEntry {
+        final String convertedDn;
+        final java.util.Collection<Attribute> attributes;
+
+        ParsedLdifEntry(String convertedDn, java.util.Collection<Attribute> attributes) {
+            this.convertedDn = convertedDn;
+            this.attributes = attributes;
+        }
     }
 
     /**
