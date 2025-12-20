@@ -41,6 +41,8 @@ node
 *.gz
 *.tmp
 localpkd.*.*
+
+# Directories to exclude (root level)
 /log/
 /logs/
 /data/

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html
+  lang="ko"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{layout/main}"
+>
+  <head>
+    <script th:src="@{/webjars/chartjs/4.4.3/dist/chart.umd.min.js}"></script>
+  </head>
+
+  <body>
+    <div layout:fragment="content">
+      <div
+        class="container mx-auto px-4 py-8 max-w-7xl"
+        x-data="paDashboardPageState()"
+        @alpine:init="init()"
+      >
+        <!-- Page Header -->
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-base-content mb-2">
+            <i class="fas fa-chart-line text-primary"></i>
+            Passive Authentication Dashboard
+          </h1>
+          <p class="text-base-content opacity-70">
+            전자여권 검증 통계 및 추이를 시각화합니다.
+          </p>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex gap-2 mb-6">
+          <a href="/pa/verify" class="btn btn-primary">
+            <i class="fas fa-plus-circle mr-2"></i>
+            새 검증 수행
+          </a>
+          <a href="/pa/history" class="btn btn-outline">
+            <i class="fas fa-history mr-2"></i>
+            검증 이력
+          </a>
+          <button @click="refreshDashboard()" :disabled="loading" class="btn btn-ghost">
+            <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+            <span class="ml-2">새로고침</span>
+          </button>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-primary">
+              <i class="fas fa-file-alt text-3xl"></i>
+            </div>
+            <div class="stat-title">총 검증 건수</div>
+            <div class="stat-value text-primary" x-text="statistics.total"></div>
+            <div class="stat-desc">전체 검증 수행 건수</div>
+          </div>
+
+          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-success">
+              <i class="fas fa-check-circle text-3xl"></i>
+            </div>
+            <div class="stat-title">검증 성공률</div>
+            <div class="stat-value text-success" x-text="statistics.successRate + '%'"></div>
+            <div class="stat-desc">
+              <span x-text="statistics.valid + ' / ' + statistics.total + ' 건'"></span>
+            </div>
+          </div>
+
+          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-info">
+              <i class="fas fa-globe text-3xl"></i>
+            </div>
+            <div class="stat-title">검증 국가 수</div>
+            <div class="stat-value text-info" x-text="statistics.countryCount"></div>
+            <div class="stat-desc">서로 다른 발급 국가</div>
+          </div>
+
+          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-warning">
+              <i class="fas fa-clock text-3xl"></i>
+            </div>
+            <div class="stat-title">오늘 검증 건수</div>
+            <div class="stat-value text-warning" x-text="statistics.todayCount"></div>
+            <div class="stat-desc" x-text="'최근 검증: ' + statistics.lastVerification"></div>
+          </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Verification Status Chart -->
+          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="card-body">
+              <h2 class="card-title text-lg">
+                <i class="fas fa-chart-pie text-success"></i>
+                검증 결과 분포
+              </h2>
+              <div class="h-80 flex items-center justify-center">
+                <canvas x-ref="statusChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Country Distribution Chart -->
+          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="card-body">
+              <h2 class="card-title text-lg">
+                <i class="fas fa-globe-americas text-info"></i>
+                국가별 검증 건수 (Top 10)
+              </h2>
+              <div class="h-80 flex items-center justify-center">
+                <canvas x-ref="countryChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="grid grid-cols-1 gap-6 mb-6">
+          <!-- Daily Trend Chart -->
+          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="card-body">
+              <h2 class="card-title text-lg">
+                <i class="fas fa-chart-line text-primary"></i>
+                일별 검증 추이 (최근 30일)
+              </h2>
+              <div class="h-80">
+                <canvas x-ref="trendChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Verifications -->
+        <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">
+              <i class="fas fa-clock text-warning"></i>
+              최근 검증 이력
+              <a href="/pa/history" class="btn btn-sm btn-ghost ml-auto">
+                전체 보기 <i class="fas fa-arrow-right ml-2"></i>
+              </a>
+            </h2>
+
+            <!-- Loading State -->
+            <div x-show="loading" class="flex justify-center py-10">
+              <span class="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+
+            <!-- Empty State -->
+            <div x-show="!loading && recentVerifications.length === 0" class="text-center py-10">
+              <i class="fas fa-inbox text-5xl text-base-content opacity-30 mb-4"></i>
+              <p class="text-lg text-base-content opacity-70">아직 검증 이력이 없습니다</p>
+              <a href="/pa/verify" class="btn btn-primary mt-4">
+                <i class="fas fa-plus-circle mr-2"></i>
+                첫 검증 수행하기
+              </a>
+            </div>
+
+            <!-- Table -->
+            <div x-show="!loading && recentVerifications.length > 0" class="overflow-x-auto">
+              <table class="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th>검증 시각</th>
+                    <th>국가</th>
+                    <th>여권 번호</th>
+                    <th>결과</th>
+                    <th>요청자</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="record in recentVerifications.slice(0, 10)" :key="record.verificationId">
+                    <tr>
+                      <td>
+                        <span class="text-sm" x-text="formatTimestamp(record.verifiedAt)"></span>
+                      </td>
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <span class="fi" :class="'fi-' + record.issuingCountry.toLowerCase()"></span>
+                          <span x-text="record.issuingCountry"></span>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="font-mono text-sm" x-text="record.documentNumber"></span>
+                      </td>
+                      <td>
+                        <span
+                          class="badge badge-sm"
+                          :class="{
+                            'badge-success': record.status === 'VALID',
+                            'badge-error': record.status === 'INVALID',
+                            'badge-warning': record.status === 'ERROR'
+                          }"
+                          x-text="record.status"
+                        ></span>
+                      </td>
+                      <td>
+                        <span class="text-sm" x-text="record.requestedBy || 'anonymous'"></span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alpine.js Component Script -->
+    <th:block layout:fragment="script-content">
+      <script>
+        function paDashboardPageState() {
+        return {
+          // Data
+          statistics: {
+            total: 0,
+            valid: 0,
+            invalid: 0,
+            error: 0,
+            successRate: 0,
+            countryCount: 0,
+            todayCount: 0,
+            lastVerification: 'N/A'
+          },
+          recentVerifications: [],
+          countryStats: {},
+          dailyStats: [],
+
+          // Charts
+          statusChart: null,
+          countryChart: null,
+          trendChart: null,
+
+          // UI State
+          loading: false,
+
+          async init() {
+            console.log('PA Dashboard initialized');
+            await this.loadDashboardData();
+            this.createCharts();
+          },
+
+          async loadDashboardData() {
+            this.loading = true;
+
+            try {
+              // Load recent verifications
+              const historyResponse = await fetch('/api/pa/history?size=100&sort=verifiedAt,desc');
+              if (historyResponse.ok) {
+                const historyData = await historyResponse.json();
+                this.recentVerifications = historyData.content || [];
+                this.calculateStatistics();
+              }
+            } catch (error) {
+              console.error('Failed to load dashboard data:', error);
+            } finally {
+              this.loading = false;
+            }
+          },
+
+          calculateStatistics() {
+            const records = this.recentVerifications;
+
+            // Basic counts
+            this.statistics.total = records.length;
+            this.statistics.valid = records.filter(r => r.status === 'VALID').length;
+            this.statistics.invalid = records.filter(r => r.status === 'INVALID').length;
+            this.statistics.error = records.filter(r => r.status === 'ERROR').length;
+
+            // Success rate
+            this.statistics.successRate = this.statistics.total > 0
+              ? Math.round((this.statistics.valid / this.statistics.total) * 100)
+              : 0;
+
+            // Country count
+            const countries = new Set(records.map(r => r.issuingCountry));
+            this.statistics.countryCount = countries.size;
+
+            // Country stats
+            this.countryStats = {};
+            records.forEach(r => {
+              this.countryStats[r.issuingCountry] = (this.countryStats[r.issuingCountry] || 0) + 1;
+            });
+
+            // Today count
+            const today = new Date().toISOString().split('T')[0];
+            this.statistics.todayCount = records.filter(r =>
+              r.verificationTimestamp && r.verificationTimestamp.startsWith(today)
+            ).length;
+
+            // Last verification
+            if (records.length > 0) {
+              const last = new Date(records[0].verificationTimestamp);
+              const now = new Date();
+              const diffMinutes = Math.floor((now - last) / 1000 / 60);
+
+              if (diffMinutes < 60) {
+                this.statistics.lastVerification = `${diffMinutes}분 전`;
+              } else if (diffMinutes < 1440) {
+                this.statistics.lastVerification = `${Math.floor(diffMinutes / 60)}시간 전`;
+              } else {
+                this.statistics.lastVerification = `${Math.floor(diffMinutes / 1440)}일 전`;
+              }
+            }
+
+            // Daily stats (last 30 days)
+            this.calculateDailyStats();
+          },
+
+          calculateDailyStats() {
+            const dailyMap = {};
+            const last30Days = [];
+
+            // Generate last 30 days
+            for (let i = 29; i >= 0; i--) {
+              const date = new Date();
+              date.setDate(date.getDate() - i);
+              const dateStr = date.toISOString().split('T')[0];
+              last30Days.push(dateStr);
+              dailyMap[dateStr] = { date: dateStr, valid: 0, invalid: 0, error: 0 };
+            }
+
+            // Count verifications per day
+            this.recentVerifications.forEach(r => {
+              if (r.verificationTimestamp) {
+                const dateStr = r.verificationTimestamp.split('T')[0];
+                if (dailyMap[dateStr]) {
+                  if (r.status === 'VALID') dailyMap[dateStr].valid++;
+                  else if (r.status === 'INVALID') dailyMap[dateStr].invalid++;
+                  else if (r.status === 'ERROR') dailyMap[dateStr].error++;
+                }
+              }
+            });
+
+            this.dailyStats = last30Days.map(date => dailyMap[date]);
+          },
+
+          createCharts() {
+            this.createStatusChart();
+            this.createCountryChart();
+            this.createTrendChart();
+          },
+
+          createStatusChart() {
+            if (this.statusChart) {
+              this.statusChart.destroy();
+            }
+
+            // Check if canvas element exists (only on dashboard page)
+            if (!this.$refs.statusChart) {
+              return;
+            }
+
+            const ctx = this.$refs.statusChart.getContext('2d');
+            this.statusChart = new Chart(ctx, {
+              type: 'doughnut',
+              data: {
+                labels: ['Valid', 'Invalid', 'Error'],
+                datasets: [{
+                  data: [
+                    this.statistics.valid,
+                    this.statistics.invalid,
+                    this.statistics.error
+                  ],
+                  backgroundColor: [
+                    'rgb(34, 197, 94)',  // success green
+                    'rgb(239, 68, 68)',  // error red
+                    'rgb(251, 191, 36)'  // warning yellow
+                  ],
+                  borderWidth: 2,
+                  borderColor: this.$store.theme.darkMode ? '#1f2937' : '#ffffff'
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                    labels: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    }
+                  }
+                }
+              }
+            });
+          },
+
+          createCountryChart() {
+            if (this.countryChart) {
+              this.countryChart.destroy();
+            }
+
+            // Check if canvas element exists (only on dashboard page)
+            if (!this.$refs.countryChart) {
+              return;
+            }
+
+            // Get top 10 countries
+            const sortedCountries = Object.entries(this.countryStats)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10);
+
+            const ctx = this.$refs.countryChart.getContext('2d');
+            this.countryChart = new Chart(ctx, {
+              type: 'bar',
+              data: {
+                labels: sortedCountries.map(c => c[0]),
+                datasets: [{
+                  label: '검증 건수',
+                  data: sortedCountries.map(c => c[1]),
+                  backgroundColor: 'rgba(59, 130, 246, 0.8)',  // info blue
+                  borderColor: 'rgb(59, 130, 246)',
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                  legend: {
+                    display: false
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    },
+                    grid: {
+                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
+                    }
+                  },
+                  x: {
+                    ticks: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    },
+                    grid: {
+                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
+                    }
+                  }
+                }
+              }
+            });
+          },
+
+          createTrendChart() {
+            if (this.trendChart) {
+              this.trendChart.destroy();
+            }
+
+            // Check if canvas element exists (only on dashboard page)
+            if (!this.$refs.trendChart) {
+              return;
+            }
+
+            const ctx = this.$refs.trendChart.getContext('2d');
+            this.trendChart = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: this.dailyStats.map(d => {
+                  const date = new Date(d.date);
+                  return (date.getMonth() + 1) + '/' + date.getDate();
+                }),
+                datasets: [
+                  {
+                    label: 'Valid',
+                    data: this.dailyStats.map(d => d.valid),
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    tension: 0.3
+                  },
+                  {
+                    label: 'Invalid',
+                    data: this.dailyStats.map(d => d.invalid),
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.3
+                  },
+                  {
+                    label: 'Error',
+                    data: this.dailyStats.map(d => d.error),
+                    borderColor: 'rgb(251, 191, 36)',
+                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                    tension: 0.3
+                  }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                    labels: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    }
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    },
+                    grid: {
+                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
+                    }
+                  },
+                  x: {
+                    ticks: {
+                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
+                    },
+                    grid: {
+                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
+                    }
+                  }
+                }
+              }
+            });
+          },
+
+          async refreshDashboard() {
+            await this.loadDashboardData();
+            this.createCharts();
+          },
+
+          formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            return new Date(timestamp).toLocaleString('ko-KR');
+          }
+        };
+      }
+      </script>
+    </th:block>
+  </body>
+</html>

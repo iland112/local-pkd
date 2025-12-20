@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head-content">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title th:text="${pageTitle} ?: 'ICAO PKD Download File Manager'">ICAO PKD Download File Manager</title>
+    <link rel="stylesheet" th:href="@{/css/application.css}" />
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}" />
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/css/all.min.css}" />
+
+    <!-- Alpine.js Core -->
+    <script
+      type="text/javascript"
+      th:src="@{/webjars/alpinejs/dist/cdn.min.js}"
+      defer
+    ></script>
+
+    <!-- Global Alpine Store & Components -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('theme', {
+                darkMode: localStorage.getItem('theme') === 'dark' || 
+                          (localStorage.getItem('theme') === null && window.matchMedia('(prefers-color-scheme: dark)').matches),
+
+                init() {
+                    this.updateTheme();
+                    // OS theme change listener
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                        // Only switch if no theme is explicitly set in localStorage
+                        if (localStorage.getItem('theme') === null) {
+                            this.darkMode = e.matches;
+                            this.updateTheme();
+                        }
+                    });
+                },
+
+                toggle() {
+                    this.darkMode = !this.darkMode;
+                    // When toggling, always set a value in localStorage
+                    localStorage.setItem('theme', this.darkMode ? 'dark' : 'winter');
+                    this.updateTheme();
+                },
+                
+                updateTheme() {
+                    // This ensures the theme is set on the HTML tag on initial load and on change
+                    document.documentElement.setAttribute('data-theme', this.darkMode ? 'dark' : 'winter');
+                }
+            });
+
+            Alpine.store('app', {
+              ldapStatus: {
+                connected: false,
+                message: '확인 중...',
+              },
+              ldapTesting: false,
+    
+              async checkLdapStatus() {
+                try {
+                  const response = await fetch('/api/ldap/health'); 
+                  const data = await response.json();
+                  this.ldapStatus.connected = data.success;
+                  this.ldapStatus.message = data.message || '연결 실패';
+                } catch (error) {
+                  console.error('LDAP status check failed:', error);
+                  this.ldapStatus.connected = false;
+                  this.ldapStatus.message = '연결 확인 불가';
+                }
+              },
+    
+              async testLdapConnection() {
+                this.ldapTesting = true;
+                try {
+                  const response = await fetch('/api/ldap/health');
+                  const data = await response.json();
+                  showNotification(data.message, data.success ? 'success' : 'error');
+                  await this.checkLdapStatus();
+                } catch (error) {
+                  showNotification('LDAP 연결 테스트에 실패했습니다.', 'error');
+                } finally {
+                  this.ldapTesting = false;
+                }
+              }
+            });
+        });
+
+        // Global component functions
+        function dashboardApp() {
+            return {
+              // 상태 데이터
+              currentDate: '',
+              currentTime: '',
+              dbConnected: false,
+              dbMessage: '확인 중...',
+              dbTesting: false,
+              statistics: {
+                totalCount: 0,
+                successCount: 0,
+                failedCount: 0,
+                successRate: 0
+              },
+              certificateStatistics: {
+                  totalCertificates: 0,
+                  validCertificates: 0,
+                  invalidCertificates: 0,
+                  totalCrls: 0,
+                  lastUpdated: null,
+                  certificatesByType: {},
+                  certificatesByCountry: {}
+              },
+              recentActivity: [],
+              loadingRecent: false,
+
+              // Chart instances (initialized to null)
+              certificateStatusPieChartInstance: null,
+              certificateTypePieChartInstance: null,
+              certificateCountryBarChartInstance: null,
+
+
+              // 초기화
+              init() {
+                this.updateDateTime();
+                this.checkDatabaseStatus();
+                Alpine.store('app').checkLdapStatus();
+                this.loadStatistics();
+                this.loadRecentActivity();
+                this.loadCertificateStatistics();
+  
+                setInterval(() => this.updateDateTime(), 60000);
+                setInterval(() => {
+                  this.checkDatabaseStatus();
+                  Alpine.store('app').checkLdapStatus();
+                }, 300000);
+
+                this.$watch('$store.theme.darkMode', () => {
+                    this.updateAllChartColors();
+                });
+                
+              },
+  
+              // 날짜/시간 업데이트
+              updateDateTime() {
+                const now = new Date();
+                this.currentDate = now.toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'short'
+                });
+                this.currentTime = now.toLocaleTimeString('ko-KR');
+              },
+  
+              // DB 상태 확인
+              async checkDatabaseStatus() {
+                try {
+                  const response = await fetch('/api/database-health');
+                  const data = await response.json();
+                  this.dbConnected = data.success;
+                  this.dbMessage = data.success ? `${data.database} ${data.version}` : (data.message || '연결 실패');
+                } catch (error) {
+                  console.error('Database status check failed:', error);
+                  this.dbConnected = false;
+                  this.dbMessage = '연결 확인 불가';
+                }
+              },
+  
+              async testDatabaseConnection() {
+                this.dbTesting = true;
+                try {
+                  const response = await fetch('/api/database-health');
+                  const data = await response.json();
+                  showNotification(data.message, data.success ? 'success' : 'error');
+                  this.checkDatabaseStatus();
+                } catch (error) {
+                  showNotification('연결 테스트에 실패했습니다.', 'error');
+                } finally {
+                  this.dbTesting = false;
+                }
+              },
+  
+              // 통계 로드
+              async loadStatistics() {
+                try {
+                  const response = await fetch('/upload-history/statistics');
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.statistics = {
+                      totalCount: data.totalCount || 0,
+                      successCount: data.successCount || 0,
+                      failedCount: data.failedCount || 0,
+                      successRate: 0
+                    };
+                  }
+                } catch (error) {
+                  console.error('Failed to load statistics:', error);
+                }
+              },
+
+              // 이미지 프리로드
+  
+              // 인증서 통계 로드
+              async loadCertificateStatistics() {
+                  try {
+                      const response = await fetch('/api/certificates/statistics'); 
+                      if (response.ok) {
+                          const data = await response.json();
+                          this.certificateStatistics = {
+                              totalCertificates: data.totalCertificates || 0,
+                              validCertificates: data.validCertificates || 0,
+                              invalidCertificates: data.invalidCertificates || 0,
+                              totalCrls: data.totalCrls || 0,
+                              lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : null,
+                              certificatesByType: data.certificatesByType || {},
+                              certificatesByCountry: data.certificatesByCountry || {}
+                          };
+                          
+                          this.$nextTick(() => {
+                              this.createCertificateStatusPieChart();
+                              this.createCertificateTypePieChart();
+                              this.createCertificateCountryBarChart();
+                          });
+
+                      } else {
+                          console.warn('Failed to load certificate statistics, API might not be implemented yet.');
+                      }
+                  } catch (error) {
+                      console.error('Error loading certificate statistics:', error);
+                  }
+              },
+  
+              // 최근 활동 로드
+              async loadRecentActivity() {
+                this.loadingRecent = true;
+                try {
+                  const response = await fetch('/upload-history/recent?limit=5');
+                  if (response.ok) {
+                    const data = await response.json();
+                    this.recentActivity = data.map(item => ({
+                      ...item,
+                      statusDisplay: this.getStatusDisplay(item.status)
+                    }));
+                  }
+                } catch (error) {
+                  console.error('Failed to load recent activity:', error);
+                } finally {
+                  this.loadingRecent = false;
+                }
+              },
+  
+              // 상태 표시명 가져오기
+              getStatusDisplay(status) {
+                const statusMap = {'RECEIVED': '수신됨','VALIDATING': '검증 중','VALIDATED': '검증 완료','PARSING': '파싱 중','PARSED': '파싱 완료','UPLOADING_TO_LDAP': 'LDAP 업로드 중','COMPLETED': '완료','FAILED': '실패'};
+                return statusMap[status] || status;
+              },
+  
+              // 날짜 포맷팅
+              formatDateTime(dateString) {
+                if (!dateString) return '';
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) { // Invalid Date 객체인지 확인
+                  console.error('Invalid date string provided:', dateString);
+                  return 'Invalid Date'; // 또는 다른 적절한 오류 메시지
+                }
+                return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+              },
+
+              // Chart.js Helpers
+              getChartFontColor() {
+                return this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
+              },
+
+              updateAllChartColors() {
+                  try {
+                      const charts = [
+                          this.certificateStatusPieChartInstance,
+                          this.certificateTypePieChartInstance,
+                          this.certificateCountryBarChartInstance
+                      ];
+                      charts.forEach(chart => {
+                          if (chart) {
+                              this.updateChartColors(chart);
+                          }
+                      });
+                  } catch (error) {
+                      console.error('Error updating chart colors:', error);
+                  }
+              },
+
+              updateChartColors(chart) {
+                  if (!chart || !chart.options || !chart.data) {
+                      console.warn('Invalid chart object provided to updateChartColors');
+                      return;
+                  }
+                  try {
+                  const newFontColor = this.getChartFontColor();
+                  chart.options.plugins.legend.labels.color = newFontColor;
+                  if (chart.config.type === 'bar') {
+                      chart.options.scales.x.ticks.color = newFontColor;
+                      chart.options.scales.y.ticks.color = newFontColor;
+                      chart.options.scales.x.title.color = newFontColor;
+                      chart.options.scales.y.title.color = newFontColor;
+                      chart.options.scales.x.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      chart.options.scales.y.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? '#6366F1' : '#4F46E5';
+                      chart.data.datasets[0].borderColor = this.$store.theme.darkMode ? '#4338CA' : '#3730A3';
+                  } else if(chart.config.type === 'pie') {
+                      if(chart.canvas.id === 'certificateStatusPieChart') {
+                          chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'];
+                      } else {
+                          chart.data.datasets[0].backgroundColor = this.getPieChartBackgroundColors(this.$store.theme.darkMode);
+                      }
+                  }
+                  chart.update();
+                  } catch (error) {
+                      console.error('Error updating chart colors:', error);
+                  }
+              },
+              
+              getPieChartBackgroundColors(darkMode = false) {
+                const baseColorsLight = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#8B5CF6', '#F472B6', '#FCD34D', '#34D399'];
+                const baseColorsDark = ['#818CF8', '#F472B6', '#FBBF24', '#34D399', '#F87171', '#60A5FA', '#A78BFA', '#FDCED5', '#FDE047', '#6EE7B7'];
+                return darkMode ? baseColorsDark : baseColorsLight;
+              },
+
+              createOrUpdateChart(canvasId, type, data, options) {
+                  try {
+                      const canvas = document.getElementById(canvasId);
+                      if (!canvas) {
+                          // Silently return null if canvas not found (chart not needed on this page)
+                          return null;
+                      }
+                      const ctx = canvas.getContext('2d');
+                      if (!ctx) {
+                          console.warn(`Could not get 2d context for canvas '${canvasId}'`);
+                          return null;
+                      }
+                      const existingChart = Chart.getChart(ctx);
+                      if (existingChart) {
+                          existingChart.destroy();
+                      }
+                      return new Chart(ctx, { type, data, options });
+                  } catch (error) {
+                      console.error(`Error creating chart '${canvasId}':`, error);
+                      return null;
+                  }
+              },
+
+              // Create Pie Chart for Certificate Status (Valid/Invalid)
+              createCertificateStatusPieChart() {
+                const data = {
+                    labels: ['유효', '무효'],
+                    datasets: [{
+                        data: [this.certificateStatistics.validCertificates, this.certificateStatistics.invalidCertificates],
+                        backgroundColor: this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'],
+                        hoverOffset: 4
+                    }]
+                };
+                const options = this.getPieChartOptions();
+                this.certificateStatusPieChartInstance = this.createOrUpdateChart('certificateStatusPieChart', 'pie', data, options);
+              },
+
+              // Create Pie Chart for Certificate Type Statistics
+              createCertificateTypePieChart() {
+                const labels = Object.keys(this.certificateStatistics.certificatesByType);
+                const dataValues = Object.values(this.certificateStatistics.certificatesByType);
+                const data = {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: this.getPieChartBackgroundColors(this.$store.theme.darkMode),
+                        hoverOffset: 4
+                    }]
+                };
+                const options = this.getPieChartOptions();
+                this.certificateTypePieChartInstance = this.createOrUpdateChart('certificateTypePieChart', 'pie', data, options);
+              },
+
+              // Create Bar Chart for Certificate by Country Statistics
+              createCertificateCountryBarChart() {
+                const labels = Object.keys(this.certificateStatistics.certificatesByCountry);
+                const dataValues = Object.values(this.certificateStatistics.certificatesByCountry);
+                const data = {
+                    labels: labels,
+                    datasets: [{
+                        label: '인증서 수',
+                        data: dataValues,
+                        backgroundColor: this.$store.theme.darkMode ? '#6366F1' : '#4F46E5',
+                        borderColor: this.$store.theme.darkMode ? '#4338CA' : '#3730A3',
+                        borderWidth: 1
+                    }]
+                };
+                const options = this.getBarChartOptions();
+                this.certificateCountryBarChartInstance = this.createOrUpdateChart('certificateCountryBarChart', 'bar', data, options);
+              },
+
+              getPieChartOptions() {
+                return {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: this.getChartFontColor() }},
+                        tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed.toLocaleString()}개` }}
+                    }
+                };
+              },
+
+              getBarChartOptions() {
+                return {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }}
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '국가', color: this.getChartFontColor() }, 
+                            ticks: { 
+                                color: this.getChartFontColor() // Set color for text labels
+                            }, 
+                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
+                        },
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: '인증서 수', color: this.getChartFontColor() }, 
+                            ticks: { color: this.getChartFontColor() }, 
+                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
+                        }
+                    }
+                };
+              }
+            }
+          }
+    </script>
+</head>
+</html>
