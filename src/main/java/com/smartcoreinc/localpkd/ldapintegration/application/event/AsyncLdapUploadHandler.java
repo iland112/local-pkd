@@ -22,8 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -78,6 +80,24 @@ public class AsyncLdapUploadHandler {
     private final Map<UUID, Boolean> processedBatches = new ConcurrentHashMap<>();
 
     /**
+     * uploadId별 타입별 완료된 배치 수 추적
+     * Key: uploadId + "_" + uploadType, Value: AtomicInteger (완료된 배치 수)
+     */
+    private final Map<String, AtomicInteger> completedBatchCounts = new ConcurrentHashMap<>();
+
+    /**
+     * uploadId별 타입별 예상 총 배치 수 추적
+     * Key: uploadId + "_" + uploadType, Value: 예상 총 배치 수
+     */
+    private final Map<String, Integer> expectedBatchCounts = new ConcurrentHashMap<>();
+
+    /**
+     * uploadId별 완료된 타입 추적 (CERTIFICATE, CRL)
+     * Key: uploadId, Value: Set of completed upload types
+     */
+    private final Map<UUID, Set<LdapBatchUploadEvent.UploadType>> completedTypes = new ConcurrentHashMap<>();
+
+    /**
      * 비동기 LDAP 배치 업로드 이벤트 핸들러
      *
      * <p>이벤트 발행 즉시 별도 스레드에서 비동기로 실행됩니다.</p>
@@ -127,6 +147,9 @@ public class AsyncLdapUploadHandler {
             log.info("=== [Async] LDAP Batch Upload Completed ===");
             log.info("BatchId: {}, Success: {}, Skipped: {}, Failed: {}",
                     batchId, result.successCount(), result.skippedCount(), result.failedCount());
+
+            // 마지막 배치 완료 시 LDAP_SAVING_COMPLETED 전송
+            checkAndSendFinalCompletion(event);
 
         } catch (Exception e) {
             log.error("LDAP Batch Upload failed: batchId={}, error={}", batchId, e.getMessage(), e);
@@ -210,6 +233,65 @@ public class AsyncLdapUploadHandler {
             return 100;
         }
         return (int) ((double) event.getBatchNumber() / event.getTotalBatches() * 100);
+    }
+
+    /**
+     * 마지막 배치 완료 시 LDAP_SAVING_COMPLETED 전송
+     *
+     * <p>각 타입(CERTIFICATE, CRL)별로 배치 완료를 추적합니다.</p>
+     * <p>해당 타입의 모든 배치가 완료되면 타입 완료로 표시합니다.</p>
+     * <p>모든 관련 타입이 완료되면 LDAP_SAVING_COMPLETED를 전송합니다.</p>
+     */
+    private void checkAndSendFinalCompletion(LdapBatchUploadEvent event) {
+        UUID uploadId = event.getUploadId();
+        LdapBatchUploadEvent.UploadType uploadType = event.getUploadType();
+        String typeKey = uploadId.toString() + "_" + uploadType.name();
+
+        // 예상 총 배치 수 등록 (해당 타입의 첫 번째 이벤트에서)
+        expectedBatchCounts.putIfAbsent(typeKey, event.getTotalBatches());
+
+        // 완료된 배치 수 증가
+        AtomicInteger counter = completedBatchCounts.computeIfAbsent(typeKey, k -> new AtomicInteger(0));
+        int completedCount = counter.incrementAndGet();
+        int expectedTotal = expectedBatchCounts.get(typeKey);
+
+        log.debug("Batch completion progress: uploadId={}, type={}, completed={}/{}",
+                uploadId, uploadType, completedCount, expectedTotal);
+
+        // 해당 타입의 모든 배치가 완료되면 타입 완료로 표시
+        if (completedCount >= expectedTotal) {
+            log.info("All {} batches completed for uploadId={} ({}/{} batches)",
+                    uploadType, uploadId, completedCount, expectedTotal);
+
+            // 완료된 타입 등록
+            Set<LdapBatchUploadEvent.UploadType> completed = completedTypes.computeIfAbsent(
+                    uploadId, k -> ConcurrentHashMap.newKeySet());
+            completed.add(uploadType);
+
+            // 타입별 캐시 정리
+            completedBatchCounts.remove(typeKey);
+            expectedBatchCounts.remove(typeKey);
+
+            // 모든 타입이 완료되었는지 확인
+            // Note: CERTIFICATE 타입은 CSCA + DSC를 모두 포함하고 있음
+            // CRL이 있는 경우에만 CRL 타입 완료를 기다림
+            boolean allTypesCompleted = completed.contains(LdapBatchUploadEvent.UploadType.CERTIFICATE);
+            // CRL은 선택적 (CRL이 없는 파일도 있음)
+
+            if (allTypesCompleted) {
+                log.info("All LDAP types completed for uploadId={}, sending LDAP_SAVING_COMPLETED", uploadId);
+
+                progressService.sendProgress(ProcessingProgress.builder()
+                        .uploadId(uploadId)
+                        .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
+                        .percentage(100)
+                        .message("LDAP 저장 완료")
+                        .build());
+
+                // 완료된 uploadId 정리
+                completedTypes.remove(uploadId);
+            }
+        }
     }
 
     /**

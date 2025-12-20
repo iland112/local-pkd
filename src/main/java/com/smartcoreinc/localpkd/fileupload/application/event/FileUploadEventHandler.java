@@ -89,22 +89,14 @@ public class FileUploadEventHandler {
                throw new RuntimeException("Validation failed: " + validationResponse.errorMessage());
             }
 
-            // 3. Update status to COMPLETED (LDAP upload already done in validation step)
-            // Note: Interleaved Batch Processing uploads to LDAP during certificate/CRL validation
+            // 3. Update status to COMPLETED
+            // Note: LDAP upload is processed asynchronously via LdapBatchUploadEvent
+            // AsyncLdapUploadHandler will send LDAP_SAVING_COMPLETED when all batches are done
             uploadedFile.updateStatusToCompleted();
             uploadedFileRepository.save(uploadedFile);
 
-            log.info("File processing completed for uploadId={} (Interleaved Batch Processing)", uploadedFile.getId().getId());
-
-            // Send final completion progress
-            progressService.sendProgress(
-                ProcessingProgress.builder()
-                    .uploadId(uploadedFile.getId().getId())
-                    .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
-                    .percentage(100)
-                    .message("파일 처리 완료 (Interleaved Batch Processing)")
-                    .build()
-            );
+            log.info("File processing completed for uploadId={} (Async LDAP upload in progress)", uploadedFile.getId().getId());
+            // Note: LDAP_SAVING_COMPLETED SSE is sent by AsyncLdapUploadHandler when all LDAP batches complete
 
         } catch (Exception e) {
             log.error("Failed to process file for uploadId: {}", event.uploadId().getId(), e);
