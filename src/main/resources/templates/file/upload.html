@@ -364,6 +364,9 @@
             // Error collection
             errorMessages: [],
 
+            // Toast duplicate prevention - track shown notifications
+            shownNotifications: new Set(),
+
             init() {
               this.$el.addEventListener('processing-mode-changed', (event) => {
                   this.processingMode = event.detail.mode;
@@ -396,6 +399,7 @@
                 this.validationInProgress = false;
                 this.ldapInProgress = false;
                 this.errorMessages = [];
+                this.shownNotifications = new Set(); // Reset shown notifications
                 this.fileName = ''; // Reset fileName here too
             },
 
@@ -566,14 +570,18 @@
                     this[completedMap[progress.status]] = true;
                     if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = false;
 
-                    // Show completion notification for each stage
-                    const stageNames = {
-                        'PARSING_COMPLETED': '파싱',
-                        'VALIDATION_COMPLETED': '검증',
-                        'LDAP_SAVING_COMPLETED': 'LDAP 저장'
-                    };
-                    if (stageNames[progress.status]) {
-                        showNotification(`${stageNames[progress.status]} 단계가 완료되었습니다.`, 'success');
+                    // Show completion notification for each stage (only once per status)
+                    const notificationKey = `${progress.uploadId}_${progress.status}`;
+                    if (!this.shownNotifications.has(notificationKey)) {
+                        this.shownNotifications.add(notificationKey);
+                        const stageNames = {
+                            'PARSING_COMPLETED': '파싱',
+                            'LDAP_SAVING_COMPLETED': '검증 + LDAP 저장'  // Interleaved: 검증과 LDAP이 통합됨
+                        };
+                        // Note: VALIDATION_COMPLETED는 중간 단계이므로 토스트 표시하지 않음 (LDAP_SAVING_COMPLETED에서 통합 표시)
+                        if (stageNames[progress.status]) {
+                            showNotification(`${stageNames[progress.status]} 단계가 완료되었습니다.`, 'success');
+                        }
                     }
                 }
                 
@@ -608,7 +616,7 @@
                     stages.forEach(stage => {
                         // Only update stages that were actually involved in processing.
                         // For stages that were never "active" (e.g. manual mode steps not triggered), leave them as is.
-                        if (stage.status !== 'IDLE') { 
+                        if (stage.status !== 'IDLE') {
                             stage.percentage = 100;
                             stage.status = 'COMPLETED';
                         }
@@ -618,7 +626,12 @@
                         if (stage.status !== 'IDLE' && stage.status !== 'COMPLETED') stage.status = 'FAILED';
                     });
                 }
-                showNotification(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
+                // Show final notification only once (prevent duplicate with stage completion toasts)
+                const finalNotificationKey = `${progress.uploadId}_FINALIZED`;
+                if (!this.shownNotifications.has(finalNotificationKey)) {
+                    this.shownNotifications.add(finalNotificationKey);
+                    showNotification(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
+                }
             },
             
             async triggerManualStep(step) {

@@ -146,7 +146,8 @@ public class FileUploadEventHandler {
             uploadedFile.updateStatusToParsed();
             uploadedFileRepository.save(uploadedFile);
 
-            progressService.sendProgress(ProcessingProgress.parsingCompleted(uploadedFile.getId().getId(), response.certificateCount()));
+            // Note: PARSING_COMPLETED SSE is already sent by ParseLdifFileUseCase/ParseMasterListFileUseCase
+            // Removed duplicate: progressService.sendProgress(ProcessingProgress.parsingCompleted(...))
             log.info("Parsing completed successfully for uploadId={}", uploadedFile.getId().getId());
         } else {
             // Update status to FAILED on parsing error
