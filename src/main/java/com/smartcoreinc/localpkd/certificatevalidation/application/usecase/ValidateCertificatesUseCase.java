@@ -21,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,7 +36,6 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -790,10 +788,7 @@ public class ValidateCertificatesUseCase {
             String issuerDN = certData.getIssuerDN();
             log.debug("Finding CSCA for DSC validation from cache: issuerDN={}", issuerDN);
 
-            // ❌ 기존: DB 조회
-            // Optional<Certificate> cscaCertOpt = certificateRepository.findBySubjectDn(issuerDN);
-
-            // ✅ 개선: 캐시 조회 (메모리 Map lookup - 0.001ms)
+            // CSCA 캐시 조회 (메모리 Map lookup)
             Certificate cscaCert = cscaCache.get(issuerDN);
 
             if (cscaCert == null) {
@@ -1145,9 +1140,7 @@ public class ValidateCertificatesUseCase {
     private Map<String, Certificate> buildCscaCache(UUID uploadId) {
         log.debug("Building CSCA cache for uploadId: {} (loading ALL CSCAs from database)", uploadId);
 
-        // ✅ 전체 DB의 모든 CSCA 인증서 조회 (단일 쿼리)
-        // ❌ 이전: findByUploadId(uploadId) - 현재 업로드만 조회
-        // ✅ 개선: findAllByType(CSCA) - 전체 DB의 모든 CSCA 조회
+        // 전체 DB의 모든 CSCA 인증서 조회 (단일 쿼리)
         List<Certificate> allCscas = certificateRepository.findAllByType(CertificateType.CSCA);
 
         // CSCA를 SubjectDN 기준으로 Map 구축

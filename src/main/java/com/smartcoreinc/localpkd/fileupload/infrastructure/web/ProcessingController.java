@@ -6,8 +6,6 @@ import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseLdifFileUs
 import com.smartcoreinc.localpkd.fileparsing.application.usecase.ParseMasterListFileUseCase;
 import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingResponse;
 import com.smartcoreinc.localpkd.fileupload.application.response.ProcessingStatusResponse;
-import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
-import com.smartcoreinc.localpkd.fileupload.domain.model.FilePath;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.port.FileStoragePort;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
