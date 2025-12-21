@@ -305,6 +305,10 @@ public class PerformPassiveAuthenticationUseCase {
         crlChecked = !crlCheckResult.hasCrlVerificationFailed();
         revoked = crlCheckResult.isCertificateRevoked();
 
+        // CRL 상태 및 상세 메시지 설정
+        String crlStatus = crlCheckResult.getStatus().name();
+        String crlMessage = buildCrlMessage(crlCheckResult, cscaSubjectDn, countryCode);
+
         if (crlCheckResult.isCertificateRevoked()) {
             log.warn("DSC certificate is REVOKED: serial={}, revocationDate={}, reason={}",
                 dscSerialNumber, crlCheckResult.getRevocationDate(), crlCheckResult.getRevocationReasonText());
@@ -335,6 +339,8 @@ public class PerformPassiveAuthenticationUseCase {
             dscNotAfter,
             crlChecked,
             revoked,
+            crlStatus,
+            crlMessage,
             validationErrors.length() > 0 ? validationErrors.toString() : null
         );
     }
@@ -619,5 +625,53 @@ public class PerformPassiveAuthenticationUseCase {
                 "CRL verification failed: " + e.getMessage()
             );
         }
+    }
+
+    /**
+     * Builds a user-friendly CRL status message based on the check result.
+     *
+     * @param crlResult CRL check result
+     * @param cscaSubjectDn CSCA Subject DN (for context)
+     * @param countryCode Country code (for context)
+     * @return Human-readable CRL status message
+     */
+    private String buildCrlMessage(CrlCheckResult crlResult, String cscaSubjectDn, String countryCode) {
+        return switch (crlResult.getStatus()) {
+            case VALID -> "CRL 확인 완료 - DSC 인증서가 폐기되지 않음";
+            case REVOKED -> String.format("인증서 폐기됨 - 사유: %s, 폐기일: %s",
+                crlResult.getRevocationReasonText(),
+                crlResult.getRevocationDate() != null ? crlResult.getRevocationDate().toString() : "알 수 없음");
+            case CRL_UNAVAILABLE -> String.format("LDAP에서 해당 CSCA의 CRL을 찾을 수 없음 (CSCA: %s, 국가: %s)",
+                extractCn(cscaSubjectDn), countryCode);
+            case CRL_EXPIRED -> "CRL이 만료됨 - nextUpdate 시간이 지남";
+            case CRL_INVALID -> String.format("CRL 검증 실패: %s",
+                crlResult.getErrorMessage() != null ? crlResult.getErrorMessage() : "서명 검증 실패");
+        };
+    }
+
+    /**
+     * Extracts CN (Common Name) from a DN string for display purposes.
+     *
+     * @param dn Distinguished Name (e.g., "CN=CSCA003,OU=MOFA,O=Government,C=KR")
+     * @return CN value or original DN if CN not found
+     */
+    private String extractCn(String dn) {
+        if (dn == null || dn.isEmpty()) {
+            return "Unknown";
+        }
+        // Simple extraction: find CN= and extract until comma
+        int cnStart = dn.indexOf("CN=");
+        if (cnStart == -1) {
+            cnStart = dn.indexOf("cn=");
+        }
+        if (cnStart == -1) {
+            return dn;  // Return full DN if no CN found
+        }
+        int valueStart = cnStart + 3;
+        int valueEnd = dn.indexOf(',', valueStart);
+        if (valueEnd == -1) {
+            valueEnd = dn.length();
+        }
+        return dn.substring(valueStart, valueEnd);
     }
 }

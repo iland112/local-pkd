@@ -4,6 +4,7 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.response.Cert
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCount;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.TypeCount;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository;
 import com.smartcoreinc.localpkd.fileparsing.infrastructure.repository.SpringDataParsedFileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ public class GetCertificateStatisticsUseCase {
 
     private final SpringDataParsedFileRepository springDataParsedFileRepository;
     private final CertificateRepository certificateRepository;
+    private final MasterListRepository masterListRepository;
 
     public CertificateStatisticsResponse execute() {
         long totalCertificates = certificateRepository.countAllBy();
@@ -35,6 +37,12 @@ public class GetCertificateStatisticsUseCase {
         // CRL 개수 추가
         if (totalCrls > 0) {
             certificatesByType.put("CRL", totalCrls);
+        }
+
+        // Master List 개수 추가
+        long totalMasterLists = masterListRepository.count();
+        if (totalMasterLists > 0) {
+            certificatesByType.put("Master List", totalMasterLists);
         }
 
         List<CountryCount> countryCounts = certificateRepository.countCertificatesByCountry();

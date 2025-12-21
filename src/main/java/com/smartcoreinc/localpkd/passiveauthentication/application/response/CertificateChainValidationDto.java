@@ -19,6 +19,15 @@ import java.time.LocalDateTime;
  *   <li>Verify CSCA is self-signed (if root CA)</li>
  * </ol>
  *
+ * <h3>CRL Status Values:</h3>
+ * <ul>
+ *   <li>VALID: CRL 확인 완료, 인증서 폐기되지 않음</li>
+ *   <li>REVOKED: 인증서가 폐기됨</li>
+ *   <li>CRL_UNAVAILABLE: LDAP에서 CRL을 찾을 수 없음</li>
+ *   <li>CRL_EXPIRED: CRL이 만료됨</li>
+ *   <li>CRL_INVALID: CRL 서명 검증 실패</li>
+ * </ul>
+ *
  * @param valid True if certificate chain is valid
  * @param dscSubject DSC Subject DN
  * @param dscSerialNumber DSC serial number (hex string)
@@ -26,8 +35,10 @@ import java.time.LocalDateTime;
  * @param cscaSerialNumber CSCA serial number (hex string)
  * @param notBefore DSC validity start date
  * @param notAfter DSC validity end date
- * @param crlChecked True if CRL was checked
+ * @param crlChecked True if CRL was checked successfully
  * @param revoked True if DSC is revoked
+ * @param crlStatus CRL check status (VALID, REVOKED, CRL_UNAVAILABLE, CRL_EXPIRED, CRL_INVALID)
+ * @param crlMessage Detailed CRL check message (e.g., reason for unavailability)
  * @param validationErrors Validation error messages (if any)
  */
 public record CertificateChainValidationDto(
@@ -42,6 +53,8 @@ public record CertificateChainValidationDto(
     LocalDateTime notAfter,
     boolean crlChecked,
     boolean revoked,
+    String crlStatus,
+    String crlMessage,
     String validationErrors
 ) {
 }

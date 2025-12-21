@@ -125,7 +125,7 @@ public class LdapUploadEventHandler {
                         .uploadId(event.getUploadId())
                         .stage(ProcessingStage.COMPLETED)
                         .percentage(100)
-                        .message(String.format("처리 완료: %d개 인증서, %d개 CRL 업로드됨",
+                        .message(String.format("처리 완료: %d개 DSC, %d개 CRL 업로드됨",
                                 event.getUploadedCertificateCount(),
                                 event.getUploadedCrlCount()))
                         .processedCount(event.getTotalUploaded())

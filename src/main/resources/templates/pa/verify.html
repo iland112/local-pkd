@@ -928,13 +928,35 @@
               this.steps.dataGroupHash.details = dgDetails;
             }
 
-            // Step 7: CRL Check
+            // Step 7: CRL Check - 상세 상태 표시
             const crlChecked = certChain?.crlChecked || false;
             const revoked = certChain?.revoked || false;
-            this.steps.crlCheck.status = crlChecked && !revoked ? 'success' : (revoked ? 'error' : 'success');
-            this.steps.crlCheck.message = crlChecked 
-              ? (revoked ? '✗ 인증서가 폐기되었습니다' : '✓ CRL 확인 완료 - 폐기되지 않음')
-              : '⚠ CRL 확인 생략됨';
+            const crlStatus = certChain?.crlStatus || 'UNKNOWN';
+            const crlMessage = certChain?.crlMessage || '';
+
+            // CRL 상태에 따른 status 및 message 설정
+            if (crlStatus === 'VALID') {
+              this.steps.crlCheck.status = 'success';
+              this.steps.crlCheck.message = '✓ ' + crlMessage;
+            } else if (crlStatus === 'REVOKED') {
+              this.steps.crlCheck.status = 'error';
+              this.steps.crlCheck.message = '✗ ' + crlMessage;
+            } else if (crlStatus === 'CRL_UNAVAILABLE') {
+              this.steps.crlCheck.status = 'warning';
+              this.steps.crlCheck.message = '⚠ ' + crlMessage;
+            } else if (crlStatus === 'CRL_EXPIRED') {
+              this.steps.crlCheck.status = 'warning';
+              this.steps.crlCheck.message = '⚠ ' + crlMessage;
+            } else if (crlStatus === 'CRL_INVALID') {
+              this.steps.crlCheck.status = 'error';
+              this.steps.crlCheck.message = '✗ ' + crlMessage;
+            } else {
+              // Fallback for legacy responses
+              this.steps.crlCheck.status = crlChecked && !revoked ? 'success' : (revoked ? 'error' : 'warning');
+              this.steps.crlCheck.message = crlChecked
+                ? (revoked ? '✗ 인증서가 폐기되었습니다' : '✓ CRL 확인 완료 - 폐기되지 않음')
+                : '⚠ CRL 상태를 확인할 수 없음';
+            }
 
             // Step 8: Data Group Parsing (if DG1 or DG2 available)
             if (this.dg1Data || this.dg2Data) {

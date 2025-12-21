@@ -213,36 +213,46 @@ public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
     /**
      * LDAP 필터 값을 RFC 4515 형식으로 escape합니다.
      *
-     * <p><b>중요:</b> DN escape (RFC 4514)와 Filter escape (RFC 4515)는 다릅니다!</p>
+     * <p><b>중요:</b> LDAP에 저장된 CRL의 cn 값이 DN escaped 형식으로 저장되어 있습니다.</p>
+     * <p>예: "CN=CSCA-KOREA,O=Government,C=KR" → "CN\3DCSCA-KOREA\2CO\3DGovernment\2CC\3DKR"</p>
      *
-     * <p>RFC 4515 (LDAP Search Filter) Escape 규칙:</p>
-     * <ul>
-     *   <li>* (asterisk) → \2a</li>
-     *   <li>( (left paren) → \28</li>
-     *   <li>) (right paren) → \29</li>
-     *   <li>\ (backslash) → \5c</li>
-     *   <li>NUL → \00</li>
-     * </ul>
-     *
-     * <p><b>주의:</b> 쉼표(,)와 등호(=)는 필터에서 escape 불필요!</p>
-     * <p>DN에서는 escape 필요하지만, 필터 값에서는 그대로 사용합니다.</p>
+     * <p>이 메서드는 두 단계 escape를 수행합니다:</p>
+     * <ol>
+     *   <li>DN escape: = → \3D, , → \2C (LDAP cn 값 매칭용)</li>
+     *   <li>RFC 4515 Filter escape: *, (, ), \, NUL</li>
+     * </ol>
      *
      * @param value 원본 필터 값 (예: "CN=CSCA-KOREA,O=Government,C=KR")
-     * @return RFC 4515 escape된 필터 값 (쉼표, 등호는 그대로 유지)
+     * @return LDAP cn 값과 매칭되는 escape된 필터 값
      */
     private String escapeFilterValue(String value) {
         if (value == null || value.isEmpty()) {
             return value;
         }
 
-        // RFC 4515 - LDAP Filter escape only
-        // Note: Comma (,) and equals (=) do NOT need escaping in filter values!
-        return value
-            .replace("\\", "\\5c")  // Backslash (must be first!)
-            .replace("*", "\\2a")   // Asterisk
-            .replace("(", "\\28")   // Left parenthesis
-            .replace(")", "\\29")   // Right parenthesis
-            .replace("\0", "\\00"); // NUL character
+        // LDAP에 저장된 CRL cn 값이 DN escaped 형식: CN\3DCSCA-KOREA\2COU\3DMOFA...
+        // RFC 4515 필터에서 이를 매칭하려면 백슬래시를 \5c로 escape 해야 함
+        //
+        // 예: CN=CSCA-KOREA,OU=MOFA,O=Government,C=KR
+        //  → CN\5c3DCSCA-KOREA\5c2COU\5c3DMOFA\5c2CO\5c3DGovernment\5c2CC\5c3DKR (필터용)
+        //
+        // 이 필터가 LDAP의 cn=CN\3DCSCA-KOREA\2COU\3DMOFA... 값과 매칭됨
+
+        StringBuilder escaped = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '=' -> escaped.append("\\5c3D");  // = → \3D (LDAP) → \5c3D (filter)
+                case ',' -> escaped.append("\\5c2C");  // , → \2C (LDAP) → \5c2C (filter)
+                case '*' -> escaped.append("\\2a");
+                case '(' -> escaped.append("\\28");
+                case ')' -> escaped.append("\\29");
+                case '\\' -> escaped.append("\\5c");
+                case '\0' -> escaped.append("\\00");
+                default -> escaped.append(c);
+            }
+        }
+        return escaped.toString();
     }
 
     /**
