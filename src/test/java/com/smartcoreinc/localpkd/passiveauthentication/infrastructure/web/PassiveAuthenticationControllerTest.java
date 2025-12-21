@@ -10,7 +10,6 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.Certifi
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileName;
-import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileHash;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileSize;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
@@ -38,7 +37,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,9 +63,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <h3>Test Scope:</h3>
  * <ul>
- *   <li>POST /api/v1/pa/verify - PA verification endpoint</li>
- *   <li>GET /api/v1/pa/history - Verification history with pagination</li>
- *   <li>GET /api/v1/pa/{verificationId} - Single verification result</li>
+ *   <li>POST /api/pa/verify - PA verification endpoint</li>
+ *   <li>GET /api/pa/history - Verification history with pagination</li>
+ *   <li>GET /api/pa/{verificationId} - Single verification result</li>
  * </ul>
  *
  * <h3>Test Categories:</h3>
@@ -106,7 +104,7 @@ class PassiveAuthenticationControllerTest {
     private UploadedFileRepository uploadedFileRepository;
 
     private static final String FIXTURES_BASE = "src/test/resources/passport-fixtures/valid-korean-passport/";
-    private static final String API_BASE_PATH = "/api/v1/pa";
+    private static final String API_BASE_PATH = "/api/pa";
 
     private byte[] sodBytes;
     private byte[] dg1Bytes;
@@ -321,7 +319,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Valid request with SOD and Data Groups
         PassiveAuthenticationRequest request = buildValidRequest();
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -356,7 +354,7 @@ class PassiveAuthenticationControllerTest {
             "api-test-client"
         );
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -375,7 +373,7 @@ class PassiveAuthenticationControllerTest {
         performVerificationAndGetId();
         performVerificationAndGetId();
 
-        // When: GET /api/v1/pa/history?page=0&size=10
+        // When: GET /api/pa/history?page=0&size=10
         mockMvc.perform(get(API_BASE_PATH + "/history")
                 .param("page", "0")
                 .param("size", "10"))
@@ -395,7 +393,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Perform a verification
         performVerificationAndGetId();
 
-        // When: GET /api/v1/pa/history?issuingCountry=KR
+        // When: GET /api/pa/history?issuingCountry=KR
         mockMvc.perform(get(API_BASE_PATH + "/history")
                 .param("issuingCountry", "KR"))
             // Then: All results should be KR (alpha-2 normalized)
@@ -410,7 +408,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Perform a verification
         performVerificationAndGetId();
 
-        // When: GET /api/v1/pa/history?status=VALID
+        // When: GET /api/pa/history?status=VALID
         mockMvc.perform(get(API_BASE_PATH + "/history")
                 .param("status", "VALID"))
             // Then: All results should be VALID
@@ -425,7 +423,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Perform a verification and get its ID
         UUID verificationId = performVerificationAndGetId();
 
-        // When: GET /api/v1/pa/{verificationId}
+        // When: GET /api/pa/{verificationId}
         mockMvc.perform(get(API_BASE_PATH + "/{verificationId}", verificationId))
             // Then: Response should be 200 OK
             .andExpect(status().isOk())
@@ -441,7 +439,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Random UUID that doesn't exist
         UUID nonExistentId = UUID.randomUUID();
 
-        // When: GET /api/v1/pa/{verificationId}
+        // When: GET /api/pa/{verificationId}
         mockMvc.perform(get(API_BASE_PATH + "/{verificationId}", nonExistentId))
             // Then: Response should be 404 Not Found
             .andExpect(status().isNotFound())
@@ -449,29 +447,29 @@ class PassiveAuthenticationControllerTest {
     }
 
     @Test
-    @DisplayName("POST /verify - Missing required field should return 400 Bad Request")
-    void shouldRejectMissingRequiredField() throws Exception {
-        // Given: Request without issuingCountry (use valid Base64)
-        String validSod = Base64.getEncoder().encodeToString(sodBytes);
+    @DisplayName("POST /verify - Missing required field (SOD) should return 400 Bad Request")
+    void shouldRejectMissingSod() throws Exception {
+        // Given: Request without SOD (required field)
+        // Note: issuingCountry is optional since PA UI uses file upload only (sod.bin, dg1.bin, dg2.bin)
         String validDg1 = Base64.getEncoder().encodeToString(dg1Bytes);
-        
+
         String invalidRequest = String.format("""
             {
+                "issuingCountry": "KOR",
                 "documentNumber": "M12345678",
-                "sod": "%s",
                 "dataGroups": {
                     "DG1": "%s"
                 }
             }
-            """, validSod, validDg1);
+            """, validDg1);
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidRequest))
-            // Then: Response should be 400 Bad Request
+            // Then: Response should be 400 Bad Request (SOD is required)
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error.message", containsString("발급 국가 코드는 필수입니다")))
+            .andExpect(jsonPath("$.error.message", containsString("SOD는 필수입니다")))
             .andDo(print());
     }
 
@@ -487,7 +485,7 @@ class PassiveAuthenticationControllerTest {
             null
         );
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -515,7 +513,7 @@ class PassiveAuthenticationControllerTest {
             }
             """, validSod, validDg1);
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidRequest))
@@ -540,7 +538,7 @@ class PassiveAuthenticationControllerTest {
             }
             """, validSod);
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidRequest))
@@ -558,7 +556,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Valid request
         PassiveAuthenticationRequest request = buildValidRequest();
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -590,7 +588,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Valid request
         PassiveAuthenticationRequest request = buildValidRequest();
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         MvcResult result = mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -613,7 +611,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Malformed JSON
         String malformedJson = "{issuingCountry: KOR, documentNumber: "; // Invalid JSON
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(malformedJson))
@@ -634,7 +632,7 @@ class PassiveAuthenticationControllerTest {
             null
         );
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         mockMvc.perform(post(API_BASE_PATH + "/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -649,7 +647,7 @@ class PassiveAuthenticationControllerTest {
         // Given: Invalid UUID format
         String invalidUuid = "not-a-uuid";
 
-        // When: GET /api/v1/pa/{verificationId}
+        // When: GET /api/pa/{verificationId}
         mockMvc.perform(get(API_BASE_PATH + "/{verificationId}", invalidUuid))
             // Then: Response should be 400 Bad Request
             .andExpect(status().isBadRequest())
@@ -667,7 +665,7 @@ class PassiveAuthenticationControllerTest {
         certificateRepository.findAllByType(CertificateType.DSC)
             .forEach(cert -> certificateRepository.deleteById(cert.getId()));
 
-        // When: POST /api/v1/pa/verify
+        // When: POST /api/pa/verify
         // Then: Verification should proceed (DSC extracted from SOD per ICAO 9303 Part 11)
         // Note: Actual verification result depends on CSCA availability in LDAP for trust chain
         mockMvc.perform(post(API_BASE_PATH + "/verify")
