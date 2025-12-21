@@ -52,6 +52,12 @@
                                 업로드 이력
                             </a>
                         </li>
+                        <li>
+                            <a href="/file/dashboard">
+                                <i class="fas fa-chart-bar"></i>
+                                통계 대시보드
+                            </a>
+                        </li>
                     </ul>
                 </div>
 
@@ -161,6 +167,12 @@
             <a href="/upload-history" th:classappend="${currentPage} == 'upload-history' ? 'active' : ''">
               <i class="fas fa-history"></i>
               업로드 이력
+            </a>
+        </li>
+        <li>
+            <a href="/file/dashboard" th:classappend="${currentPage} == 'file-dashboard' ? 'active' : ''">
+              <i class="fas fa-chart-bar"></i>
+              통계 대시보드
             </a>
         </li>
 

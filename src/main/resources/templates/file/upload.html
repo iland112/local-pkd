@@ -709,7 +709,8 @@
                     details.forEach(detail => {
                         if (detail) {
                             let badgeClass = 'badge-primary';
-                            if (detail.includes('CSCA')) badgeClass = 'badge-success';
+                            if (detail.includes('Master List') || detail.includes('ML')) badgeClass = 'badge-secondary';
+                            else if (detail.includes('CSCA')) badgeClass = 'badge-success';
                             else if (detail.includes('DSC_NC')) badgeClass = 'badge-accent';
                             else if (detail.includes('DSC')) badgeClass = 'badge-info';
                             else if (detail.includes('CRL')) badgeClass = 'badge-warning';

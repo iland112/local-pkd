@@ -10,17 +10,35 @@
       <div class="container mx-auto px-4 py-6 max-w-7xl">
         <!-- 헤더 섹션 -->
         <div class="mb-8">
-          <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-6 text-white">
+          <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-8 text-white">
             <div class="flex items-center justify-between">
               <div>
-                <h1 class="text-3xl font-bold mb-2">
-                  ICAO PKD Local Manager
+                <h1 class="text-4xl font-bold mb-3">
+                  <i class="fas fa-shield-alt mr-3"></i>ICAO PKD Local Manager
                 </h1>
-                <p class="text-blue-100 text-lg">
+                <p class="text-blue-100 text-xl mb-2">
                   ICAO Public Key Directory 로컬 평가 및 관리 시스템
                 </p>
+                <p class="text-blue-200 text-sm">
+                  ePassport 인증서 관리 및 Passive Authentication 검증 플랫폼
+                </p>
+                <!-- 표준 준수 배지 -->
+                <div class="flex flex-wrap gap-2 mt-4">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-30 text-blue-100">
+                    <i class="fas fa-certificate mr-1"></i> ICAO Doc 9303
+                  </span>
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-30 text-blue-100">
+                    <i class="fas fa-file-signature mr-1"></i> RFC 5652 CMS
+                  </span>
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-30 text-blue-100">
+                    <i class="fas fa-key mr-1"></i> RFC 5280 X.509
+                  </span>
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-30 text-blue-100">
+                    <i class="fas fa-user-circle mr-1"></i> ISO/IEC 19794-5
+                  </span>
+                </div>
               </div>
-              <div class="text-right">
+              <div class="text-right hidden md:block">
                 <div class="text-blue-100 text-sm">
                   <i class="fas fa-calendar-alt mr-2"></i>
                   <span x-text="currentDate"></span>
@@ -29,14 +47,16 @@
                   <i class="fas fa-clock mr-2"></i>
                   <span x-text="currentTime"></span>
                 </div>
+                <button @click="showSystemInfo()" class="mt-3 text-blue-200 hover:text-white text-xs transition-colors">
+                  <i class="fas fa-info-circle mr-1"></i> 시스템 정보
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Dashboard Grid Layout -->
-        <div class="grid grid-cols-1 gap-6 md:gap-8">
-          <!-- Row 1: Connection Status (2 cards) -->
+        <!-- 시스템 연결 상태 -->
+        <div class="mb-8">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- PostgreSQL 데이터베이스 상태 -->
             <div class="rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5 border border-l-4"
@@ -99,162 +119,162 @@
               </button>
             </div>
           </div>
+        </div>
 
-          <!-- Row 4: Certificate by Country Statistics as Bar Chart (full width) -->
-          <div class="grid grid-cols-1" x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0">
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-globe-asia text-orange-500 mr-3"></i>
-                국가별 인증서 통계
-              </h3>
-              <div class="relative h-80">
-                <canvas id="certificateCountryBarChart"></canvas>
+        <!-- 기능별 카드 섹션 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+          <!-- PKD Upload 카드 -->
+          <div class="border rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+               :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-4">
+              <div class="flex items-center text-white">
+                <i class="fas fa-database text-3xl mr-4"></i>
+                <div>
+                  <h2 class="text-xl font-bold">PKD Upload</h2>
+                  <p class="text-indigo-100 text-sm">인증서 파일 업로드 및 관리</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-5">
+              <p class="text-sm mb-4" :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'">
+                ICAO PKD에서 다운로드한 LDIF, Master List 파일을 업로드하고,
+                CSCA/DSC/CRL 인증서를 파싱하여 검증 후 LDAP 서버에 저장합니다.
+              </p>
+              <ul class="text-sm space-y-2 mb-5" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  LDIF / Master List 파일 파싱
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  인증서 Trust Chain 검증
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  OpenLDAP 자동 등록
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  실시간 처리 진행 상황 (SSE)
+                </li>
+              </ul>
+              <div class="flex flex-wrap gap-2">
+                <a href="/file/upload" class="btn btn-primary btn-sm gap-2">
+                  <i class="fas fa-upload"></i> 파일 업로드
+                </a>
+                <a href="/upload-history" class="btn btn-outline btn-sm gap-2">
+                  <i class="fas fa-history"></i> 업로드 이력
+                </a>
+                <a href="/file/dashboard" class="btn btn-outline btn-sm gap-2">
+                  <i class="fas fa-chart-bar"></i> 통계
+                </a>
               </div>
             </div>
           </div>
 
-          <!-- Row 3: Certificate Statistics as Pie Charts (2 columns) -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="certificateStatistics.totalCertificates > 0">
-            <!-- Stored Certificate Statistics Pie Chart -->
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-certificate text-blue-500 mr-3"></i>
-                인증서 상태 통계
-              </h3>
-              <div class="relative h-64 md:h-72">
-                  <canvas id="certificateStatusPieChart"></canvas>
-              </div>
-            </div>
-
-            <!-- Certificate Type Statistics Pie Chart -->
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-tags text-purple-500 mr-3"></i>
-                인증서 유형별 통계
-              </h3>
-              <div class="relative h-64 md:h-72">
-                  <canvas id="certificateTypePieChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <!-- Row 2: Upload Statistics (3 cards) -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- 총 업로드 -->
-            <div class="border border-l-4 border-l-indigo-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    총 업로드
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-indigo-600" x-text="statistics.totalCount"></span>
-                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
-                  </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">전체 파일 수</p>
-                </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-upload text-4xl text-indigo-500"></i>
+          <!-- Passive Authentication 카드 -->
+          <div class="border rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+               :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+            <div class="bg-gradient-to-r from-teal-500 to-cyan-600 p-4">
+              <div class="flex items-center text-white">
+                <i class="fas fa-passport text-3xl mr-4"></i>
+                <div>
+                  <h2 class="text-xl font-bold">Passive Authentication</h2>
+                  <p class="text-teal-100 text-sm">ePassport 검증</p>
                 </div>
               </div>
             </div>
-
-            <!-- 성공률 -->
-            <div class="border border-l-4 border-l-green-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    성공률
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-green-600" x-text="statistics.successRate.toFixed(1) + '%'"></span>
-                  </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    <span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span> 파일
-                  </p>
-                </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-check-circle text-4xl text-green-500"></i>
-                </div>
-              </div>
-            </div>
-
-            <!-- 실패 수 -->
-            <div class="border border-l-4 border-l-red-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    실패
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-red-600" x-text="statistics.failedCount"></span>
-                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
-                  </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">실패한 파일 수</p>
-                </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-times-circle text-4xl text-red-500"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Row 5: Recent Upload Activity (1 card) -->
-          <div class="grid grid-cols-1">
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                  <i class="fas fa-history text-indigo-500 mr-3"></i>
-                  최근 업로드 이력
-                </h3>
-                <button
-                  @click="loadRecentActivity()"
-                  :disabled="loadingRecent"
-                  class="p-2 rounded-md transition-colors disabled:opacity-50"
-                  :class="$store.theme.darkMode ? 'text-gray-400 hover:text-indigo-400 hover:bg-base-300' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'"
-                >
-                  <i class="fas" :class="loadingRecent ? 'fa-spinner animate-spin' : 'fa-sync-alt'"></i>
-                </button>
-              </div>
-
-              <div x-show="recentActivity.length === 0 && !loadingRecent" class="text-center py-12" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-500'">
-                <i class="fas fa-inbox text-5xl mb-4" :class="$store.theme.darkMode ? 'text-gray-700' : 'text-gray-300'"></i>
-                <p class="font-medium">최근 업로드 이력이 없습니다.</p>
-                <p class="text-sm mt-2">파일을 업로드하여 시작하세요.</p>
-              </div>
-
-              <div x-show="loadingRecent" class="text-center py-12">
-                <i class="fas fa-spinner animate-spin text-5xl text-indigo-500 mb-4"></i>
-                <p :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">로딩 중...</p>
-              </div>
-
-              <div x-show="recentActivity.length > 0 && !loadingRecent" class="space-y-3">
-                <template x-for="item in recentActivity" :key="item.id">
-                  <div class="flex items-center p-4 rounded-lg hover:shadow-md transition-all duration-200 cursor-pointer" :class="$store.theme.darkMode ? 'bg-base-200 hover:bg-base-300' : 'bg-gray-50 hover:bg-indigo-50'">
-                    <i class="fas fa-file text-indigo-500 mr-4 text-lg"></i>
-                    <div class="flex-1 min-w-0">
-                      <p class="font-semibold truncate" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-900'" x-text="item.filename"></p>
-                      <p class="text-xs mt-0.5" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'" x-text="formatDateTime(item.uploadedAt)"></p>
-                    </div>
-                    <span class="badge ml-3 flex-shrink-0" :class="{
-                      'badge-success': item.status === 'COMPLETED',
-                      'badge-error': item.status === 'FAILED',
-                      'badge-warning': item.status !== 'COMPLETED' && item.status !== 'FAILED'
-                    }" x-text="item.statusDisplay"></span>
-                  </div>
-                </template>
-              </div>
-
-              <div x-show="recentActivity.length > 0" class="mt-6 text-center">
-                <a href="/upload-history" class="inline-flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-semibold hover:underline" :class="$store.theme.darkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
-                  전체 이력 보기 <i class="fas fa-arrow-right ml-2"></i>
+            <div class="p-5">
+              <p class="text-sm mb-4" :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'">
+                ePassport의 SOD(Security Object Document)와 Data Groups를 검증하여
+                여권 데이터의 무결성과 발급국 서명을 확인합니다.
+              </p>
+              <ul class="text-sm space-y-2 mb-5" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  ICAO 9303 Part 11 표준 준수
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  DSC/CSCA Trust Chain 검증
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  Data Group Hash 검증
+                </li>
+                <li class="flex items-center">
+                  <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                  DG1 (MRZ) / DG2 (Face) 파싱
+                </li>
+              </ul>
+              <div class="flex flex-wrap gap-2">
+                <a href="/pa/verify" class="btn btn-primary btn-sm gap-2" style="background: linear-gradient(to right, #14b8a6, #06b6d4); border: none;">
+                  <i class="fas fa-check-circle"></i> PA 검증
+                </a>
+                <a href="/pa/history" class="btn btn-outline btn-sm gap-2">
+                  <i class="fas fa-history"></i> 검증 이력
+                </a>
+                <a href="/pa/dashboard" class="btn btn-outline btn-sm gap-2">
+                  <i class="fas fa-chart-line"></i> 통계
                 </a>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- 빠른 시작 가이드 -->
+        <div class="border rounded-xl shadow-lg p-6"
+             :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
+          <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+            <i class="fas fa-rocket text-orange-500 mr-3"></i>
+            빠른 시작 가이드
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- PKD Upload 가이드 -->
+            <div class="p-4 rounded-lg" :class="$store.theme.darkMode ? 'bg-base-200' : 'bg-gray-50'">
+              <h4 class="font-semibold mb-3" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-700'">
+                <i class="fas fa-database text-indigo-500 mr-2"></i>PKD 인증서 업로드
+              </h4>
+              <ol class="text-sm space-y-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                <li class="flex items-start">
+                  <span class="bg-indigo-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">1</span>
+                  <span>ICAO PKD에서 LDIF 또는 Master List 파일 다운로드</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="bg-indigo-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">2</span>
+                  <span><a href="/file/upload" class="text-indigo-500 hover:underline">파일 업로드</a> 페이지에서 파일 선택</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="bg-indigo-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">3</span>
+                  <span>자동 파싱 → 검증 → LDAP 저장 완료</span>
+                </li>
+              </ol>
+            </div>
+            <!-- PA 검증 가이드 -->
+            <div class="p-4 rounded-lg" :class="$store.theme.darkMode ? 'bg-base-200' : 'bg-gray-50'">
+              <h4 class="font-semibold mb-3" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-700'">
+                <i class="fas fa-passport text-teal-500 mr-2"></i>ePassport PA 검증
+              </h4>
+              <ol class="text-sm space-y-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                <li class="flex items-start">
+                  <span class="bg-teal-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">1</span>
+                  <span>ePassport 칩에서 SOD, DG1, DG2 등 추출</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="bg-teal-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">2</span>
+                  <span><a href="/pa/verify" class="text-teal-500 hover:underline">PA 검증</a> 페이지에서 파일 업로드</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="bg-teal-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0">3</span>
+                  <span>7단계 검증 수행 → 결과 확인</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-
   </body>
 </html>
