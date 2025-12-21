@@ -96,7 +96,7 @@ public class LdapUploadEventHandler {
         log.info("  - Success Rate: {}%", event.getSuccessRate());
 
         try {
-            // 1. Update UploadedFile status to COMPLETED
+            // 1. Update UploadedFile status to COMPLETED (if not already in terminal state)
             com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile uploadedFile =
                 uploadedFileRepository.findById(new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(event.getUploadId()))
                     .orElseThrow(() -> new com.smartcoreinc.localpkd.shared.exception.DomainException(
@@ -104,7 +104,11 @@ public class LdapUploadEventHandler {
                         "UploadedFile not found for ID: " + event.getUploadId()
                     ));
 
-            if (event.isSuccess()) {
+            // Skip status update if already in terminal state (COMPLETED or FAILED)
+            if (uploadedFile.getStatus().isTerminal()) {
+                log.info("UploadedFile already in terminal state ({}), skipping status update for uploadId: {}",
+                    uploadedFile.getStatus(), event.getUploadId());
+            } else if (event.isSuccess()) {
                 // Update status to COMPLETED
                 uploadedFile.updateStatusToCompleted();
                 uploadedFileRepository.save(uploadedFile);
