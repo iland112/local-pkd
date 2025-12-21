@@ -415,17 +415,16 @@ public class ProcessingController {
 
             com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile uploadedFile = uploadedFileOpt.get();
 
-            // TODO: 처리 상태를 데이터베이스에서 조회하여 응답 생성 (Phase 19)
-            // 현재는 기본적인 응답만 구성
+            // Basic response - actual progress is tracked via SSE stream
             ProcessingStatusResponse response = ProcessingStatusResponse.builder()
                     .uploadId(uploadUUID)
                     .fileName(uploadedFile.getFileNameValue())
                     .processingMode(uploadedFile.getProcessingMode().name())
-                    .currentStage("UPLOAD_COMPLETED")  // TODO: Actual stage from database
-                    .currentPercentage(5)              // TODO: Calculate based on actual stages
+                    .currentStage(uploadedFile.getStatus().name())
+                    .currentPercentage(calculateProgressPercentage(uploadedFile.getStatus()))
                     .uploadedAt(uploadedFile.getUploadedAt())
                     .lastUpdateAt(LocalDateTime.now())
-                    .status("IN_PROGRESS")             // TODO: From database
+                    .status(uploadedFile.getStatus().isTerminal() ? "COMPLETED" : "IN_PROGRESS")
                     .manualPauseAtStep(uploadedFile.getManualPauseAtStep())
                     .build();
 
@@ -438,5 +437,24 @@ public class ProcessingController {
             log.error("Error getting processing status: uploadId={}", uploadId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    /**
+     * Calculate progress percentage based on upload status
+     *
+     * @param status Current upload status
+     * @return Progress percentage (0-100)
+     */
+    private int calculateProgressPercentage(com.smartcoreinc.localpkd.fileupload.domain.model.UploadStatus status) {
+        return switch (status) {
+            case RECEIVED -> 5;
+            case VALIDATING -> 15;
+            case VALIDATED -> 25;
+            case PARSING -> 35;
+            case PARSED -> 50;
+            case UPLOADING_TO_LDAP -> 75;
+            case COMPLETED -> 100;
+            case CHECKSUM_INVALID, DUPLICATE_DETECTED, FAILED -> 0;
+        };
     }
 }

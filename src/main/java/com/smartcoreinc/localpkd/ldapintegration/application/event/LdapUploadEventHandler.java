@@ -62,10 +62,6 @@ public class LdapUploadEventHandler {
 
     private final ProgressService progressService;
     private final com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository uploadedFileRepository;
-    // TODO: Phase 4에서 추가될 Services
-    // private final UploadHistoryService uploadHistoryService;
-    // private final NotificationService notificationService;
-    // private final AuditService auditService;
 
     /**
      * LDAP 업로드 완료 이벤트 처리 (비동기, 트랜잭션 커밋 후)
@@ -153,38 +149,6 @@ public class LdapUploadEventHandler {
                         .build()
                 );
             }
-
-            // 2. UploadHistory 상태 업데이트
-            // TODO: Phase 4에서 구현 예정
-            // uploadHistoryService.markAsCompleted(
-            //     event.getUploadId(),
-            //     event.getTotalUploaded(),
-            //     event.getFailedCount()
-            // );
-
-            // 3. 사용자 알림 발송
-            // TODO: Phase 4에서 구현 예정
-            // if (event.isSuccess()) {
-            //     notificationService.notifyUploadSuccess(
-            //         event.getUploadId(),
-            //         event.getUploadedCertificateCount(),
-            //         event.getUploadedCrlCount()
-            //     );
-            // } else {
-            //     notificationService.notifyUploadPartialSuccess(
-            //         event.getUploadId(),
-            //         event.getTotalUploaded(),
-            //         event.getFailedCount()
-            //     );
-            // }
-
-            // 4. 감사 로그 기록
-            // TODO: Phase 4에서 구현 예정
-            // auditService.recordLdapUploadCompleted(
-            //     event.getUploadId(),
-            //     event.getTotalProcessed(),
-            //     event.getFailedCount()
-            // );
 
             log.info("Upload finalization completed for uploadId: {}", event.getUploadId());
 

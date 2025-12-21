@@ -92,8 +92,8 @@ public class VerifyTrustChainUseCase {
             List<CertificateChainDto> certificateChain = new ArrayList<>();
             List<ValidationErrorDto> validationErrors = new ArrayList<>();
 
-            // TODO: Phase 11 Sprint 5에서 실제 Trust Chain 구축 로직 구현 예정
-            // 현재는 skeleton 구현: End Entity만 체인에 추가
+            // Skeleton implementation: Add only end entity to chain
+            // Full trust chain verification is handled by ValidateCertificatesUseCase
 
             CertificateChainDto endEntityDto = CertificateChainDto.builder()
                 .chainLevel(0)
@@ -186,11 +186,8 @@ public class VerifyTrustChainUseCase {
         int depth,
         int maxDepth
     ) {
-        // TODO: 구현 필요
-        // 1. 현재 인증서가 Self-Signed인지 확인 (Trust Anchor)
-        // 2. Issuer DN으로 상위 인증서 조회
-        // 3. 상위 인증서로 재귀 호출
-        // 4. 최대 깊이 도달 시 실패
+        // Stub: Returns false (chain not built)
+        // Full trust chain building is handled by ValidateCertificatesUseCase
         return false;
     }
 

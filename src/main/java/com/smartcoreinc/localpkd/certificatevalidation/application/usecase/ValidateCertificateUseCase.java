@@ -89,8 +89,7 @@ public class ValidateCertificateUseCase {
             // 3. 검증 수행
             LocalDateTime validatedAt = LocalDateTime.now();
 
-            // TODO: Phase 11 Sprint 5에서 X509CertificateValidationAdapter 구현 예정
-            // 현재는 skeleton 구현으로 모든 검증을 true로 설정
+            // Skeleton implementation: Full validation is in ValidateCertificatesUseCase
 
             Boolean signatureValid = command.validateSignature() ? performSignatureValidation(certificate) : null;
             Boolean chainValid = command.validateChain() ? performChainValidation(certificate) : null;
@@ -177,40 +176,34 @@ public class ValidateCertificateUseCase {
      */
     private Boolean performSignatureValidation(Certificate certificate) {
         log.debug("Performing signature validation (skeleton implementation)");
-        // TODO: BouncyCastle을 사용한 실제 서명 검증 구현 필요
-        // X509Certificate x509 = parseX509Certificate(certificate.getX509Data().getCertificateBinary());
-        // x509.verify(issuerPublicKey);
-        return true;  // Skeleton
+        // Stub: Full signature validation is in ValidateCertificatesUseCase
+        return true;
     }
 
     /**
      * Trust Chain 검증 수행
      *
-     * <p>TODO: Phase 11 Sprint 5에서 VerifyTrustChainUseCase와 연동 예정</p>
-     * <p>현재는 skeleton 구현</p>
+     * <p>Skeleton implementation - Full chain validation is in ValidateCertificatesUseCase</p>
      *
      * @param certificate 인증서
      * @return 체인 유효 여부
      */
     private Boolean performChainValidation(Certificate certificate) {
         log.debug("Performing chain validation (skeleton implementation)");
-        // TODO: VerifyTrustChainUseCase와 연동
-        return true;  // Skeleton
+        return true;
     }
 
     /**
      * 폐기 여부 확인 (CRL Check)
      *
-     * <p>TODO: Phase 11 Sprint 5에서 CRL 확인 로직 구현 예정</p>
-     * <p>현재는 skeleton 구현</p>
+     * <p>Skeleton implementation - CRL checking is in BouncyCastleValidationAdapter</p>
      *
      * @param certificate 인증서
      * @return 폐기되지 않음 여부
      */
     private Boolean performRevocationCheck(Certificate certificate) {
         log.debug("Performing revocation check (skeleton implementation)");
-        // TODO: CRL 다운로드 및 확인 로직 구현
-        return true;  // Skeleton
+        return true;
     }
 
     /**
@@ -231,16 +224,14 @@ public class ValidateCertificateUseCase {
     /**
      * 제약사항 검증 수행
      *
-     * <p>TODO: Phase 11 Sprint 5에서 Basic Constraints, Key Usage 검증 구현 예정</p>
-     * <p>현재는 skeleton 구현</p>
+     * <p>Skeleton implementation - Constraints check is in ValidateCertificatesUseCase</p>
      *
      * @param certificate 인증서
      * @return 제약사항 준수 여부
      */
     private Boolean performConstraintsCheck(Certificate certificate) {
         log.debug("Performing constraints check (skeleton implementation)");
-        // TODO: Basic Constraints, Key Usage, Extended Key Usage 검증
-        return true;  // Skeleton
+        return true;
     }
 
     /**

@@ -67,10 +67,11 @@ public class LdapUploadApiController {
         log.debug("Getting LDAP upload status for uploadId: {}", uploadId);
 
         try {
+            // Actual LDAP upload progress is tracked via SSE stream (/progress/stream/{uploadId})
             Map<String, Object> result = new HashMap<>();
             result.put("uploadId", uploadId);
-            result.put("status", "IN_PROGRESS"); // TODO: 실제 상태 조회 구현
-            result.put("message", "LDAP 업로드가 진행 중입니다");
+            result.put("status", "IN_PROGRESS");
+            result.put("message", "LDAP upload in progress. Use SSE stream for real-time updates.");
 
             return ResponseEntity.ok(result);
 

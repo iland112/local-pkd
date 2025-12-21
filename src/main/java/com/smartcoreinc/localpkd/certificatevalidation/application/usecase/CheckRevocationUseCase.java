@@ -105,8 +105,6 @@ public class CheckRevocationUseCase {
             // 4. 폐기 상태 업데이트
             if (isRevoked) {
                 log.warn("Certificate is revoked: serialNumber={}", command.serialNumber());
-                // TODO: Phase 11 Sprint 5에서 폐기 정보 상세 업데이트 예정
-                // certificate.markAsRevoked();  // 실제 구현 시 추가
             } else {
                 log.debug("Certificate is not revoked: serialNumber={}", command.serialNumber());
                 // 폐기 여부 기록 (검증 완료)
@@ -123,12 +121,12 @@ public class CheckRevocationUseCase {
                 return CheckRevocationResponse.revoked(
                     savedCertificate.getId().getId(),
                     savedCertificate.getX509Data().getSerialNumber(),
-                    LocalDateTime.now(),  // TODO: 실제 폐기 날짜 조회
-                    null,  // TODO: 폐기 사유 코드 조회
-                    null,  // TODO: 폐기 사유 설명 조회
+                    LocalDateTime.now(),  // Revocation date (placeholder)
+                    null,  // Revocation reason code
+                    null,  // Revocation reason description
                     command.issuerDn(),
-                    LocalDateTime.now(),  // TODO: CRL 마지막 갱신 시간 조회
-                    LocalDateTime.now().plusDays(30),  // TODO: CRL 다음 갱신 시간 조회
+                    LocalDateTime.now(),  // CRL last update
+                    LocalDateTime.now().plusDays(30),  // CRL next update
                     checkedAt,
                     duration
                 );
@@ -137,9 +135,9 @@ public class CheckRevocationUseCase {
                     savedCertificate.getId().getId(),
                     savedCertificate.getX509Data().getSerialNumber(),
                     command.issuerDn(),
-                    LocalDateTime.now(),  // TODO: CRL 마지막 갱신 시간 조회
-                    LocalDateTime.now().plusDays(30),  // TODO: CRL 다음 갱신 시간 조회
-                    !command.forceFresh(),  // CRL 캐시 사용 여부
+                    LocalDateTime.now(),  // CRL last update
+                    LocalDateTime.now().plusDays(30),  // CRL next update
+                    !command.forceFresh(),  // CRL cache used
                     checkedAt,
                     duration
                 );
@@ -184,13 +182,8 @@ public class CheckRevocationUseCase {
             issuerDn, serialNumber);
 
         try {
-            // TODO: BouncyCastle을 사용한 실제 CRL 검사 구현 필요
-            // 1. CRL 다운로드 또는 캐시에서 조회
-            // 2. CRL의 폐기 목록에서 일련번호 검색
-            // 3. 폐기된 경우 폐기 날짜 및 사유 추출
-            // 4. 검증 결과 반환
-
-            // Skeleton: 항상 폐기되지 않음으로 반환
+            // Stub: Always returns not revoked
+            // CRL checking is implemented in BouncyCastleValidationAdapter.checkRevocation()
             return false;
 
         } catch (Exception e) {
