@@ -39,6 +39,7 @@ class CompletePassiveAuthenticationFlowTests {
     @Autowired
     private PerformPassiveAuthenticationUseCase useCase;
 
+    @SuppressWarnings("unused")  // Reserved for future audit log verification tests
     @Autowired
     private PassiveAuthenticationAuditLogRepository auditLogRepository;
 

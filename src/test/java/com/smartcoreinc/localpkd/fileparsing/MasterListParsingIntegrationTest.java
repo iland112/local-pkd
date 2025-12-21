@@ -1,7 +1,6 @@
 package com.smartcoreinc.localpkd.fileparsing;
 
 import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
-import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFileId;
 import com.smartcoreinc.localpkd.fileparsing.infrastructure.adapter.MasterListParserAdapter;
@@ -11,7 +10,6 @@ import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.core.io.FileSystemResource;
 
@@ -19,11 +17,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.*;
 
 @Slf4j
 @DisplayName("Master List Parsing Integration Test")
@@ -68,6 +61,7 @@ class MasterListParsingIntegrationTest {
         );
     }
 
+    @SuppressWarnings("unused")  // Utility method for manual testing
     private void parseFile() throws Exception {
         parsedFile.startParsing();
         masterListParser.parse(masterListBytes, FileFormat.of(FileFormat.Type.ML_SIGNED_CMS), parsedFile);

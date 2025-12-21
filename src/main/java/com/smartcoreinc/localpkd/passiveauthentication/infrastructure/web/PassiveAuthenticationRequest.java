@@ -45,28 +45,28 @@ import java.util.Map;
 @Schema(description = "Passive Authentication 검증 요청")
 public record PassiveAuthenticationRequest(
 
-    @Schema(description = "여권 발급 국가 코드 (ISO 3166-1 alpha-3)", example = "KOR", required = false)
+    @Schema(description = "여권 발급 국가 코드 (ISO 3166-1 alpha-3)", example = "KOR", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Pattern(regexp = "^[A-Z]{3}$", message = "발급 국가 코드는 ISO 3166-1 alpha-3 형식이어야 합니다 (예: KOR, USA, GBR)")
     String issuingCountry,
 
-    @Schema(description = "여권 번호", example = "M12345678", required = false)
+    @Schema(description = "여권 번호", example = "M12345678", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Size(min = 1, max = 20, message = "여권 번호는 1-20자여야 합니다")
     String documentNumber,
 
     @Schema(description = "SOD (Security Object Document) Base64 인코딩",
             example = "MIIGBwYJKoZIhvcNAQcCoII...",
-            required = true)
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "SOD는 필수입니다")
     String sod,
 
     @Schema(description = "Data Groups (DG1-DG16) Base64 인코딩 Map",
             example = "{\"DG1\": \"UEQxMjM0NTY3ODk...\", \"DG2\": \"iVBORw0KGgoAAAANS...\"}",
-            required = true)
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Data Groups는 필수입니다")
     @NotEmpty(message = "최소 하나의 Data Group이 필요합니다")
     Map<String, String> dataGroups,
 
-    @Schema(description = "요청자 식별자 (선택사항, 감사 추적용)", example = "api-client-123", required = false)
+    @Schema(description = "요청자 식별자 (선택사항, 감사 추적용)", example = "api-client-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     String requestedBy
 
 ) {

@@ -16,7 +16,6 @@ import com.unboundid.ldap.sdk.Entry;
 import com.unboundid.ldif.LDIFReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x509.Extension;
@@ -54,7 +53,6 @@ public class LdifParserAdapter implements FileParserPort {
     private final ProgressService progressService;
     private final CertificateExistenceService certificateExistenceService;
     private final com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository;  // NEW: For LDIF Master List storage
-    private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;  // NEW: For Master List CSCAs
 
     private static final String ATTR_USER_CERTIFICATE = "userCertificate;binary";
     private static final String ATTR_CRL = "certificateRevocationList;binary";
@@ -695,9 +693,6 @@ public class LdifParserAdapter implements FileParserPort {
         String subjectDn = holder.getSubject().toString();
         String issuerDn = holder.getIssuer().toString();
         String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
-
-        // Extract country code from DN
-        String countryCode = CountryCodeUtil.extractCountryCode(subjectDn);
 
         // Create X509Data (note: publicKey will be null in fallback mode)
         com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data x509Data =

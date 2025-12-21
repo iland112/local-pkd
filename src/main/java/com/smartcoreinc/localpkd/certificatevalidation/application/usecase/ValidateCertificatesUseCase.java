@@ -90,7 +90,6 @@ public class ValidateCertificatesUseCase {
     private final ParsedFileRepository parsedFileRepository;
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
-    private final com.smartcoreinc.localpkd.certificatevalidation.application.service.CertificateSaveService certificateSaveService;
 
     /**
      * 인증서 검증 실행
@@ -146,7 +145,6 @@ public class ValidateCertificatesUseCase {
             // 총 배치 수 추정 (배치 크기 기준)
             int estimatedCscaBatches = (totalCertificates / BATCH_SIZE) + 1;
             int estimatedDscBatches = (totalCertificates / BATCH_SIZE) + 1;
-            int estimatedCrlBatches = (command.crlCount() / BATCH_SIZE) + 1;
 
             // ✅ 파일 형식 확인 (ML vs LDIF)
             String fileFormat = parsedFile.getFileFormat().toStorageValue();
@@ -1115,15 +1113,6 @@ public class ValidateCertificatesUseCase {
         return date.toInstant()
             .atZone(ZoneId.systemDefault())
             .toLocalDateTime();
-    }
-
-    /**
-     * LocalDateTime을 Date로 변환
-     */
-    private Date convertToDate(LocalDateTime localDateTime) {
-        return Date.from(localDateTime
-            .atZone(ZoneId.systemDefault())
-            .toInstant());
     }
 
     /**

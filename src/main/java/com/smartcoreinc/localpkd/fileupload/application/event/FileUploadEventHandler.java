@@ -165,6 +165,7 @@ public class FileUploadEventHandler {
         return validateCertificatesUseCase.execute(validationCommand);
     }
 
+    @SuppressWarnings("unused")  // Reserved for future LDAP upload workflow
     private com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse uploadToLdap(
             UploadedFile uploadedFile,
             CertificatesValidatedResponse validationResponse) {
@@ -244,6 +245,7 @@ public class FileUploadEventHandler {
         log.info("=== [Event-Async] DuplicateFileDetected (Additional processing) ===");
     }
 
+    @SuppressWarnings("unused")  // Utility method for logging
     private String formatFileSize(long bytes) {
         if (bytes >= 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
         if (bytes >= 1024) return String.format("%.1f KB", bytes / 1024.0);

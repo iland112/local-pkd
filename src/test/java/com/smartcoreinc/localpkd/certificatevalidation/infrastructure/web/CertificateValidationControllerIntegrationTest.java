@@ -8,13 +8,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.SpringBootTest; // Add this import
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc; // Add this import
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 
 
 import java.time.LocalDateTime;
@@ -60,7 +59,7 @@ public class CertificateValidationControllerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private ValidateCertificateUseCase validateCertificateUseCase;
 
     private static final String ENDPOINT = "/api/validate";
@@ -386,11 +385,10 @@ public class CertificateValidationControllerIntegrationTest {
 
         // WHEN
         long startTime = System.currentTimeMillis();
-        MvcResult result = mockMvc.perform(post(ENDPOINT)
+        mockMvc.perform(post(ENDPOINT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
+                .andExpect(status().isOk());
         long duration = System.currentTimeMillis() - startTime;
 
         // THEN

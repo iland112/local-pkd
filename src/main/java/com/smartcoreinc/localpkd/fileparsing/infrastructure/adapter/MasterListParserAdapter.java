@@ -24,7 +24,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.security.Security;
 import java.security.cert.CertificateFactory;
@@ -147,7 +146,6 @@ public class MasterListParserAdapter implements FileParserPort, MasterListParser
         return true;
     }
     
-    @SuppressWarnings("unchecked")
     private void extractCscaCertificates(CMSSignedData signedData, ParsedFile parsedFile) throws Exception {
         CMSProcessable signedContent = signedData.getSignedContent();
         byte[] contentBytes = (byte[]) signedContent.getContent();

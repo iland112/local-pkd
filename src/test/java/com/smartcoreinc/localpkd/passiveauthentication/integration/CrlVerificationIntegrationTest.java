@@ -1,6 +1,5 @@
 package com.smartcoreinc.localpkd.passiveauthentication.integration;
 
-import com.smartcoreinc.localpkd.passiveauthentication.domain.model.CrlCheckResult;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.port.CrlLdapPort;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.service.CrlVerificationService;
 import com.smartcoreinc.localpkd.passiveauthentication.infrastructure.cache.CrlCacheService;
@@ -12,7 +11,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.security.cert.X509CRL;
-import java.security.cert.X509Certificate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +49,7 @@ class CrlVerificationIntegrationTest {
     @Autowired
     private CrlCacheService crlCacheService;
 
+    @SuppressWarnings("unused")  // Reserved for future test methods
     @Autowired
     private CrlVerificationService crlVerificationService;
 

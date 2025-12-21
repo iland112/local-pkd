@@ -79,6 +79,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
     private LDAPConnectionPool connectionPool;
 
     // ICAO PKD 원본 Base DN
+    @SuppressWarnings("unused")  // Reserved for future ICAO PKD integration
     private static final String ICAO_BASE_DN = "dc=icao,dc=int";
 
     /**

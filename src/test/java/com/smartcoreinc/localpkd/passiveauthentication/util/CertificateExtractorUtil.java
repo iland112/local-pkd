@@ -1,6 +1,5 @@
 package com.smartcoreinc.localpkd.passiveauthentication.util;
 
-import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.util.encoders.Base64;

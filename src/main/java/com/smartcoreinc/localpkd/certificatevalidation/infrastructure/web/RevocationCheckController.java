@@ -11,11 +11,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 /**
  * RevocationCheckController - 인증서 폐기 여부 확인 REST API 컨트롤러
@@ -139,8 +136,6 @@ public class RevocationCheckController {
         log.debug("Request: issuerDn={}, serialNumber={}, forceFresh={}, crlFetchTimeoutSeconds={}",
                 request.getIssuerDn(), request.getSerialNumber(), request.isForceFresh(),
                 request.getCrlFetchTimeoutSeconds());
-
-        long startTime = System.currentTimeMillis();
 
         // 1. Request 검증 (GlobalExceptionHandler에서 처리)
         request.validate();

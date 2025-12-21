@@ -3,7 +3,6 @@ package com.smartcoreinc.localpkd.certificatevalidation.application.usecase;
 import com.smartcoreinc.localpkd.certificatevalidation.application.command.VerifyTrustChainCommand;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.VerifyTrustChainResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.VerifyTrustChainResponse.CertificateChainDto;
-import com.smartcoreinc.localpkd.certificatevalidation.application.response.VerifyTrustChainResponse.ValidationErrorDto;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
@@ -90,7 +89,6 @@ public class VerifyTrustChainUseCase {
 
             // 3. Trust Chain 구축
             List<CertificateChainDto> certificateChain = new ArrayList<>();
-            List<ValidationErrorDto> validationErrors = new ArrayList<>();
 
             // Skeleton implementation: Add only end entity to chain
             // Full trust chain verification is handled by ValidateCertificatesUseCase
@@ -167,41 +165,5 @@ public class VerifyTrustChainUseCase {
             .filter(csca -> countryCode == null || countryCode.equals(csca.getSubjectInfo().getCountryCode()))
             .findFirst()
             .orElse(null);
-    }
-
-    /**
-     * Trust Chain 구축 (재귀적으로 상위 인증서 검색)
-     *
-     * <p>TODO: Phase 11 Sprint 5에서 구현 예정</p>
-     *
-     * @param certificate 현재 인증서
-     * @param chain 체인 목록 (출력 파라미터)
-     * @param depth 현재 깊이
-     * @param maxDepth 최대 깊이
-     * @return Trust Anchor 도달 여부
-     */
-    private boolean buildChain(
-        Certificate certificate,
-        List<CertificateChainDto> chain,
-        int depth,
-        int maxDepth
-    ) {
-        // Stub: Returns false (chain not built)
-        // Full trust chain building is handled by ValidateCertificatesUseCase
-        return false;
-    }
-
-    /**
-     * Self-Signed 인증서 여부 확인
-     *
-     * <p>Subject DN과 Issuer DN이 동일하면 Self-Signed입니다.</p>
-     *
-     * @param certificate 인증서
-     * @return Self-Signed 여부
-     */
-    private boolean isSelfSigned(Certificate certificate) {
-        String subjectDn = certificate.getSubjectInfo().getDistinguishedName();
-        String issuerDn = certificate.getIssuerInfo().getDistinguishedName();
-        return subjectDn.equals(issuerDn);
     }
 }

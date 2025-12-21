@@ -3,7 +3,6 @@ package com.smartcoreinc.localpkd.certificatevalidation.domain.repository;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateSourceType;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CountryCount;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.TypeCount;

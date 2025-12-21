@@ -94,6 +94,7 @@ class PassiveAuthenticationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @SuppressWarnings("unused")  // Reserved for future test methods
     @Autowired
     private PerformPassiveAuthenticationUseCase performPassiveAuthenticationUseCase;
 

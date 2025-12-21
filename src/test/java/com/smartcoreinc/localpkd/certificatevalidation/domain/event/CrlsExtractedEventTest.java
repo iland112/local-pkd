@@ -5,7 +5,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -18,7 +17,6 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("CrlsExtractedEvent Domain Event 테스트")
 class CrlsExtractedEventTest {
 
-    private static final UUID PARSED_FILE_ID = UUID.randomUUID();
     private static final int TOTAL_CRL_COUNT = 69;
     private static final int SUCCESS_COUNT = 69;
     private static final int FAILURE_COUNT = 0;

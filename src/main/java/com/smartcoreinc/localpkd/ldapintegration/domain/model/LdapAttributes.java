@@ -6,7 +6,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -102,6 +101,7 @@ public class LdapAttributes implements ValueObject, Serializable {
      * DN 컴포넌트 이스케이프 패턴
      * RFC 4514: DN 컴포넌트에서 이스케이프해야 할 특수 문자들
      */
+    @SuppressWarnings("unused")  // Reserved for future DN escaping
     private static final Pattern DN_ESCAPE_PATTERN = Pattern.compile("[,=+\\\\/<>;\"]");
 
     /**

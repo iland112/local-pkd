@@ -2,11 +2,10 @@
 <html
   lang="ko"
   xmlns:th="http://www.thymeleaf.org"
-  xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
-  layout:decorate="~{layout/main}"
+  th:replace="~{layout/base :: layout(~{::content})}"
 >
-  <head>
-    <th:block layout:fragment="extra-styles">
+  <body>
+    <th:block th:fragment="content">
       <style>
         /* Enhanced Visualization Styles */
         .asn1-tree { font-family: 'Courier New', monospace; line-height: 1.6; }
@@ -16,10 +15,6 @@
         details summary { cursor: pointer; user-select: none; }
         details[open] summary i.fa-chevron-down { transform: rotate(180deg); transition: transform 0.2s ease; }
       </style>
-    </th:block>
-  </head>
-  <body>
-    <div layout:fragment="content">
       <div
         class="container mx-auto px-4 py-8 max-w-7xl"
         x-data="paVerifyPageState()"
@@ -632,12 +627,9 @@
           </div>
         </div>
       </div>
-    </div>
-  </body>
 
-  <!-- Alpine.js Component Script -->
-  <th:block layout:fragment="script-content">
-    <script>
+      <!-- Alpine.js Component Script -->
+      <script>
       function paVerifyPageState() {
         console.log('[DEBUG] PA Verify Page State initialized');
         return {
@@ -1114,6 +1106,7 @@
           }
         };
       }
-    </script>
-  </th:block>
+      </script>
+    </th:block>
+  </body>
 </html>

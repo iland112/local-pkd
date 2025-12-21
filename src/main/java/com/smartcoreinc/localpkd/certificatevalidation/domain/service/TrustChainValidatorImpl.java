@@ -5,14 +5,12 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.Certifi
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.asn1.x509.KeyUsage;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

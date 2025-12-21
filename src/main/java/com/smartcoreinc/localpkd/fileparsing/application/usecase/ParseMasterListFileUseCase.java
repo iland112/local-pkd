@@ -77,6 +77,7 @@ public class ParseMasterListFileUseCase {
     private final FileParserPort fileParserPort;
     private final ProgressService progressService;
     private final MasterListRepository masterListRepository;
+    @SuppressWarnings("unused")  // Reserved for future certificate persistence during parsing
     private final CertificateRepository certificateRepository;
     private final MasterListParser masterListParser;
 

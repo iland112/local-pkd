@@ -5,7 +5,6 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.response.Chec
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateId;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
-import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +57,6 @@ import java.util.UUID;
 public class CheckRevocationUseCase {
 
     private final CertificateRepository certificateRepository;
-    private final CertificateRevocationListRepository crlRepository;
 
     /**
      * 인증서 폐기 여부 확인 실행
@@ -94,7 +92,6 @@ public class CheckRevocationUseCase {
                 certificate.getX509Data().getSerialNumber());
 
             // 3. CRL 조회 및 폐기 확인
-            long crlCheckStartTime = System.currentTimeMillis();
             boolean isRevoked = checkCertificateRevocation(
                 command.issuerDn(),
                 command.serialNumber(),

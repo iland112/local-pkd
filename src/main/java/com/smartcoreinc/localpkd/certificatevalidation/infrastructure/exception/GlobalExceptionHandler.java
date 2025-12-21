@@ -13,14 +13,13 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -479,6 +478,24 @@ public class GlobalExceptionHandler {
         log.debug("SSE client disconnected (normal behavior): {}", e.getMessage());
 
         // 응답하지 않음 - 이미 연결이 종료되었으므로 ResponseEntity 반환 불가
+    }
+
+    /**
+     * 정적 리소스 미발견 예외 처리 (Chrome DevTools 등 브라우저 자동 요청)
+     *
+     * @param e NoResourceFoundException 예외
+     * @param request HTTP 요청
+     * @return 404 NOT_FOUND (조용히 처리)
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Void> handleNoResourceFoundException(
+            NoResourceFoundException e,
+            WebRequest request) {
+
+        // .well-known 등 브라우저 자동 요청은 DEBUG 레벨로 로깅
+        log.debug("Static resource not found (browser auto-request): {}", e.getResourcePath());
+
+        return ResponseEntity.notFound().build();
     }
 
     @ExceptionHandler(Exception.class)

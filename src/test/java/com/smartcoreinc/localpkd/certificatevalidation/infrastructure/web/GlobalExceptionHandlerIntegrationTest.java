@@ -4,17 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartcoreinc.localpkd.certificatevalidation.application.response.ValidateCertificateResponse;
 import com.smartcoreinc.localpkd.certificatevalidation.application.usecase.ValidateCertificateUseCase;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.exception.ErrorResponse;
-import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.CertificateValidationController;
 import com.smartcoreinc.localpkd.certificatevalidation.infrastructure.web.request.CertificateValidationRequest;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 
@@ -55,7 +53,7 @@ public class GlobalExceptionHandlerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private ValidateCertificateUseCase validateCertificateUseCase;
 
     private static final String ENDPOINT = "/api/validate";

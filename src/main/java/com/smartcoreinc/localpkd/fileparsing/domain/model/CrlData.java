@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.Lob;
 import java.time.LocalDateTime;
 
 /**

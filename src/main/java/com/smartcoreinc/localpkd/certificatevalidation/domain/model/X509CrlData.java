@@ -58,7 +58,7 @@ import java.util.Arrays;
 @Getter
 @lombok.Setter(lombok.AccessLevel.PROTECTED)  // JPA용 protected setter 자동 생성
 @EqualsAndHashCode
-@jakarta.persistence.Access(jakarta.persistence.AccessType.PROPERTY)  // Force Hibernate to use getters
+@jakarta.persistence.Access(jakarta.persistence.AccessType.FIELD)  // Use field access for Native Image compatibility
 public class X509CrlData implements ValueObject {
 
     /**

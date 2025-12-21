@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.Map;
 
 /**
  * MasterListParseResult - Master List 파싱 결과 DTO

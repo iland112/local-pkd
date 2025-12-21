@@ -206,6 +206,7 @@ public class CertificatePathBuilderImpl implements CertificatePathBuilder {
      * @param dn Distinguished Name
      * @return 정규화된 DN
      */
+    @SuppressWarnings("unused")  // Utility method for future DN comparison
     private String normalizeDn(String dn) {
         if (dn == null) {
             return "";

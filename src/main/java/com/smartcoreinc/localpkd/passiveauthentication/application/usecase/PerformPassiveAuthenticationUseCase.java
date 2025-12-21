@@ -498,6 +498,8 @@ public class PerformPassiveAuthenticationUseCase {
             command.requestedBy()
         );
 
+        // Status is computed for potential future logging/auditing enhancements
+        @SuppressWarnings("unused")
         PassiveAuthenticationStatus status = determineOverallStatus(
             chainValidation, sodValidation, dgValidation, errors
         );
