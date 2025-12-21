@@ -1,7 +1,6 @@
 package com.smartcoreinc.localpkd.ldapintegration.infrastructure.web;
 
 import com.smartcoreinc.localpkd.ldapintegration.application.usecase.LdapHealthCheckUseCase;
-import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -46,21 +45,6 @@ import java.util.UUID;
 public class LdapUploadApiController {
 
     private final LdapHealthCheckUseCase ldapHealthCheckUseCase;
-
-    /**
-     * @deprecated This endpoint is deprecated and will be removed. Use a new endpoint that is compatible with the new UploadToLdapUseCase.
-     */
-    @Deprecated(forRemoval = true, since = "2025-11-23")
-    @Operation(summary = "LDAP 업로드 시작 (Deprecated)",
-               description = "이 API는 더 이상 사용되지 않습니다. 새로운 업로드 API를 사용하세요.")
-    @PostMapping("/upload")
-    public ResponseEntity<?> uploadToLdap() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("message", "This endpoint is deprecated and no longer supported.");
-        response.put("errorCode", "ENDPOINT_DEPRECATED");
-        return ResponseEntity.status(HttpStatus.GONE).body(response);
-    }
 
     /**
      * LDAP 업로드 상태 조회

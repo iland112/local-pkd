@@ -1,5 +1,6 @@
 package com.smartcoreinc.localpkd.fileparsing.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.common.util.CountryCodeUtil;
 import com.smartcoreinc.localpkd.fileparsing.application.service.CertificateExistenceService;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CrlData;
@@ -176,20 +177,6 @@ public class LdifParserAdapter implements FileParserPort {
     }
 
     /**
-     * @deprecated Use {@link #parseEntryWithCache(Entry, int, ParsedFile, Set)} for better performance
-     */
-    @Deprecated
-    private void parseEntry(Entry entry, int entryNumber, ParsedFile parsedFile) {
-        if (entry.hasAttribute(ATTR_USER_CERTIFICATE)) {
-            parseCertificateFromEntry(entry, parsedFile);
-        } else if (entry.hasAttribute(ATTR_CRL)) {
-            parseCrlFromBytes(entry.getAttribute(ATTR_CRL).getValueByteArray(), entry.getDN(), parsedFile);
-        } else if (entry.hasAttribute(ATTR_MASTER_LIST_CONTENT)) {
-            parseMasterListContent(entry.getAttribute(ATTR_MASTER_LIST_CONTENT).getValueByteArray(), entry.getDN(), parsedFile);
-        }
-    }
-
-    /**
      * ✅ 캐시 기반 인증서 파싱 (배치 중복 체크 최적화)
      *
      * <p>메모리 Set으로 중복 체크하여 DB 조회 없음 (N+1 문제 해결)</p>
@@ -223,10 +210,10 @@ public class LdifParserAdapter implements FileParserPort {
             String issuerDn = usesFallbackParsing ? holder.getIssuer().toString() : cert.getIssuerX500Principal().getName();
 
             // Country code extraction with fallback strategy
-            String countryCode = extractCountryCode(subjectDn);
+            String countryCode = CountryCodeUtil.extractCountryCode(subjectDn);
             if (countryCode == null) {
                 // Fallback 1: Extract from Issuer DN (for DSC without country in subject)
-                countryCode = extractCountryCode(issuerDn);
+                countryCode = CountryCodeUtil.extractCountryCode(issuerDn);
                 if (countryCode != null) {
                     log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
                 }
@@ -317,112 +304,12 @@ public class LdifParserAdapter implements FileParserPort {
         }
     }
 
-    /**
-     * LDIF 엔트리에서 X.509 인증서를 파싱하여 ParsedFile에 추가합니다.
-     *
-     * <p>
-     *  - CSCA: self-signed (subject == issuer)<br>
-     *  - DSC:  subject != issuer, 일반 데이터 경로 (dc=data)<br>
-     *  - DSC_NC: subject != issuer 이고 DN 경로에 {@code dc=nc-data} 가 포함된 경우
-     * </p>
-     *
-     * <p>
-     * NC-DATA(DSC_NC)는 이후 검증 단계에서 별도의 유효성 검사를 수행하지 않고
-     * 통계/분석 및 LDAP 저장 용도로만 사용됩니다.
-     * </p>
-     *
-     * @deprecated Use {@link #parseCertificateFromEntryWithCache(Entry, ParsedFile, Set)} for better performance
-     */
-    @Deprecated
-    private void parseCertificateFromEntry(Entry entry, ParsedFile parsedFile) {
-        byte[] certBytes = entry.getAttribute(ATTR_USER_CERTIFICATE).getValueByteArray();
-        String dn = entry.getDN();
-        try {
-            CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(certBytes));
-
-            String subjectDn = cert.getSubjectX500Principal().getName();
-            String issuerDn = cert.getIssuerX500Principal().getName();
-
-            // Country code extraction with fallback strategy
-            String countryCode = extractCountryCode(subjectDn);
-            if (countryCode == null) {
-                // Fallback 1: Extract from Issuer DN
-                countryCode = extractCountryCode(issuerDn);
-                if (countryCode != null) {
-                    log.debug("Country code extracted from Issuer DN: {} for subject: {}", countryCode, subjectDn);
-                }
-            }
-            if (countryCode == null && dn != null) {
-                // Fallback 2: Extract from LDIF entry DN
-                countryCode = extractCountryCodeFromMasterListDn(dn);
-                if (countryCode != null) {
-                    log.debug("Country code extracted from LDIF entry DN: {} for subject: {}", countryCode, subjectDn);
-                }
-            }
-
-            boolean selfSigned = subjectDn.equals(issuerDn);
-            boolean isNonConformantPath = dn != null && dn.toLowerCase().contains("dc=nc-data");
-
-            String certType;
-            if (selfSigned) {
-                certType = "CSCA";
-            } else if (isNonConformantPath) {
-                certType = "DSC_NC";
-                log.debug("Detected DSC_NC certificate from nc-data path: dn={}", dn);
-            } else {
-                certType = "DSC";
-            }
-
-            String fingerprint = calculateFingerprint(cert);
-
-            Map<String, List<String>> allAttributes = new HashMap<>();
-            for (Attribute attr : entry.getAttributes()) {
-                String name = attr.getName();
-                List<String> values = new ArrayList<>();
-                if (attr.hasValue()) {
-                    if (name.endsWith(";binary")) {
-                         for (byte[] val : attr.getValueByteArrays()) {
-                            values.add(Base64.getEncoder().encodeToString(val));
-                        }
-                    } else {
-                        values.addAll(Arrays.asList(attr.getValues()));
-                    }
-                }
-                allAttributes.put(name, values);
-            }
-
-            CertificateData certData = CertificateData.of(
-                certType,
-                countryCode,
-                subjectDn,
-                issuerDn,
-                cert.getSerialNumber().toString(16),
-                convertToLocalDateTime(cert.getNotBefore()),
-                convertToLocalDateTime(cert.getNotAfter()),
-                cert.getEncoded(),
-                fingerprint,
-                true,
-                allAttributes
-            );
-
-            if (!certificateExistenceService.existsByFingerprintSha256(fingerprint)) {
-                parsedFile.addCertificate(certData);
-            } else {
-                parsedFile.addError(ParsingError.of("DUPLICATE_CERTIFICATE", fingerprint, "Certificate with this fingerprint already exists globally."));
-                log.warn("Duplicate certificate skipped: fingerprint_sha256={}", fingerprint);
-            }
-        } catch (Exception e) {
-            parsedFile.addError(ParsingError.of("CERT_PARSE_ERROR", dn, e.getMessage()));
-        }
-    }
-
     private void parseCrlFromBytes(byte[] crlBytes, String dn, ParsedFile parsedFile) {
         try {
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
             X509CRL crl = (X509CRL) certFactory.generateCRL(new ByteArrayInputStream(crlBytes));
 
-            String countryCode = extractCountryCode(crl.getIssuerX500Principal().getName());
+            String countryCode = CountryCodeUtil.extractCountryCode(crl.getIssuerX500Principal().getName());
 
             CrlData crlData = CrlData.of(
                 countryCode,
@@ -693,19 +580,6 @@ public class LdifParserAdapter implements FileParserPort {
         return matcher.find() ? matcher.group(1).trim() : null;
     }
 
-    /**
-     * DN에서 국가 코드 추출
-     *
-     * @param dn Distinguished Name
-     * @return 국가 코드 (대문자, 2-3자) 또는 null
-     * @deprecated Use {@link com.smartcoreinc.localpkd.common.util.CountryCodeUtil#extractCountryCode(String)} instead
-     */
-    @Deprecated(since = "2025-12-11", forRemoval = true)
-    private String extractCountryCode(String dn) {
-        // CountryCodeUtil로 위임 (DRY 원칙)
-        return com.smartcoreinc.localpkd.common.util.CountryCodeUtil.extractCountryCode(dn);
-    }
-
     private String calculateFingerprint(X509Certificate cert) throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
         md.update(cert.getEncoded());
@@ -823,7 +697,7 @@ public class LdifParserAdapter implements FileParserPort {
         String serialNumber = holder.getSerialNumber().toString(16).toUpperCase();
 
         // Extract country code from DN
-        String countryCode = extractCountryCode(subjectDn);
+        String countryCode = CountryCodeUtil.extractCountryCode(subjectDn);
 
         // Create X509Data (note: publicKey will be null in fallback mode)
         com.smartcoreinc.localpkd.certificatevalidation.domain.model.X509Data x509Data =

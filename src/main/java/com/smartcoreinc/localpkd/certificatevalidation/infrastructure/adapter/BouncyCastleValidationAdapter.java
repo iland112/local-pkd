@@ -2,6 +2,7 @@ package com.smartcoreinc.localpkd.certificatevalidation.infrastructure.adapter;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateRevocationList;
+import com.smartcoreinc.localpkd.common.util.CountryCodeUtil;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidationError;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.ValidityPeriod;
@@ -619,21 +620,6 @@ public class BouncyCastleValidationAdapter implements CertificateValidationPort 
         return null;
     }
 
-    /**
-     * 국가 코드 추출 (DN에서)
-     *
-     * <p>DN: CN=CSCA-QA,O=Qatar,C=QA 에서 QA 추출</p>
-     *
-     * @param dn Distinguished Name (Subject 또는 Issuer)
-     * @return 국가 코드 (2-3자) 또는 null
-     * @deprecated Use {@link com.smartcoreinc.localpkd.common.util.CountryCodeUtil#extractCountryCode(String)} instead
-     */
-    @Deprecated(since = "2025-12-11", forRemoval = true)
-    private String extractCountryCode(String dn) {
-        // CountryCodeUtil로 위임 (DRY 원칙)
-        return com.smartcoreinc.localpkd.common.util.CountryCodeUtil.extractCountryCode(dn);
-    }
-
     @Override
     public boolean checkRevocation(Certificate certificate) {
         log.info("=== Certificate revocation check started (Phase 12 Week 4) ===");
@@ -662,7 +648,7 @@ public class BouncyCastleValidationAdapter implements CertificateValidationPort 
             log.debug("CSCA issuer name: {}", issuerName);
 
             // 3. 국가 코드 추출
-            String countryCode = extractCountryCode(issuerDn);
+            String countryCode = CountryCodeUtil.extractCountryCode(issuerDn);
             if (countryCode == null) {
                 log.debug("Could not extract country code from issuer DN: {}", issuerDn);
                 return true;  // 국가 코드 없음: 폐기되지 않았다고 가정

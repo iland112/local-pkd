@@ -19,11 +19,14 @@ public class CertificateExistenceService {
     private final ParsedCertificateQueryRepository parsedCertificateQueryRepository;
 
     /**
-     * 단일 fingerprint 중복 체크 (기존 메서드)
+     * 단일 fingerprint 중복 체크
      *
-     * @deprecated Use {@link #findExistingFingerprints(Set)} for batch processing to avoid N+1 queries
+     * <p>개별 인증서 중복 체크에 사용. 대량 처리 시에는
+     * {@link #findExistingFingerprints(Set)}를 사용하세요.</p>
+     *
+     * @param fingerprintSha256 인증서 fingerprint (SHA-256)
+     * @return 존재 여부
      */
-    @Deprecated
     @Transactional(readOnly = true)
     public boolean existsByFingerprintSha256(String fingerprintSha256) {
         return parsedCertificateQueryRepository.existsByFingerprintSha256(fingerprintSha256);
