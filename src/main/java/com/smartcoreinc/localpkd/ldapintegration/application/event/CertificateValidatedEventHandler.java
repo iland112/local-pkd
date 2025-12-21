@@ -1,7 +1,7 @@
 package com.smartcoreinc.localpkd.ldapintegration.application.event;
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
-import com.smartcoreinc.localpkd.fileupload.domain.model.ProcessingMode;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadedFile;
 import com.smartcoreinc.localpkd.fileupload.domain.repository.UploadedFileRepository;
@@ -14,7 +14,6 @@ import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
 import com.smartcoreinc.localpkd.shared.progress.ProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -31,6 +30,7 @@ public class CertificateValidatedEventHandler {
 
     private final UploadToLdapUseCase uploadToLdapUseCase;
     private final UploadedFileRepository uploadedFileRepository;
+    private final MasterListRepository masterListRepository;
     private final ProgressService progressService;
 
     /**
@@ -66,22 +66,25 @@ public class CertificateValidatedEventHandler {
             int totalCertificates = event.getValidCertificateCount() + event.getInvalidCertificateCount();
             int totalCrls = event.getValidCrlCount() + event.getInvalidCrlCount();
 
-            if (totalCertificates == 0 && totalCrls == 0) {
-                log.info("No certificates or CRLs to upload to LDAP for uploadId: {}. Completing process.", event.getUploadId());
+            // Also count Master Lists for LDAP upload (LDIF files contain country-specific Master Lists)
+            long totalMasterLists = masterListRepository.countByUploadId(new UploadId(event.getUploadId()));
+
+            if (totalCertificates == 0 && totalCrls == 0 && totalMasterLists == 0) {
+                log.info("No certificates, CRLs, or Master Lists to upload to LDAP for uploadId: {}. Completing process.", event.getUploadId());
                 progressService.sendProgress(ProcessingProgress.completed(event.getUploadId(), 0));
                 return;
             }
 
-            log.info("AUTO mode: Starting LDAP upload for {} total certificates ({} valid, {} invalid) and {} total CRLs ({} valid, {} invalid).",
+            log.info("AUTO mode: Starting LDAP upload for {} total certificates ({} valid, {} invalid), {} total CRLs ({} valid, {} invalid), and {} Master Lists.",
                 totalCertificates, event.getValidCertificateCount(), event.getInvalidCertificateCount(),
-                totalCrls, event.getValidCrlCount(), event.getInvalidCrlCount());
+                totalCrls, event.getValidCrlCount(), event.getInvalidCrlCount(), totalMasterLists);
 
             // Update status to UPLOADING_TO_LDAP
             uploadedFile.updateStatusToUploadingToLdap();
             uploadedFileRepository.save(uploadedFile);
 
             progressService.sendProgress(
-                ProcessingProgress.ldapSavingStarted(event.getUploadId(), totalCertificates + totalCrls)
+                ProcessingProgress.ldapSavingStarted(event.getUploadId(), totalCertificates + totalCrls + (int) totalMasterLists)
             );
 
             // Use the correct Command, UseCase, and Response from the ldapintegration context
@@ -89,7 +92,8 @@ public class CertificateValidatedEventHandler {
             UploadToLdapCommand command = UploadToLdapCommand.create(
                 event.getUploadId(),
                 totalCertificates,  // Total (valid + invalid) - UseCase will query DB for all
-                totalCrls           // Total (valid + invalid)
+                totalCrls,          // Total (valid + invalid)
+                (int) totalMasterLists  // Master Lists from LDIF file
             );
 
             UploadToLdapResponse response = uploadToLdapUseCase.execute(command);

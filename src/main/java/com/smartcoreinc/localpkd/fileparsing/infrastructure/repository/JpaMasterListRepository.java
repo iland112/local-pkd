@@ -220,4 +220,16 @@ public class JpaMasterListRepository implements MasterListRepository {
     public long countByCountryCode(CountryCode countryCode) {
         return jpaRepository.countByCountryCode(countryCode);
     }
+
+    /**
+     * UploadId별 MasterList 개수 조회
+     *
+     * @param uploadId UploadId
+     * @return 해당 업로드의 MasterList 개수
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countByUploadId(UploadId uploadId) {
+        return jpaRepository.countByUploadId(uploadId);
+    }
 }

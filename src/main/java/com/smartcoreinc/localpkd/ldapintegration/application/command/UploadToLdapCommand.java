@@ -42,6 +42,11 @@ public record UploadToLdapCommand(
     int validCrlCount,
 
     /**
+     * Master List 개수 (LDIF 파일에서 파싱된 국가별 Master List)
+     */
+    int masterListCount,
+
+    /**
      * LDAP 배치 크기 (한 번에 몇 개씩 업로드할지)
      * 기본값: 100
      */
@@ -63,8 +68,11 @@ public record UploadToLdapCommand(
         if (validCrlCount < 0) {
             throw new IllegalArgumentException("validCrlCount must not be negative");
         }
-        if (validCertificateCount + validCrlCount == 0) {
-            throw new IllegalArgumentException("At least one certificate or CRL must be present");
+        if (masterListCount < 0) {
+            throw new IllegalArgumentException("masterListCount must not be negative");
+        }
+        if (validCertificateCount + validCrlCount + masterListCount == 0) {
+            throw new IllegalArgumentException("At least one certificate, CRL, or Master List must be present");
         }
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
@@ -72,20 +80,28 @@ public record UploadToLdapCommand(
     }
 
     /**
-     * 총 업로드할 항목 수 (certificates + CRLs)
+     * 총 업로드할 항목 수 (certificates + CRLs + Master Lists)
      */
     public int getTotalCount() {
-        return validCertificateCount + validCrlCount;
+        return validCertificateCount + validCrlCount + masterListCount;
     }
 
     /**
      * 배치 크기 기본값을 적용한 생성자
      */
     public static UploadToLdapCommand create(UUID uploadId, int validCertificateCount, int validCrlCount) {
+        return create(uploadId, validCertificateCount, validCrlCount, 0);
+    }
+
+    /**
+     * Master List 포함 생성자
+     */
+    public static UploadToLdapCommand create(UUID uploadId, int validCertificateCount, int validCrlCount, int masterListCount) {
         return UploadToLdapCommand.builder()
             .uploadId(uploadId)
             .validCertificateCount(validCertificateCount)
             .validCrlCount(validCrlCount)
+            .masterListCount(masterListCount)
             .batchSize(100)  // Default batch size
             .build();
     }

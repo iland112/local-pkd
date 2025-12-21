@@ -88,8 +88,9 @@ public class UploadToLdapUseCase {
     @Transactional
     public UploadToLdapResponse execute(UploadToLdapCommand command) {
         log.info("=== LDAP upload started ===");
-        log.info("UploadId: {}, Certificates: {}, CRLs: {}, BatchSize: {}",
-            command.uploadId(), command.validCertificateCount(), command.validCrlCount(), command.batchSize());
+        log.info("UploadId: {}, Certificates: {}, CRLs: {}, MasterLists: {}, BatchSize: {}",
+            command.uploadId(), command.validCertificateCount(), command.validCrlCount(),
+            command.masterListCount(), command.batchSize());
 
         long startTime = System.currentTimeMillis();
 
@@ -225,10 +226,64 @@ public class UploadToLdapUseCase {
                 }
             }
 
-            // 5. Master List upload logic removed (CSCAs are uploaded individually with other certificates)
-            log.info("Skipping separate Master List object upload as CSCAs are handled during the certificate upload phase.");
+            // 5. Master List CMS binary upload to o=ml,c={COUNTRY}
+            // LDIF files contain country-specific Master Lists that should be uploaded to LDAP
+            java.util.List<com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList> masterLists =
+                    masterListRepository.findAllByUploadId(
+                        new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId()));
+
+            log.info("Uploading {} Master Lists to LDAP...", masterLists.size());
             int uploadedMasterListCount = 0;
+            int skippedMasterListCount = 0;
             int failedMasterListCount = 0;
+
+            for (int i = 0; i < masterLists.size(); i++) {
+                com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList ml = masterLists.get(i);
+                try {
+                    // Get country code and signer DN for this Master List
+                    String countryCode = ml.getCountryCode() != null ? ml.getCountryCode().getValue() : "XX";
+                    String cscaDn = ml.getSignerDn() != null ? ml.getSignerDn() : "CN=Unknown";
+                    String serialNumber = "1";  // Default serial for Master List entry
+
+                    // Convert Master List to LDIF format for o=ml,c={COUNTRY}
+                    String ldifEntry = ldifConverter.masterListForCountryToLdif(ml, countryCode, cscaDn, serialNumber);
+
+                    // Upload single Master List entry
+                    List<String> mlBatch = new ArrayList<>();
+                    mlBatch.add(ldifEntry);
+                    int successCount = ldapAdapter.addLdifEntriesBatch(mlBatch);
+
+                    if (successCount > 0) {
+                        uploadedMasterListCount++;
+                        log.debug("Master List uploaded: country={}, mlId={}", countryCode, ml.getId().getId());
+                    } else {
+                        skippedMasterListCount++;
+                        log.debug("Master List skipped (duplicate): country={}, mlId={}", countryCode, ml.getId().getId());
+                    }
+
+                    // Send progress every 10 items or at the end
+                    if ((i + 1) % 10 == 0 || (i + 1) == masterLists.size()) {
+                        int percentage = 95 + ((i + 1) * 4 / Math.max(masterLists.size(), 1));
+                        progressService.sendProgress(
+                                ProcessingProgress.builder()
+                                        .uploadId(command.uploadId())
+                                        .stage(ProcessingStage.LDAP_SAVING_IN_PROGRESS)
+                                        .percentage(Math.min(99, percentage))
+                                        .message(String.format("Master List LDAP 저장 중 (%d/%d)", i + 1, masterLists.size()))
+                                        .processedCount(i + 1)
+                                        .totalCount(masterLists.size())
+                                        .build()
+                        );
+                    }
+
+                } catch (Exception e) {
+                    failedMasterListCount++;
+                    log.error("Failed to upload Master List to LDAP: mlId={}", ml.getId().getId(), e);
+                }
+            }
+
+            log.info("Master List LDAP upload completed: {} uploaded, {} skipped, {} failed",
+                    uploadedMasterListCount, skippedMasterListCount, failedMasterListCount);
 
             // 6. LDAP 업로드 결과 통계 계산
             // Calculate totals first
@@ -249,9 +304,9 @@ public class UploadToLdapUseCase {
                     .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC_NC)
                     .count();
 
-            log.info("LDAP upload completed: CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}, CRL: {}",
-                    cscaUploadedCount, masterListCscaCount, dscUploadedCount, dscNcUploadedCount, uploadedCrlCount);
-            log.info("Skipped (duplicates): {} certificates, {} CRLs", skippedCertificateCount, skippedCrlCount);
+            log.info("LDAP upload completed: CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}, CRL: {}, MasterList: {}",
+                    cscaUploadedCount, masterListCscaCount, dscUploadedCount, dscNcUploadedCount, uploadedCrlCount, uploadedMasterListCount);
+            log.info("Skipped (duplicates): {} certificates, {} CRLs, {} Master Lists", skippedCertificateCount, skippedCrlCount, skippedMasterListCount);
 
             // 통계 메시지 포맷팅
             StringBuilder detailsMsg = new StringBuilder();
@@ -269,6 +324,10 @@ public class UploadToLdapUseCase {
             if (uploadedCrlCount > 0) {
                 if (detailsMsg.length() > 0) detailsMsg.append(", ");
                 detailsMsg.append(String.format("CRL: %d개", uploadedCrlCount));
+            }
+            if (uploadedMasterListCount > 0) {
+                if (detailsMsg.length() > 0) detailsMsg.append(", ");
+                detailsMsg.append(String.format("MasterList: %d개", uploadedMasterListCount));
             }
             if (totalFailed > 0) {
                 if (detailsMsg.length() > 0) detailsMsg.append(", ");

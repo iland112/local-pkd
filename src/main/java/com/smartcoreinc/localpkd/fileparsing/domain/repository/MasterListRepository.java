@@ -142,4 +142,12 @@ public interface MasterListRepository {
      * @return 해당 국가의 MasterList 개수
      */
     long countByCountryCode(CountryCode countryCode);
+
+    /**
+     * UploadId별 MasterList 개수 조회
+     *
+     * @param uploadId UploadId
+     * @return 해당 업로드의 MasterList 개수
+     */
+    long countByUploadId(UploadId uploadId);
 }

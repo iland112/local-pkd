@@ -41,6 +41,13 @@ public class UnifiedFileUploadController {
         return "file/upload";
     }
 
+    @GetMapping("/dashboard")
+    public String showDashboardPage(Model model) {
+        log.info("PKD statistics dashboard page accessed");
+        model.addAttribute("currentPage", "file-dashboard");
+        return "file/dashboard";
+    }
+
     @Operation(
         summary = "파일 비동기 업로드",
         description = """
