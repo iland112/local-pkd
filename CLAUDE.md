@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 5.0
-**Last Updated**: 2025-12-21
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅
+**Version**: 5.1
+**Last Updated**: 2025-12-22
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅
 
 ---
 
@@ -252,6 +252,8 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 
 ## 🚀 Build & Run
 
+### JVM Mode (개발용)
+
 ```bash
 # 컨테이너 시작
 ./podman-start.sh
@@ -266,6 +268,25 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 ./mvnw spring-boot:run
 # http://localhost:8081
 ```
+
+### Native Image Mode (프로덕션용)
+
+```bash
+# 컨테이너 시작
+./podman-start.sh
+
+# Native Image 빌드 (5-10분 소요)
+./scripts/native-build.sh --skip-tests
+
+# Native Image 실행
+./scripts/native-run.sh
+# http://localhost:8081
+```
+
+**Native Image 장점**:
+- 빠른 시작: ~0.1초 (JVM: ~5초)
+- 낮은 메모리: ~100MB (JVM: ~500MB)
+- 단일 실행 파일: `target/local-pkd`
 
 ---
 
@@ -313,6 +334,15 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 - PA 수행 (`/pa/verify`)
 - PA 이력 (`/pa/history`)
 - PA 통계 (`/pa/dashboard`)
+
+### GraalVM Native Image ✅ PRODUCTION READY
+
+| Feature | Status |
+|---------|--------|
+| Native Image Build | ✅ |
+| BouncyCastle Reflection Config | ✅ |
+| Thymeleaf Pure Fragment Pattern | ✅ |
+| Build/Run Scripts | ✅ |
 
 ### Future Enhancements (Optional)
 
@@ -365,6 +395,7 @@ http://<WSL-IP>:8081
 | ICAO_9303_PA_CRL_STANDARD | PA + CRL 표준 절차 | docs/ICAO_9303_PA_CRL_STANDARD.md |
 | DG1_DG2_PARSING_GUIDE | DG 파싱 가이드 | docs/DG1_DG2_PARSING_GUIDE.md |
 | LDAP_BASE_DN_RECOVERY | LDAP 복구 가이드 | docs/LDAP_BASE_DN_RECOVERY.md |
+| NATIVE_IMAGE_GUIDE | Native Image 빌드/실행 | docs/NATIVE_IMAGE_GUIDE.md |
 
 **세션 문서**: `docs/SESSION_*.md` (개발 이력)
 **아카이브**: `docs/archive/phases/` (Phase 1-19 문서)
