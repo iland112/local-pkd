@@ -8,6 +8,11 @@
 >
 <head th:replace="~{layout/_head :: head-content}"></head>
 <body x-data="dashboardApp()" x-init="$store.theme.init()">
+  <!-- Skip Navigation Links for Accessibility -->
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-content focus:rounded-lg focus:shadow-lg">
+    메인 콘텐츠로 건너뛰기
+  </a>
+
   <div class="drawer">
     <input id="main-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col">
@@ -16,7 +21,7 @@
         <nav th:replace="~{layout/_nav :: nav-content}"></nav>
 
         <!-- 메인 컨텐츠 영역 -->
-        <main class="flex-grow bg-base-200/30">
+        <main id="main-content" class="flex-grow bg-base-200/30" role="main">
             <!-- Page Content - passed as fragment parameter -->
             <th:block th:replace="${content}"></th:block>
         </main>
