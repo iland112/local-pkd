@@ -7,7 +7,7 @@
   <body>
     <th:block th:fragment="content">
       <div
-        class="container mx-auto px-4 py-8 max-w-7xl"
+        class="w-full px-4 lg:px-6 py-4"
         x-data="uploadPageState()"
         @alpine:init="init()"
         @beforeunload.window="destroySseConnection()"
@@ -15,33 +15,42 @@
 
         <!-- Success Alert -->
         <div th:if="${success}" class="alert alert-success mb-4 shadow-lg" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <!-- Heroicon: check-circle -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
           <span th:text="${success}">Success message</span>
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
 
         <!-- Error Alert -->
         <div th:if="${error}" class="alert alert-error mb-4 shadow-lg" x-data="{ show: true }" x-show="show">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <!-- Heroicon: x-circle -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
           <span th:text="${error}">Error message</span>
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-stretch">
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
           <!-- Left Column: Upload Form -->
           <div id="uploadFunctionCard" class="col-span-1 lg:col-span-3">
             <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-              <div class="card-body flex flex-col">
-                <h2 class="card-title text-2xl">
-                  <i class="fas fa-cloud-upload-alt text-primary"></i>
+              <div class="card-body flex flex-col p-5">
+                <h2 class="card-title text-xl flex items-center gap-2">
+                  <!-- Heroicon: cloud-arrow-up -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-primary">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                  </svg>
                   <span>파일 업로드</span>
                 </h2>
-                <p class="text-sm text-base-content opacity-70 mb-4">
+                <p class="text-sm text-base-content opacity-70 mb-3">
                   LDIF, Master List 파일을 처리 서버에 업로드합니다.
                 </p>
 
                 <!-- Processing Mode Selector Fragment -->
-                <div class="mb-6 pb-6 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
+                <div class="mb-4 pb-4 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
                   <th:block th:replace="~{fragments/processing-mode-selector :: mode-selector(selected='AUTO')}" />
                 </div>
 
@@ -54,15 +63,18 @@
                     @dragleave.prevent="isDragging = false"
                     @drop.prevent="handleFileDrop($event)"
                   >
-                    <label class="label">
-                      <span class="label-text font-semibold">
-                        <i class="fas fa-file-upload text-primary mr-1"></i>
+                    <label class="label py-1">
+                      <span class="label-text font-semibold flex items-center gap-1">
+                        <!-- Heroicon: arrow-up-tray -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-primary">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                        </svg>
                         파일 선택
                       </span>
                     </label>
                     <div
                       x-ref="dropzone"
-                      class="relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-300"
+                      class="relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors duration-300"
                       :class="{
                         'border-primary bg-primary bg-opacity-10': isDragging,
                         'border-base-300 hover:border-primary hover:bg-base-200': !isDragging && !selectedFile,
@@ -81,7 +93,10 @@
                         @change="handleFileSelection($event)"
                       />
                       <div class="flex flex-col items-center justify-center space-y-2">
-                        <i class="fas fa-cloud-upload-alt text-4xl" :class="selectedFile ? 'text-info-content' : 'text-base-content opacity-50'"></i>
+                        <!-- Heroicon: cloud-arrow-up -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-12 h-12" :class="selectedFile ? 'text-info-content' : 'text-base-content opacity-50'">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                        </svg>
                         <p x-show="!selectedFile" class="text-base-content opacity-70">
                           파일을 여기로 드래그하거나 클릭하여 선택하세요.
                         </p>
@@ -94,8 +109,11 @@
                   </div>
 
                   <!-- File Type Warning -->
-                  <div x-show="!isValidFileType" class="alert alert-warning mt-4">
-                    <i class="fas fa-exclamation-triangle"></i>
+                  <div x-show="!isValidFileType" class="alert alert-warning mt-3">
+                    <!-- Heroicon: exclamation-triangle -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
                     <span>지원하지 않는 파일 형식입니다. LDIF 또는 ML 파일을 선택해주세요.</span>
                   </div>
 
@@ -104,14 +122,20 @@
                   <input type="hidden" name="processingMode" x-model="processingMode" />
 
                   <!-- Action Buttons -->
-                  <div class="card-actions justify-end mt-6">
-                    <button type="button" onclick="window.location.href='/upload-history'" class="btn btn-outline gap-2">
-                      <i class="fas fa-history"></i>
+                  <div class="card-actions justify-end mt-4">
+                    <button type="button" onclick="window.location.href='/upload-history'" class="btn btn-outline btn-sm gap-2">
+                      <!-- Heroicon: clock -->
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
                       업로드 이력
                     </button>
-                    <button type="submit" id="uploadBtn" class="btn btn-primary gap-2" :disabled="isProcessing || !selectedFile || !isValidFileType">
-                      <span x-show="isProcessing" class="loading loading-spinner"></span>
-                      <i x-show="!isProcessing" class="fas fa-upload"></i>
+                    <button type="submit" id="uploadBtn" class="btn btn-primary btn-sm gap-2" :disabled="isProcessing || !selectedFile || !isValidFileType">
+                      <span x-show="isProcessing" class="loading loading-spinner loading-sm"></span>
+                      <!-- Heroicon: arrow-up-tray -->
+                      <svg x-show="!isProcessing" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
                       업로드
                     </button>
                   </div>
@@ -129,41 +153,44 @@
                  x-transition:enter-end="opacity-100 transform translate-y-0"
             >
               <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-                <div class="card-body flex flex-col">
-                  <h3 class="card-title text-lg mb-4 flex flex-col items-start">
-                    <div class="flex items-center">
-                      <i class="fas fa-tasks text-info mr-2"></i>
+                <div class="card-body flex flex-col p-5">
+                  <h3 class="card-title text-lg mb-3 flex flex-col items-start">
+                    <div class="flex items-center gap-2">
+                      <!-- Heroicon: queue-list -->
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-info">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+                      </svg>
                       <span>처리 진행 상황</span>
                     </div>
-                    <span x-show="fileName" class="font-mono text-sm ml-6 opacity-70"> 파일명:(<span x-text="fileName"></span>)</span>
+                    <span x-show="fileName" class="font-mono text-xs ml-7 opacity-70"> 파일명:(<span x-text="fileName"></span>)</span>
                   </h3>
-                  
+
                   <!-- Stage Progress Steps -->
                   <ul class="steps steps-vertical w-full flex-grow">
-                    <li class="step mb-4" :class="{
+                    <li class="step mb-3" :class="{
                           'step-primary': uploadStage.status === 'IN_PROGRESS',
                           'step-success': uploadStage.status === 'COMPLETED',
                           'step-error': uploadStage.status === 'FAILED'
                         }">
                       <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title">파일 업로드</div>
+                        <div class="step-title text-sm font-medium">파일 업로드</div>
                         <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="uploadStage.message"></div>
-                        <progress class="progress progress-primary w-full" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress>
+                        <progress class="progress progress-primary w-full h-1.5" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress>
                         <div class="text-xs font-mono w-full" x-show="uploadStage.percentage > 0" x-text="uploadStage.percentage + '%'"></div>
                       </div>
                     </li>
-                    <li class="step mb-4" :class="{
+                    <li class="step mb-3" :class="{
                           'step-primary': parseStage.status === 'IN_PROGRESS',
                           'step-success': parseStage.status === 'COMPLETED',
                           'step-error': parseStage.status === 'FAILED'
                         }">
                       <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title">파일 파싱</div>
+                        <div class="step-title text-sm font-medium">파일 파싱</div>
                         <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="parseStage.message"></div>
-                        <progress class="progress progress-primary w-full" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress>
+                        <progress class="progress progress-primary w-full h-1.5" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress>
                         <div class="text-xs font-mono w-full" x-show="parseStage.percentage > 0" x-text="parseStage.percentage + '%'"></div>
                         <template x-if="parseStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div>
+                          <div class="text-xs mt-1 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div>
                         </template>
                       </div>
                     </li>
@@ -174,12 +201,12 @@
                           'step-error': validateStage.status === 'FAILED' || ldapStage.status === 'FAILED'
                         }">
                       <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title">인증서 검증 + LDAP 저장</div>
+                        <div class="step-title text-sm font-medium">인증서 검증 + LDAP 저장</div>
                         <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="getIntegratedStageMessage()"></div>
-                        <progress class="progress progress-primary w-full" :value="getIntegratedStagePercentage()" max="100" x-show="getIntegratedStagePercentage() > 0"></progress>
+                        <progress class="progress progress-primary w-full h-1.5" :value="getIntegratedStagePercentage()" max="100" x-show="getIntegratedStagePercentage() > 0"></progress>
                         <div class="text-xs font-mono w-full" x-show="getIntegratedStagePercentage() > 0" x-text="getIntegratedStagePercentage() + '%'"></div>
                         <template x-if="validateStage.details || ldapStage.details">
-                          <div class="text-xs mt-2 p-2 bg-base-200 rounded w-full">
+                          <div class="text-xs mt-1 p-2 bg-base-200 rounded w-full">
                             <div x-show="validateStage.details" x-html="validateStage.details"></div>
                             <div x-show="ldapStage.details" class="mt-1 pt-1 border-t border-base-300" x-html="ldapStage.details"></div>
                           </div>
@@ -189,10 +216,10 @@
                   </ul>
 
                   <!-- Manual Mode Control Panel (Interleaved Batch Processing) -->
-                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-6 border-t pt-4" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
-                    <h4 class="font-bold text-md mb-3">수동 처리 제어</h4>
-                    <p class="text-xs opacity-70 mb-3">검증 단계에서 LDAP 저장이 함께 수행됩니다 (Interleaved Batch Processing)</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-4 border-t pt-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
+                    <h4 class="font-bold text-sm mb-2">수동 처리 제어</h4>
+                    <p class="text-xs opacity-70 mb-2">검증 단계에서 LDAP 저장이 함께 수행됩니다</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <!-- Parse Button -->
                         <button
                             :disabled="parsingCompleted || parsingInProgress"
@@ -203,7 +230,15 @@
                                 'btn-primary': !parsingCompleted && !parsingInProgress,
                                 'loading': parsingInProgress
                             }">
-                            <i x-show="!parsingInProgress" class="fas" :class="{'fa-check-circle': parsingCompleted, 'fa-play': !parsingCompleted}"></i>
+                            <template x-if="!parsingInProgress">
+                              <!-- Heroicon: check-circle or play -->
+                              <svg x-show="parsingCompleted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                              </svg>
+                              <svg x-show="!parsingCompleted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                              </svg>
+                            </template>
                             <span x-text="parsingCompleted ? '파싱 완료' : (parsingInProgress ? '파싱 중...' : '1. 파싱 시작')"></span>
                         </button>
 
@@ -217,33 +252,49 @@
                                 'btn-primary': parsingCompleted && !ldapCompleted && !validationInProgress && !ldapInProgress,
                                 'loading': validationInProgress || ldapInProgress
                             }">
-                            <i x-show="!validationInProgress && !ldapInProgress" class="fas" :class="{'fa-check-circle': ldapCompleted, 'fa-play': !ldapCompleted}"></i>
+                            <template x-if="!validationInProgress && !ldapInProgress">
+                              <svg x-show="ldapCompleted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                              </svg>
+                              <svg x-show="!ldapCompleted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                              </svg>
+                            </template>
                             <span x-text="ldapCompleted ? '검증 + LDAP 완료' : ((validationInProgress || ldapInProgress) ? '검증 + LDAP 저장 중...' : '2. 검증 + LDAP 저장')"></span>
                         </button>
                     </div>
                   </div>
 
                   <!-- Final Status Message -->
-                  <div x-show="overallStatus === 'FINALIZED' || overallStatus === 'FAILED'" class="mt-6 alert" :class="{'alert-success': overallStatus === 'FINALIZED', 'alert-error': overallStatus === 'FAILED'}">
-                     <i class="fas" :class="{'fa-check-circle': overallStatus === 'FINALIZED', 'fa-exclamation-triangle': overallStatus === 'FAILED'}"></i>
+                  <div x-show="overallStatus === 'FINALIZED' || overallStatus === 'FAILED'" class="mt-4 alert" :class="{'alert-success': overallStatus === 'FINALIZED', 'alert-error': overallStatus === 'FAILED'}">
+                    <!-- Heroicon: check-circle or exclamation-triangle -->
+                    <svg x-show="overallStatus === 'FINALIZED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <svg x-show="overallStatus === 'FAILED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
                     <span x-text="overallMessage"></span>
                   </div>
                 </div>
               </div>
             </div>
-            
+
             <!-- Error Card -->
-            <div x-show="errorMessages.length > 0" class="col-span-full"
+            <div x-show="errorMessages.length > 0" class="mt-4"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0"
                  x-transition:enter-end="opacity-100"
             >
               <div class="card bg-red-100 border border-red-400 text-red-700 shadow-xl">
-                  <div class="card-body">
+                  <div class="card-body p-4">
                       <div class="flex justify-between items-center">
-                        <h3 class="card-title text-lg">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            오류 발생
+                        <h3 class="card-title text-base flex items-center gap-2">
+                          <!-- Heroicon: exclamation-triangle -->
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                          </svg>
+                          오류 발생
                         </h3>
                         <button @click="errorMessages = []" class="btn btn-sm btn-ghost">✕</button>
                       </div>
@@ -265,8 +316,11 @@
           <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>
-          <h3 class="font-bold text-lg text-warning mb-4">
-            <i class="fas fa-exclamation-triangle mr-2"></i>
+          <h3 class="font-bold text-lg text-warning mb-4 flex items-center gap-2">
+            <!-- Heroicon: exclamation-triangle -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
             중복 파일 경고
           </h3>
 
@@ -298,13 +352,20 @@
           </div>
 
           <div class="modal-action">
-              <button class="btn btn-outline" onclick="document.getElementById('duplicateModal').close()">취소</button>
-              <button class="btn btn-info gap-2" @click="viewExistingFile()">
-                <i class="fas fa-eye"></i>
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('duplicateModal').close()">취소</button>
+              <button class="btn btn-info btn-sm gap-2" @click="viewExistingFile()">
+                <!-- Heroicon: eye -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                </svg>
                 기존 파일 보기
               </button>
-              <button class="btn btn-error gap-2" @click="forceUpload()">
-                <i class="fas fa-sync-alt"></i>
+              <button class="btn btn-error btn-sm gap-2" @click="forceUpload()">
+                <!-- Heroicon: arrow-path -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
                 강제 업로드
               </button>
           </div>
@@ -324,7 +385,7 @@
             isValidFileType: true,
             fileInfo: '',
             selectedFile: null,
-            fileName: '', // Added fileName
+            fileName: '',
 
             // Upload & Processing state
             isProcessing: false,
@@ -346,7 +407,7 @@
             ldapStage: { active: true, message: '업로드 대기 중', percentage: 0, status: 'IDLE', details: '' },
 
             // Overall status
-            overallStatus: 'IDLE', // IDLE, IN_PROGRESS, FINALIZED, FAILED
+            overallStatus: 'IDLE',
             overallMessage: '',
 
             // Manual mode completion flags
@@ -362,7 +423,7 @@
             // Error collection
             errorMessages: [],
 
-            // Toast duplicate prevention - track shown notifications
+            // Toast duplicate prevention
             shownNotifications: new Set(),
 
             init() {
@@ -377,7 +438,7 @@
             },
 
             resetProgressState() {
-                this.isProcessing = false; // 초기 상태는 false로 설정
+                this.isProcessing = false;
                 this.uploadId = null;
                 sessionStorage.removeItem('currentUploadId');
                 this.sseReconnectAttempts = 0;
@@ -397,17 +458,15 @@
                 this.validationInProgress = false;
                 this.ldapInProgress = false;
                 this.errorMessages = [];
-                this.shownNotifications = new Set(); // Reset shown notifications
-                this.fileName = ''; // Reset fileName here too
+                this.shownNotifications = new Set();
+                this.fileName = '';
             },
 
             handleFileDrop(event) {
               this.isDragging = false;
               const files = event.dataTransfer.files;
               if (files.length > 0) {
-                // Manually set the files for the hidden input
                 this.$refs.fileInput.files = files;
-                // Create a new 'change' event to trigger handleFileSelection
                 const changeEvent = new Event('change', { bubbles: true });
                 this.$refs.fileInput.dispatchEvent(changeEvent);
               }
@@ -417,12 +476,12 @@
               this.selectedFile = event.target.files[0];
               if (!this.selectedFile) {
                   this.fileInfo = '';
-                  this.isValidFileType = true; // Reset validation
-                  this.fileName = ''; // Also reset fileName
+                  this.isValidFileType = true;
+                  this.fileName = '';
                   return;
               };
               this.fileInfo = `${this.selectedFile.name} (${formatFileSize(this.selectedFile.size)})`;
-              this.fileName = this.selectedFile.name; // Set fileName here
+              this.fileName = this.selectedFile.name;
 
               const fileName = this.selectedFile.name.toLowerCase();
               if (fileName.endsWith('.ldif')) {
@@ -495,13 +554,12 @@
             handleUploadError(error, context) {
                 console.error(`${context} error:`, error);
                 this.errorMessages.push(`${context} 중 오류: ${error.message}`);
-                // Only mark the specific stage as FAILED, not necessarily active for all
-                this.uploadStage.status = 'FAILED'; 
+                this.uploadStage.status = 'FAILED';
                 this.uploadStage.message = '실패: ' + error.message;
                 this.overallStatus = 'FAILED';
                 this.isProcessing = false;
             },
-            
+
             viewExistingFile() {
                 if(this.existingFileId) window.open(`/history/${this.existingFileId}`, '_blank');
             },
@@ -528,7 +586,6 @@
               if (this.sseReconnectAttempts < this.maxSseReconnectAttempts) {
                   this.sseReconnectAttempts++;
                   const delay = 2000 * Math.pow(2, this.sseReconnectAttempts - 1);
-                  // this.errorMessages.push(`SSE 연결이 끊어졌습니다. ${delay/1000}초 후 재연결합니다...`); // Removed this line
                   this.sseReconnectTimer = setTimeout(() => this.startSseConnection(), delay);
               } else {
                   this.errorMessages.push('SSE 연결을 복구할 수 없습니다.');
@@ -555,9 +612,9 @@
 
                 const targetStage = stageMap[progress.step];
                 if (targetStage) {
-                    targetStage.active = true; // Always true for steps display
+                    targetStage.active = true;
                     if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = true;
-                    
+
                     targetStage.message = progress.message;
                     targetStage.percentage = progress.percentage;
                     targetStage.status = progress.status;
@@ -568,21 +625,19 @@
                     this[completedMap[progress.status]] = true;
                     if(inProgressMap[progress.step]) this[inProgressMap[progress.step]] = false;
 
-                    // Show completion notification for each stage (only once per status)
                     const notificationKey = `${progress.uploadId}_${progress.status}`;
                     if (!this.shownNotifications.has(notificationKey)) {
                         this.shownNotifications.add(notificationKey);
                         const stageNames = {
                             'PARSING_COMPLETED': '파싱',
-                            'LDAP_SAVING_COMPLETED': '검증 + LDAP 저장'  // Interleaved: 검증과 LDAP이 통합됨
+                            'LDAP_SAVING_COMPLETED': '검증 + LDAP 저장'
                         };
-                        // Note: VALIDATION_COMPLETED는 중간 단계이므로 토스트 표시하지 않음 (LDAP_SAVING_COMPLETED에서 통합 표시)
                         if (stageNames[progress.status]) {
                             showNotification(`${stageNames[progress.status]} 단계가 완료되었습니다.`, 'success');
                         }
                     }
                 }
-                
+
                 if (progress.step === 'PAUSE') {
                     if (completedMap[progress.stage]) this[completedMap[progress.stage]] = true;
                     this.isProcessing = false;
@@ -612,8 +667,6 @@
                 const stages = [this.uploadStage, this.parseStage, this.validateStage, this.ldapStage];
                 if(this.overallStatus === 'FINALIZED') {
                     stages.forEach(stage => {
-                        // Only update stages that were actually involved in processing.
-                        // For stages that were never "active" (e.g. manual mode steps not triggered), leave them as is.
                         if (stage.status !== 'IDLE') {
                             stage.percentage = 100;
                             stage.status = 'COMPLETED';
@@ -624,14 +677,13 @@
                         if (stage.status !== 'IDLE' && stage.status !== 'COMPLETED') stage.status = 'FAILED';
                     });
                 }
-                // Show final notification only once (prevent duplicate with stage completion toasts)
                 const finalNotificationKey = `${progress.uploadId}_FINALIZED`;
                 if (!this.shownNotifications.has(finalNotificationKey)) {
                     this.shownNotifications.add(finalNotificationKey);
                     showNotification(progress.message, this.overallStatus === 'FINALIZED' ? 'success' : 'error');
                 }
             },
-            
+
             async triggerManualStep(step) {
                 if (!this.uploadId) { showNotification('업로드된 파일이 없습니다.', 'warning'); return; }
                 this.isProcessing = true;
@@ -655,7 +707,6 @@
                         const error = await response.json();
                         throw new Error(error.message || '수동 처리 시작에 실패했습니다.');
                     }
-                    // Toast will be shown when stage completes via SSE
                 } catch (error) {
                     this.errorMessages.push(`[${step}] ${error.message}`);
                     this.isProcessing = false;
@@ -663,14 +714,12 @@
                     stageMap[step].status = 'FAILED';
                 }
             },
-            
+
             triggerParse() { this.triggerManualStep('PARSE'); },
             triggerValidate() { this.triggerManualStep('VALIDATE'); },
             triggerLdapUpload() { this.triggerManualStep('UPLOAD_TO_LDAP'); },
 
-            // Helper functions for Interleaved Batch Processing UI
             getIntegratedStageMessage() {
-                // 검증 + LDAP 통합 단계 메시지
                 if (this.ldapStage.status === 'COMPLETED') {
                     return '검증 및 LDAP 저장 완료';
                 } else if (this.ldapStage.status === 'IN_PROGRESS') {
@@ -686,7 +735,6 @@
             },
 
             getIntegratedStagePercentage() {
-                // 검증 + LDAP 통합 단계 진행률 (검증 50% + LDAP 50%)
                 if (this.ldapStage.status === 'COMPLETED') {
                     return 100;
                 } else if (this.ldapStage.status === 'IN_PROGRESS') {
@@ -737,7 +785,6 @@
           };
         }
 
-        // Global utility functions
         function formatFileSize(bytes) {
           if (bytes === 0) return '0 Bytes';
           const k = 1024;
@@ -758,10 +805,15 @@
                 success: 'alert-success', error: 'alert-error',
                 warning: 'alert-warning', info: 'alert-info'
             }[type];
+
+            const iconSvg = type === 'success'
+                ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>'
+                : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>';
+
             toast.className = `alert ${alertClass} shadow-lg transition-all duration-300 transform`;
-            toast.innerHTML = `<div><i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} mr-2"></i><span>${message}</span></div>`;
+            toast.innerHTML = `<div class="flex items-center gap-2">${iconSvg}<span>${message}</span></div>`;
             toastContainer.appendChild(toast);
-            
+
             setTimeout(() => toast.style.opacity = '0', 4700);
             setTimeout(() => toast.remove(), 5000);
         }

@@ -8,88 +8,121 @@
     <th:block th:fragment="content">
       <script th:src="@{/webjars/chartjs/4.4.3/dist/chart.umd.js}"></script>
       <div
-        class="container mx-auto px-4 py-8 max-w-7xl"
+        class="w-full px-4 lg:px-6 py-4"
         x-data="paDashboardPageState()"
         @alpine:init="init()"
       >
         <!-- Page Header -->
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold text-base-content mb-2">
-            <i class="fas fa-chart-line text-primary"></i>
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-base-content mb-1 flex items-center gap-2">
+            <!-- Heroicon: chart-bar-square -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-primary">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
+            </svg>
             Passive Authentication Dashboard
           </h1>
-          <p class="text-base-content opacity-70">
+          <p class="text-base-content opacity-70 text-sm">
             전자여권 검증 통계 및 추이를 시각화합니다.
           </p>
         </div>
 
         <!-- Quick Actions -->
-        <div class="flex gap-2 mb-6">
-          <a href="/pa/verify" class="btn btn-primary">
-            <i class="fas fa-plus-circle mr-2"></i>
+        <div class="flex gap-2 mb-4">
+          <a href="/pa/verify" class="btn btn-primary btn-sm">
+            <!-- Heroicon: plus-circle -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
             새 검증 수행
           </a>
-          <a href="/pa/history" class="btn btn-outline">
-            <i class="fas fa-history mr-2"></i>
+          <a href="/pa/history" class="btn btn-outline btn-sm">
+            <!-- Heroicon: clock -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
             검증 이력
           </a>
-          <button @click="refreshDashboard()" :disabled="loading" class="btn btn-ghost">
-            <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
-            <span class="ml-2">새로고침</span>
+          <button @click="refreshDashboard()" :disabled="loading" class="btn btn-ghost btn-sm">
+            <template x-if="loading">
+              <span class="loading loading-spinner loading-xs"></span>
+            </template>
+            <template x-if="!loading">
+              <!-- Heroicon: arrow-path -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </template>
+            새로고침
           </button>
         </div>
 
         <!-- Summary Statistics -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
             <div class="stat-figure text-primary">
-              <i class="fas fa-file-alt text-3xl"></i>
+              <!-- Heroicon: document-text -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
             </div>
-            <div class="stat-title">총 검증 건수</div>
-            <div class="stat-value text-primary" x-text="statistics.total"></div>
-            <div class="stat-desc">전체 검증 수행 건수</div>
+            <div class="stat-title text-xs">총 검증 건수</div>
+            <div class="stat-value text-xl text-primary" x-text="statistics.total"></div>
+            <div class="stat-desc text-xs">전체 검증 수행 건수</div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
             <div class="stat-figure text-success">
-              <i class="fas fa-check-circle text-3xl"></i>
+              <!-- Heroicon: check-circle -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
             </div>
-            <div class="stat-title">검증 성공률</div>
-            <div class="stat-value text-success" x-text="statistics.successRate + '%'"></div>
-            <div class="stat-desc">
+            <div class="stat-title text-xs">검증 성공률</div>
+            <div class="stat-value text-xl text-success" x-text="statistics.successRate + '%'"></div>
+            <div class="stat-desc text-xs">
               <span x-text="statistics.valid + ' / ' + statistics.total + ' 건'"></span>
             </div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
             <div class="stat-figure text-info">
-              <i class="fas fa-globe text-3xl"></i>
+              <!-- Heroicon: globe-americas -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.115 5.19a.75.75 0 0 1-.18.09L12 9.75l6.065-4.47a.75.75 0 0 1-.18-.09M12 21.75c-4.97 0-9-4.03-9-9s4.03-9 9-9 9 4.03 9 9-4.03 9-9 9Z" />
+              </svg>
             </div>
-            <div class="stat-title">검증 국가 수</div>
-            <div class="stat-value text-info" x-text="statistics.countryCount"></div>
-            <div class="stat-desc">서로 다른 발급 국가</div>
+            <div class="stat-title text-xs">검증 국가 수</div>
+            <div class="stat-value text-xl text-info" x-text="statistics.countryCount"></div>
+            <div class="stat-desc text-xs">서로 다른 발급 국가</div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
             <div class="stat-figure text-warning">
-              <i class="fas fa-clock text-3xl"></i>
+              <!-- Heroicon: calendar -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+              </svg>
             </div>
-            <div class="stat-title">오늘 검증 건수</div>
-            <div class="stat-value text-warning" x-text="statistics.todayCount"></div>
-            <div class="stat-desc" x-text="'최근 검증: ' + statistics.lastVerification"></div>
+            <div class="stat-title text-xs">오늘 검증 건수</div>
+            <div class="stat-value text-xl text-warning" x-text="statistics.todayCount"></div>
+            <div class="stat-desc text-xs" x-text="'최근 검증: ' + statistics.lastVerification"></div>
           </div>
         </div>
 
         <!-- Charts Row 1 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <!-- Verification Status Chart -->
           <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-chart-pie text-success"></i>
+            <div class="card-body p-5">
+              <h2 class="card-title text-base flex items-center gap-2">
+                <!-- Heroicon: chart-pie -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-success">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+                </svg>
                 검증 결과 분포
               </h2>
-              <div class="h-80 flex items-center justify-center">
+              <div class="h-64 flex items-center justify-center">
                 <canvas x-ref="statusChart"></canvas>
               </div>
             </div>
@@ -97,12 +130,15 @@
 
           <!-- Country Distribution Chart -->
           <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-globe-americas text-info"></i>
+            <div class="card-body p-5">
+              <h2 class="card-title text-base flex items-center gap-2">
+                <!-- Heroicon: globe-alt -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-info">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+                </svg>
                 국가별 검증 건수 (Top 10)
               </h2>
-              <div class="h-80 flex items-center justify-center">
+              <div class="h-64 flex items-center justify-center">
                 <canvas x-ref="countryChart"></canvas>
               </div>
             </div>
@@ -110,15 +146,18 @@
         </div>
 
         <!-- Charts Row 2 -->
-        <div class="grid grid-cols-1 gap-6 mb-6">
+        <div class="grid grid-cols-1 gap-4 mb-4">
           <!-- Daily Trend Chart -->
           <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-chart-line text-primary"></i>
+            <div class="card-body p-5">
+              <h2 class="card-title text-base flex items-center gap-2">
+                <!-- Heroicon: presentation-chart-line -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-primary">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+                </svg>
                 일별 검증 추이 (최근 30일)
               </h2>
-              <div class="h-80">
+              <div class="h-64">
                 <canvas x-ref="trendChart"></canvas>
               </div>
             </div>
@@ -127,12 +166,19 @@
 
         <!-- Recent Verifications -->
         <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-          <div class="card-body">
-            <h2 class="card-title text-lg mb-4">
-              <i class="fas fa-clock text-warning"></i>
+          <div class="card-body p-5">
+            <h2 class="card-title text-base mb-3 flex items-center gap-2">
+              <!-- Heroicon: clock -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-warning">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
               최근 검증 이력
-              <a href="/pa/history" class="btn btn-sm btn-ghost ml-auto">
-                전체 보기 <i class="fas fa-arrow-right ml-2"></i>
+              <a href="/pa/history" class="btn btn-sm btn-ghost ml-auto flex items-center gap-1">
+                전체 보기
+                <!-- Heroicon: arrow-right -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
               </a>
             </h2>
 
@@ -143,17 +189,23 @@
 
             <!-- Empty State -->
             <div x-show="!loading && recentVerifications.length === 0" class="text-center py-10">
-              <i class="fas fa-inbox text-5xl text-base-content opacity-30 mb-4"></i>
-              <p class="text-lg text-base-content opacity-70">아직 검증 이력이 없습니다</p>
-              <a href="/pa/verify" class="btn btn-primary mt-4">
-                <i class="fas fa-plus-circle mr-2"></i>
+              <!-- Heroicon: inbox -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-14 h-14 mx-auto text-base-content opacity-30 mb-3">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z" />
+              </svg>
+              <p class="text-base text-base-content opacity-70">아직 검증 이력이 없습니다</p>
+              <a href="/pa/verify" class="btn btn-primary btn-sm mt-4">
+                <!-- Heroicon: plus-circle -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
                 첫 검증 수행하기
               </a>
             </div>
 
             <!-- Table -->
             <div x-show="!loading && recentVerifications.length > 0" class="overflow-x-auto">
-              <table class="table table-zebra w-full">
+              <table class="table table-zebra table-sm w-full">
                 <thead>
                   <tr>
                     <th>검증 시각</th>
@@ -167,7 +219,7 @@
                   <template x-for="record in recentVerifications.slice(0, 10)" :key="record.verificationId">
                     <tr>
                       <td>
-                        <span class="text-sm" x-text="formatTimestamp(record.verifiedAt)"></span>
+                        <span class="text-xs" x-text="formatTimestamp(record.verifiedAt)"></span>
                       </td>
                       <td>
                         <div class="flex items-center gap-2">
@@ -176,11 +228,11 @@
                         </div>
                       </td>
                       <td>
-                        <span class="font-mono text-sm" x-text="record.documentNumber"></span>
+                        <span class="font-mono text-xs" x-text="record.documentNumber"></span>
                       </td>
                       <td>
                         <span
-                          class="badge badge-sm"
+                          class="badge badge-xs"
                           :class="{
                             'badge-success': record.status === 'VALID',
                             'badge-error': record.status === 'INVALID',
@@ -190,7 +242,7 @@
                         ></span>
                       </td>
                       <td>
-                        <span class="text-sm" x-text="record.requestedBy || 'anonymous'"></span>
+                        <span class="text-xs" x-text="record.requestedBy || 'anonymous'"></span>
                       </td>
                     </tr>
                   </template>
@@ -358,12 +410,21 @@
                     this.statistics.error
                   ],
                   backgroundColor: [
-                    'rgb(34, 197, 94)',  // success green
-                    'rgb(239, 68, 68)',  // error red
-                    'rgb(251, 191, 36)'  // warning yellow
+                    'rgba(134, 239, 172, 0.7)',  // pastel green (success)
+                    'rgba(252, 165, 165, 0.7)',  // pastel red (error)
+                    'rgba(253, 224, 139, 0.7)'   // pastel yellow (warning)
                   ],
                   borderWidth: 2,
-                  borderColor: this.$store.theme.darkMode ? '#1f2937' : '#ffffff'
+                  borderColor: [
+                    'rgba(134, 239, 172, 0.9)',
+                    'rgba(252, 165, 165, 0.9)',
+                    'rgba(253, 224, 139, 0.9)'
+                  ],
+                  hoverBackgroundColor: [
+                    'rgba(134, 239, 172, 0.85)',
+                    'rgba(252, 165, 165, 0.85)',
+                    'rgba(253, 224, 139, 0.85)'
+                  ]
                 }]
               },
               options: {
@@ -404,9 +465,10 @@
                 datasets: [{
                   label: '검증 건수',
                   data: sortedCountries.map(c => c[1]),
-                  backgroundColor: 'rgba(59, 130, 246, 0.8)',  // info blue
-                  borderColor: 'rgb(59, 130, 246)',
-                  borderWidth: 1
+                  backgroundColor: 'rgba(147, 197, 253, 0.6)',  // pastel blue
+                  borderColor: 'rgba(147, 197, 253, 0.9)',
+                  borderWidth: 1,
+                  hoverBackgroundColor: 'rgba(147, 197, 253, 0.8)'
                 }]
               },
               options: {
@@ -462,23 +524,35 @@
                   {
                     label: 'Valid',
                     data: this.dailyStats.map(d => d.valid),
-                    borderColor: 'rgb(34, 197, 94)',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    tension: 0.3
+                    borderColor: 'rgba(134, 239, 172, 0.8)',   // pastel green
+                    backgroundColor: 'rgba(134, 239, 172, 0.15)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: 'rgba(134, 239, 172, 0.9)',
+                    pointBorderColor: 'rgba(134, 239, 172, 1)',
+                    pointHoverBackgroundColor: 'rgba(134, 239, 172, 1)'
                   },
                   {
                     label: 'Invalid',
                     data: this.dailyStats.map(d => d.invalid),
-                    borderColor: 'rgb(239, 68, 68)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.3
+                    borderColor: 'rgba(252, 165, 165, 0.8)',   // pastel red
+                    backgroundColor: 'rgba(252, 165, 165, 0.15)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: 'rgba(252, 165, 165, 0.9)',
+                    pointBorderColor: 'rgba(252, 165, 165, 1)',
+                    pointHoverBackgroundColor: 'rgba(252, 165, 165, 1)'
                   },
                   {
                     label: 'Error',
                     data: this.dailyStats.map(d => d.error),
-                    borderColor: 'rgb(251, 191, 36)',
-                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                    tension: 0.3
+                    borderColor: 'rgba(253, 224, 139, 0.8)',   // pastel yellow
+                    backgroundColor: 'rgba(253, 224, 139, 0.15)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: 'rgba(253, 224, 139, 0.9)',
+                    pointBorderColor: 'rgba(253, 224, 139, 1)',
+                    pointHoverBackgroundColor: 'rgba(253, 224, 139, 1)'
                   }
                 ]
               },
