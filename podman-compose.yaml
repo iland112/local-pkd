@@ -15,7 +15,7 @@ services:
       - icao-local-pkd-postgres_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
     restart: unless-stopped
-  
+
   # pgAdmin (선택사항 - 데이터베이스 관리 도구)
   pgadmin:
     image: docker.io/dpage/pgadmin4:latest
@@ -30,6 +30,38 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
+
+  # Local PKD Application (Native Image)
+  local-pkd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local-pkd:latest
+    container_name: icao-local-pkd-app
+    network_mode: host
+    environment:
+      # container 프로파일만 활성화 (local 프로파일 제외)
+      SPRING_PROFILES_ACTIVE: container
+      # PostgreSQL 연결 - host 네트워크이므로 localhost 사용
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/icao_local_pkd
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+      # LDAP 연결 (외부 서버)
+      LDAP_IP: 192.168.100.10
+      LDAP_PORT: 389
+      LDAP_USERNAME: "cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
+      LDAP_PASSWORD: core
+    volumes:
+      - ./data:/app/data:Z
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   icao-local-pkd-postgres_data:

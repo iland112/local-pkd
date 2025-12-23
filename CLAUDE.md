@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 5.1
-**Last Updated**: 2025-12-22
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅
+**Version**: 5.2
+**Last Updated**: 2025-12-23
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅
 
 ---
 
@@ -272,8 +272,8 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 ### Native Image Mode (프로덕션용)
 
 ```bash
-# 컨테이너 시작
-./podman-start.sh
+# 컨테이너 시작 (DB만)
+./podman-start.sh --skip-app
 
 # Native Image 빌드 (5-10분 소요)
 ./scripts/native-build.sh --skip-tests
@@ -287,6 +287,36 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 - 빠른 시작: ~0.1초 (JVM: ~5초)
 - 낮은 메모리: ~100MB (JVM: ~500MB)
 - 단일 실행 파일: `target/local-pkd`
+
+### Podman Container Mode (외부 클라이언트 연동)
+
+```bash
+# Native Image 빌드 (최초 1회)
+./scripts/native-build.sh --skip-tests
+
+# 전체 서비스 시작 (DB + App)
+./podman-start.sh
+
+# 이미지 재빌드 시
+./podman-start.sh --build
+```
+
+**컨테이너 구성**:
+- `icao-local-pkd-postgres`: PostgreSQL 15 (port 5432)
+- `icao-local-pkd-pgadmin`: pgAdmin (port 5050)
+- `icao-local-pkd-app`: Local PKD Native Image (port 8081, host network)
+
+**Windows 클라이언트 접속** (ePassport Reader 연동):
+```bash
+# WSL2 IP 확인
+hostname -I  # 예: 172.24.1.6
+
+# UFW 방화벽 허용 (최초 1회)
+sudo ufw allow 8081/tcp
+
+# Windows에서 접속
+http://172.24.1.6:8081
+```
 
 ---
 
@@ -344,6 +374,16 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 | Thymeleaf Pure Fragment Pattern | ✅ |
 | Build/Run Scripts | ✅ |
 
+### Podman Containerization ✅ PRODUCTION READY
+
+| Feature | Status |
+|---------|--------|
+| Dockerfile (Native Image) | ✅ |
+| podman-compose.yaml | ✅ |
+| Host Network Mode | ✅ |
+| Windows Client Access | ✅ |
+| PA API Integration Guide | ✅ |
+
 ### Future Enhancements (Optional)
 
 - ⏳ 실시간 검증 진행 상황 (SSE 기반)
@@ -396,6 +436,7 @@ http://<WSL-IP>:8081
 | DG1_DG2_PARSING_GUIDE | DG 파싱 가이드 | docs/DG1_DG2_PARSING_GUIDE.md |
 | LDAP_BASE_DN_RECOVERY | LDAP 복구 가이드 | docs/LDAP_BASE_DN_RECOVERY.md |
 | NATIVE_IMAGE_GUIDE | Native Image 빌드/실행 | docs/NATIVE_IMAGE_GUIDE.md |
+| PA_API_INTEGRATION_GUIDE | 외부 클라이언트 PA API 연동 | docs/PA_API_INTEGRATION_GUIDE.md |
 
 **세션 문서**: `docs/SESSION_*.md` (개발 이력)
 **아카이브**: `docs/archive/phases/` (Phase 1-19 문서)
