@@ -16,7 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.context.event.EventListener;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,10 +48,17 @@ import java.util.stream.Collectors;
  *   <li>RabbitMQ 전환 시 Redis로 교체 가능</li>
  * </ul>
  *
+ * <p><b>트랜잭션 처리</b>:</p>
+ * <ul>
+ *   <li>@TransactionalEventListener(phase = AFTER_COMMIT): PostgreSQL 커밋 후 이벤트 처리</li>
+ *   <li>이를 통해 LDAP 핸들러가 DB에서 데이터를 확실히 조회 가능</li>
+ *   <li>PostgreSQL 저장과 LDAP 업로드가 논리적으로 분리됨</li>
+ * </ul>
+ *
  * <p><b>RabbitMQ 전환 시 변경 사항</b>:</p>
  * <pre>
  * // 현재 (Spring Events)
- * @TransactionalEventListener
+ * @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
  * @Async("ldapUploadExecutor")
  * public void handleLdapBatchUpload(LdapBatchUploadEvent event)
  *
@@ -100,14 +108,15 @@ public class AsyncLdapUploadHandler {
     /**
      * 비동기 LDAP 배치 업로드 이벤트 핸들러
      *
-     * <p>이벤트 발행 즉시 별도 스레드에서 비동기로 실행됩니다.</p>
-     * <p>새로운 트랜잭션에서 실행 (REQUIRES_NEW)하여 호출자 트랜잭션과 분리</p>
+     * <p><b>AFTER_COMMIT</b>: 트랜잭션 커밋 후에 이벤트가 처리됩니다.</p>
+     * <p>이렇게 하면 PostgreSQL에 데이터가 완전히 저장된 후 LDAP 핸들러가 조회할 수 있습니다.</p>
+     * <p>별도 스레드 풀(ldapUploadExecutor)에서 비동기로 실행됩니다.</p>
      * <p>RabbitMQ 전환 시 @RabbitListener로 변경됩니다.</p>
      *
      * @param event LDAP 배치 업로드 이벤트
      */
     @Async("ldapUploadExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleLdapBatchUpload(LdapBatchUploadEvent event) {
         UUID batchId = event.getBatchId();
@@ -296,13 +305,19 @@ public class AsyncLdapUploadHandler {
 
     /**
      * 처리된 배치 캐시 정리 (메모리 관리)
-     * 
-     * <p>주기적으로 호출하여 오래된 항목 제거</p>
+     *
+     * <p>1시간마다 자동 실행되어 오래된 항목 제거</p>
      * <p>RabbitMQ 전환 시: Redis TTL로 자동 만료</p>
      */
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 3600000)  // 1시간마다 실행
     public void clearProcessedBatches() {
         int size = processedBatches.size();
-        processedBatches.clear();
-        log.info("Cleared {} processed batch entries", size);
+        if (size > 0) {
+            processedBatches.clear();
+            completedBatchCounts.clear();
+            expectedBatchCounts.clear();
+            completedTypes.clear();
+            log.info("Scheduled cache cleanup: cleared {} processed batch entries", size);
+        }
     }
 }

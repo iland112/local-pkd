@@ -3,6 +3,7 @@ package com.smartcoreinc.localpkd.certificatevalidation.domain.model;
 import com.smartcoreinc.localpkd.shared.domain.ValueObject;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import java.security.PublicKey;
 import java.util.Arrays;
@@ -60,6 +61,7 @@ public class X509Data implements ValueObject {
      * <p><b>NOTE</b>: @Lob 제거 - Hibernate/PostgreSQL bytea 매핑 버그 회피.
      * columnDefinition="BYTEA"만으로도 충분함.</p>
      */
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "certificate_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateBinary;
 
@@ -235,19 +237,25 @@ public class X509Data implements ValueObject {
     /**
      * 인증서 크기 (바이트)
      *
+     * <p>Note: 메서드명을 'getCertificateSize' 대신 'calculateCertificateSize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 바이트 단위 크기
      */
-    public int getCertificateSize() {
+    public int calculateCertificateSize() {
         return certificateBinary != null ? certificateBinary.length : 0;
     }
 
     /**
      * 인증서 크기 (사람 친화적 표현)
      *
+     * <p>Note: 메서드명을 'getCertificateSizeDisplay' 대신 'formatCertificateSizeDisplay'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 예: "2.5 KB", "1.2 MB"
      */
-    public String getCertificateSizeDisplay() {
-        int size = getCertificateSize();
+    public String formatCertificateSizeDisplay() {
+        int size = calculateCertificateSize();
         if (size <= 0) return "0 B";
         if (size < 1024) return size + " B";
         if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
@@ -257,9 +265,12 @@ public class X509Data implements ValueObject {
     /**
      * 공개 키 알고리즘
      *
+     * <p>Note: 메서드명을 'getPublicKeyAlgorithm' 대신 'extractPublicKeyAlgorithm'으로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 알고리즘 명 (예: "RSA", "EC", "DSA")
      */
-    public String getPublicKeyAlgorithm() {
+    public String extractPublicKeyAlgorithm() {
         return publicKey != null ? publicKey.getAlgorithm() : "UNKNOWN";
     }
 
@@ -300,7 +311,7 @@ public class X509Data implements ValueObject {
     public String toString() {
         return String.format(
             "X509Data[fingerprint=%s, serialNumber=%s, size=%s, keyAlgorithm=%s]",
-            fingerprintSha256, serialNumber, getCertificateSizeDisplay(), getPublicKeyAlgorithm()
+            fingerprintSha256, serialNumber, formatCertificateSizeDisplay(), extractPublicKeyAlgorithm()
         );
     }
 

@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 
 /**
  * Data Group in ePassport LDS (Logical Data Structure).
@@ -23,6 +24,7 @@ public class DataGroup {
     @Column(name = "data_group_number", length = 10)
     private DataGroupNumber number;
 
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "content", columnDefinition = "BYTEA")
     private byte[] content;
 

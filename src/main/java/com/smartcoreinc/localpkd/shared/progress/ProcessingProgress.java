@@ -156,16 +156,20 @@ public class ProcessingProgress {
             case VALIDATION_IN_PROGRESS:
             case VALIDATION_COMPLETED:
                 return "VALIDATE";
+            case DB_SAVING_STARTED:
+            case DB_SAVING_IN_PROGRESS:
+            case DB_SAVING_COMPLETED:
+                return "DB_SAVE";
             case LDAP_SAVING_STARTED:
             case LDAP_SAVING_IN_PROGRESS:
             case LDAP_SAVING_COMPLETED:
                 return "LDAP_UPLOAD";
-            case MANUAL_PAUSE: // New case
+            case MANUAL_PAUSE:
                 return "PAUSE";
             case COMPLETED:
                 return "FINALIZED";
             case FAILED:
-                return "FAILED"; // Frontend expects "FAILED" status, not necessarily a step
+                return "FAILED";
             default:
                 return "UNKNOWN";
         }
@@ -278,13 +282,58 @@ public class ProcessingProgress {
     }
 
     /**
+     * DB 저장 시작
+     */
+    public static ProcessingProgress dbSavingStarted(UUID uploadId, int totalCount) {
+        return ProcessingProgress.builder()
+            .uploadId(uploadId)
+            .stage(ProcessingStage.DB_SAVING_STARTED)
+            .percentage(72)
+            .processedCount(0)
+            .totalCount(totalCount)
+            .message("DB 저장 시작")
+            .build();
+    }
+
+    /**
+     * DB 저장 진행 중
+     */
+    public static ProcessingProgress dbSavingInProgress(
+            UUID uploadId, int processedCount, int totalCount, String message, int minPercent, int maxPercent) {
+        int percentage = calculatePercentage(processedCount, totalCount, minPercent, maxPercent);
+        return ProcessingProgress.builder()
+            .uploadId(uploadId)
+            .stage(ProcessingStage.DB_SAVING_IN_PROGRESS)
+            .percentage(percentage)
+            .processedCount(processedCount)
+            .totalCount(totalCount)
+            .message(message)
+            .build();
+    }
+
+    /**
+     * DB 저장 완료
+     */
+    public static ProcessingProgress dbSavingCompleted(UUID uploadId, int totalCount, String details) {
+        return ProcessingProgress.builder()
+            .uploadId(uploadId)
+            .stage(ProcessingStage.DB_SAVING_COMPLETED)
+            .percentage(85)
+            .processedCount(totalCount)
+            .totalCount(totalCount)
+            .message(String.format("DB 저장 완료 (총 %d개)", totalCount))
+            .details(details)
+            .build();
+    }
+
+    /**
      * LDAP 저장 시작
      */
     public static ProcessingProgress ldapSavingStarted(UUID uploadId, int totalCount) {
         return ProcessingProgress.builder()
             .uploadId(uploadId)
             .stage(ProcessingStage.LDAP_SAVING_STARTED)
-            .percentage(90) // 90%로 변경
+            .percentage(87)
             .processedCount(0)
             .totalCount(totalCount)
             .message("LDAP 저장 시작")

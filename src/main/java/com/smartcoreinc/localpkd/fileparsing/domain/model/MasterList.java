@@ -136,9 +136,12 @@ public class MasterList extends AggregateRoot<MasterListId> {
 
     /**
      * Get the size of the CMS binary in bytes
+     *
+     * <p>Note: 메서드명을 'getSize' 대신 'calculateBinarySize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
      */
-    public int getBinarySize() {
-        return cmsBinary != null ? cmsBinary.getSize() : 0;
+    public int calculateBinarySize() {
+        return cmsBinary != null ? cmsBinary.calculateSize() : 0;
     }
 
     /**
@@ -167,6 +170,6 @@ public class MasterList extends AggregateRoot<MasterListId> {
     @Override
     public String toString() {
         return String.format("MasterList[id=%s, country=%s, version=%s, cscaCount=%d, size=%d bytes]",
-                id, countryCode, version, cscaCount, getBinarySize());
+                id, countryCode, version, cscaCount, calculateBinarySize());
     }
 }

@@ -4,9 +4,9 @@ import com.smartcoreinc.localpkd.shared.domain.ValueObject;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.Lob;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import java.util.Arrays;
 
@@ -70,7 +70,8 @@ public class X509CrlData implements ValueObject {
      *
      * <p><b>Note</b>: Lombok @Getter/@Setter에서 제외됨 (수동 getter/setter 사용 - 복사본 반환)</p>
      */
-    @Lob
+    // NOTE: @Lob 제거 - Hibernate 6 + PostgreSQL bytea 매핑 시 @JdbcTypeCode만 사용
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA")
     @lombok.Getter(lombok.AccessLevel.NONE)  // Lombok getter 생성 제외 (수동 getter 사용)
     @lombok.Setter(lombok.AccessLevel.NONE)  // Lombok setter 생성 제외 (수동 setter 사용)
@@ -165,20 +166,24 @@ public class X509CrlData implements ValueObject {
     /**
      * CRL 데이터 크기
      *
+     * <p>Note: 메서드명을 'getSize' 대신 'calculateSize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 바이트 단위 크기
      */
-    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
-    public int getSize() {
+    public int calculateSize() {
         return crlBinary != null ? crlBinary.length : 0;
     }
 
     /**
      * 비어있는지 확인
      *
+     * <p>Note: 메서드명을 'isEmpty' 대신 'checkEmpty'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return CRL 데이터가 없으면 true
      */
-    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
-    public boolean isEmpty() {
+    public boolean checkEmpty() {
         return crlBinary == null || crlBinary.length == 0;
     }
 
@@ -187,8 +192,7 @@ public class X509CrlData implements ValueObject {
      *
      * @return revokedCount > 0이면 true
      */
-    @jakarta.persistence.Transient  // JPA 프로퍼티가 아닌 유틸리티 메서드
-    public boolean hasRevokedCertificates() {
+    public boolean checkHasRevokedCertificates() {
         return revokedCount > 0;
     }
 
@@ -199,6 +203,6 @@ public class X509CrlData implements ValueObject {
      */
     @Override
     public String toString() {
-        return String.format("X509CrlData[size=%d bytes, revokedCount=%d]", getSize(), revokedCount);
+        return String.format("X509CrlData[size=%d bytes, revokedCount=%d]", calculateSize(), revokedCount);
     }
 }
