@@ -133,9 +133,17 @@ public class LdapBatchUploadService {
     }
 
     /**
-     * CRL 배치를 LDAP에 업로드
+     * CRL 배치를 LDAP에 업로드 (RFC 5280 기준 CRL Number 비교 포함)
      *
      * <p>각 CRL을 LDIF 형식으로 변환하고 배치 단위로 LDAP에 업로드합니다.</p>
+     * <p><b>RFC 5280 표준 준수</b>: CRL Number를 비교하여 더 최신 CRL만 업로드합니다.</p>
+     *
+     * <h3>동작 방식</h3>
+     * <ul>
+     *   <li>기존 CRL 없음: ADD 연산으로 신규 추가</li>
+     *   <li>새 CRL Number > 기존 CRL Number: MODIFY 연산으로 교체</li>
+     *   <li>새 CRL Number <= 기존 CRL Number: 스킵 (기존 CRL 유지)</li>
+     * </ul>
      *
      * @param crls 업로드할 CRL 목록
      * @return LdapBatchUploadResult 업로드 결과
@@ -146,7 +154,7 @@ public class LdapBatchUploadService {
             return LdapBatchUploadResult.empty();
         }
 
-        log.info("Uploading {} CRLs to LDAP", crls.size());
+        log.info("Uploading {} CRLs to LDAP (RFC 5280 CRL Number comparison enabled)", crls.size());
 
         List<String> ldifEntries = new ArrayList<>();
         List<UUID> failedIds = new ArrayList<>();
@@ -168,17 +176,30 @@ public class LdapBatchUploadService {
             }
         }
 
-        // 2. LDAP 배치 업로드
+        // 2. LDAP 배치 업로드 (RFC 5280 CRL Number 비교 사용)
         int successCount = 0;
         int skippedCount = 0;
+        int updatedCount = 0;
 
         if (!ldifEntries.isEmpty()) {
             try {
-                successCount = ldapAdapter.addLdifEntriesBatch(ldifEntries);
-                skippedCount = ldifEntries.size() - successCount;
+                // RFC 5280 표준에 따라 CRL Number를 비교하여 추가/업데이트/스킵 결정
+                UnboundIdLdapAdapter.CrlBatchResult batchResult =
+                    ldapAdapter.addOrUpdateCrlEntriesBatch(ldifEntries);
 
-                log.info("CRL LDAP batch upload completed: {} success, {} skipped (duplicates)",
-                    successCount, skippedCount);
+                successCount = batchResult.added();
+                updatedCount = batchResult.updated();
+                skippedCount = batchResult.skipped();
+
+                log.info("CRL LDAP batch upload completed: {} added, {} updated, {} skipped (already latest)",
+                    successCount, updatedCount, skippedCount);
+
+                // 성공 카운트에 업데이트된 CRL 포함
+                successCount = batchResult.totalSuccess();
+
+                if (batchResult.errors() > 0) {
+                    log.warn("CRL LDAP batch upload had {} errors", batchResult.errors());
+                }
 
             } catch (Exception e) {
                 log.error("CRL LDAP batch upload failed: {}", e.getMessage(), e);

@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 5.3
+**Version**: 5.4
 **Last Updated**: 2025-12-25
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅ + RFC 5280 LDAP Update ✅
 
 ---
 
@@ -17,6 +17,7 @@ ICAO PKD 파일(Master List .ml, LDIF .ldif)을 업로드하여 인증서를 파
 - ✅ 파일 파싱 (LDIF, Master List CMS)
 - ✅ 인증서 검증 (Trust Chain, CRL, 유효기간)
 - ✅ OpenLDAP 자동 등록 (검증 상태 포함)
+- ✅ **RFC 5280 준수 LDAP 업데이트** (신규/업데이트/스킵 비교 로직)
 - ✅ 실시간 진행 상황 (uploadId별 SSE 스트림)
 - ✅ 업로드 이력 관리 (단계별 상태 추적)
 - ✅ PKD 통계 대시보드 (차트, 국가별 통계)
@@ -162,6 +163,23 @@ public void processLdif(UploadId uploadId, ...) {
 **Pass 2**: DSC Validation (Trust Chain)
 - CSCA 조회 → DSC 서명 검증
 - Validity Period 검증
+
+### RFC 5280 준수 LDAP 업데이트 (2025-12-25 추가)
+
+LDAP에 동일한 데이터가 이미 존재하는 경우 중복 저장을 방지하고, 변경된 경우만 업데이트합니다.
+
+| 데이터 유형 | 비교 기준 | 동작 |
+|------------|----------|------|
+| 인증서 (CSCA/DSC) | DN + 바이너리 + description | 신규 ADD, description 변경시 MODIFY, 동일시 SKIP |
+| CRL | DN + CRL Number (OID 2.5.29.20) | 신규 ADD, CRL Number 증가시 MODIFY, 동일/이전시 SKIP |
+| Master List | DN + CMS 바이너리 | 신규 ADD, 내용 변경시 MODIFY, 동일시 SKIP |
+
+**Progress 메시지 예시**:
+```
+LDAP 저장 완료 (신규 5개, 업데이트 2개, 동일하여 스킵 3개)
+```
+
+상세 문서: `docs/RFC5280_LDAP_UPDATE_GUIDE.md`
 
 ---
 
@@ -437,6 +455,7 @@ http://<WSL-IP>:8081
 | LDAP_BASE_DN_RECOVERY | LDAP 복구 가이드 | docs/LDAP_BASE_DN_RECOVERY.md |
 | NATIVE_IMAGE_GUIDE | Native Image 빌드/실행 | docs/NATIVE_IMAGE_GUIDE.md |
 | PA_API_INTEGRATION_GUIDE | 외부 클라이언트 PA API 연동 | docs/PA_API_INTEGRATION_GUIDE.md |
+| RFC5280_LDAP_UPDATE_GUIDE | RFC 5280 준수 LDAP 업데이트 | docs/RFC5280_LDAP_UPDATE_GUIDE.md |
 
 **세션 문서**: `docs/SESSION_*.md` (개발 이력)
 **아카이브**: `docs/archive/phases/` (Phase 1-19 문서)

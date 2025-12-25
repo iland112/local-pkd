@@ -65,6 +65,7 @@ public class ParseLdifFileUseCase {
     private final FileParserPort fileParserPort;
     private final ProgressService progressService;
     private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;
+    private final com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository;
 
     /**
      * Constructor with @Qualifier to specify which FileParserPort bean to inject
@@ -73,12 +74,14 @@ public class ParseLdifFileUseCase {
             ParsedFileRepository repository,
             @Qualifier("ldifParserAdapter") FileParserPort fileParserPort,
             ProgressService progressService,
-            com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository
+            com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository,
+            com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository
     ) {
         this.repository = repository;
         this.fileParserPort = fileParserPort;
         this.progressService = progressService;
         this.certificateRepository = certificateRepository;
+        this.masterListRepository = masterListRepository;
     }
 
     /**
@@ -141,16 +144,42 @@ public class ParseLdifFileUseCase {
                     .filter(cert -> "DSC_NC".equals(cert.getCertificateType())).count();
                 int crlCount = parsedFile.getCrls().size();
 
-                log.info("Parsing completed: {} certificates (CSCA: {}, DSC: {}, DSC_NC: {}), {} CRLs, {} errors",
+                // Master List 개수 조회 (LDIF 파일 내 Master List 엔트리)
+                long masterListCount = masterListRepository.countByUploadId(uploadId);
+
+                log.info("Parsing completed: {} certificates (CSCA: {}, DSC: {}, DSC_NC: {}), {} CRLs, {} Master Lists, {} errors",
                     parsedFile.getCertificates().size(), cscaCount, dscCount, dscNcCount,
-                    parsedFile.getCrls().size(),
+                    parsedFile.getCrls().size(), masterListCount,
                     parsedFile.getErrors().size());
 
                 // 9. SSE 진행 상황 전송: PARSING_COMPLETED (60%) with detailed statistics
-                String detailsMsg = String.format("CSCA: %d개, DSC: %d개%s, CRL: %d개",
-                    cscaCount, dscCount,
-                    (dscNcCount > 0 ? ", DSC_NC: " + dscNcCount + "개" : ""),
-                    crlCount);
+                // Master List가 있으면 별도로 표시하고, ML에서 추출된 CSCA임을 명시
+                StringBuilder detailsMsgBuilder = new StringBuilder();
+                if (masterListCount > 0) {
+                    // Master List가 있는 경우: Master List 먼저 표시, CSCA는 ML에서 추출됨
+                    detailsMsgBuilder.append(String.format("MasterList: %d개 (CSCA %d개 포함)", masterListCount, cscaCount));
+                    if (dscCount > 0) {
+                        detailsMsgBuilder.append(String.format(", DSC: %d개", dscCount));
+                    }
+                } else {
+                    // Master List 없는 경우: 기존 형식 유지
+                    if (cscaCount > 0) {
+                        detailsMsgBuilder.append(String.format("CSCA: %d개", cscaCount));
+                    }
+                    if (dscCount > 0) {
+                        if (detailsMsgBuilder.length() > 0) detailsMsgBuilder.append(", ");
+                        detailsMsgBuilder.append(String.format("DSC: %d개", dscCount));
+                    }
+                }
+                if (dscNcCount > 0) {
+                    if (detailsMsgBuilder.length() > 0) detailsMsgBuilder.append(", ");
+                    detailsMsgBuilder.append(String.format("DSC_NC: %d개", dscNcCount));
+                }
+                if (crlCount > 0) {
+                    if (detailsMsgBuilder.length() > 0) detailsMsgBuilder.append(", ");
+                    detailsMsgBuilder.append(String.format("CRL: %d개", crlCount));
+                }
+                String detailsMsg = detailsMsgBuilder.toString();
 
                 progressService.sendProgress(
                     ProcessingProgress.builder()
