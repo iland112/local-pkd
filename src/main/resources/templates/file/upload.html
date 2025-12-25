@@ -33,21 +33,46 @@
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
+        <!-- Page Header -->
+        <div class="mb-8">
+          <div class="flex items-center gap-4">
+            <div class="p-3 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg">
+              <!-- Heroicon: arrow-up-tray -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-white">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-2xl font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                PKD 파일 업로드
+              </h1>
+              <p class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                ICAO PKD LDIF 또는 Master List 파일을 업로드합니다. 파일 형식이 자동으로 감지됩니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           <!-- Left Column: Upload Form -->
-          <div id="uploadFunctionCard" class="col-span-1 lg:col-span-3">
-            <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-              <div class="card-body flex flex-col p-5">
-                <h2 class="card-title text-xl flex items-center gap-2">
-                  <!-- Heroicon: cloud-arrow-up -->
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-primary">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
-                  </svg>
-                  <span>파일 업로드</span>
-                </h2>
-                <p class="text-sm text-base-content opacity-70 mb-3">
-                  LDIF, Master List 파일을 처리 서버에 업로드합니다.
-                </p>
+          <div id="uploadFunctionCard" class="col-span-1">
+            <div class="rounded-2xl h-full transition-all duration-300 hover:shadow-xl"
+                 :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+              <div class="flex flex-col p-6">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-indigo-900/30' : 'bg-indigo-50'">
+                    <!-- Heroicon: cloud-arrow-up -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-indigo-500">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">파일 업로드</h2>
+                    <p class="text-xs" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                      LDIF, Master List 파일을 처리 서버에 업로드합니다.
+                    </p>
+                  </div>
+                </div>
 
                 <!-- Processing Mode Selector Fragment -->
                 <div class="mb-4 pb-4 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
@@ -122,15 +147,19 @@
                   <input type="hidden" name="processingMode" x-model="processingMode" />
 
                   <!-- Action Buttons -->
-                  <div class="card-actions justify-end mt-4">
-                    <button type="button" onclick="window.location.href='/upload-history'" class="btn btn-outline btn-sm gap-2">
+                  <div class="flex justify-end gap-3 mt-5 pt-4 border-t" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-100'">
+                    <button type="button" onclick="window.location.href='/upload-history'"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border"
+                            :class="$store.theme.darkMode ? 'text-gray-300 border-gray-600 hover:bg-gray-700' : 'text-gray-700 border-gray-300 hover:bg-gray-50'">
                       <!-- Heroicon: clock -->
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                       </svg>
                       업로드 이력
                     </button>
-                    <button type="submit" id="uploadBtn" class="btn btn-primary btn-sm gap-2" :disabled="isProcessing || !selectedFile || !isValidFileType">
+                    <button type="submit" id="uploadBtn"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            :disabled="isProcessing || !selectedFile || !isValidFileType">
                       <span x-show="isProcessing" class="loading loading-spinner loading-sm"></span>
                       <!-- Heroicon: arrow-up-tray -->
                       <svg x-show="!isProcessing" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -145,100 +174,131 @@
           </div>
 
           <!-- Right Column: Progress & Results -->
-          <div class="col-span-1 lg:col-span-2">
+          <div class="col-span-1">
             <!-- Upload Process Card -->
             <div id="uploadProcessCard"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform -translate-y-2"
                  x-transition:enter-end="opacity-100 transform translate-y-0"
             >
-              <div class="card bg-base-100 shadow-xl h-full border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-                <div class="card-body flex flex-col p-5">
-                  <h3 class="card-title text-lg mb-3 flex flex-col items-start">
-                    <div class="flex items-center gap-2">
+              <div class="rounded-2xl h-full transition-all duration-300"
+                   :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+                <div class="flex flex-col p-4">
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="p-2 rounded-lg" :class="$store.theme.darkMode ? 'bg-cyan-900/30' : 'bg-cyan-50'">
                       <!-- Heroicon: queue-list -->
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-cyan-500">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
                       </svg>
-                      <span>처리 진행 상황</span>
                     </div>
-                    <span x-show="fileName" class="font-mono text-xs ml-7 opacity-70"> 파일명:(<span x-text="fileName"></span>)</span>
-                  </h3>
+                    <div class="flex-1 min-w-0">
+                      <h3 class="text-base font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">처리 진행 상황</h3>
+                      <p x-show="fileName" class="font-mono text-xs truncate" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'" x-text="fileName"></p>
+                    </div>
+                  </div>
 
-                  <!-- Stage Progress Steps -->
-                  <ul class="steps steps-vertical w-full flex-grow">
-                    <li class="step mb-3" :class="{
-                          'step-primary': uploadStage.status === 'IN_PROGRESS',
-                          'step-success': uploadStage.status === 'COMPLETED',
-                          'step-error': uploadStage.status === 'FAILED'
-                        }">
-                      <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title text-sm font-medium">파일 업로드</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="uploadStage.message"></div>
-                        <progress class="progress progress-primary w-full h-1.5" :value="uploadStage.percentage" max="100" x-show="uploadStage.percentage > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="uploadStage.percentage > 0" x-text="uploadStage.percentage + '%'"></div>
+                  <!-- Stage Progress Grid -->
+                  <div class="space-y-2">
+                    <!-- Step 1: 파일 업로드 -->
+                    <div class="flex items-start gap-2 p-2 rounded-lg" :class="{'bg-base-200': uploadStage.status !== 'IDLE'}">
+                      <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <span class="text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                              :class="{
+                                'bg-primary text-primary-content': uploadStage.status === 'IN_PROGRESS',
+                                'bg-success text-success-content': uploadStage.status === 'COMPLETED',
+                                'bg-error text-error-content': uploadStage.status === 'FAILED',
+                                'bg-base-300 text-base-content/50': uploadStage.status === 'IDLE'
+                              }">1</span>
+                        <span class="text-xs font-medium">업로드</span>
+                        <span x-show="uploadStage.status === 'IN_PROGRESS'" class="loading loading-spinner loading-xs text-primary"></span>
+                        <svg x-show="uploadStage.status === 'COMPLETED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-success"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                        <svg x-show="uploadStage.status === 'FAILED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-error"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                       </div>
-                    </li>
-                    <li class="step mb-3" :class="{
-                          'step-primary': parseStage.status === 'IN_PROGRESS',
-                          'step-success': parseStage.status === 'COMPLETED',
-                          'step-error': parseStage.status === 'FAILED'
-                        }">
-                      <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title text-sm font-medium">파일 파싱</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="parseStage.message"></div>
-                        <progress class="progress progress-primary w-full h-1.5" :value="parseStage.percentage" max="100" x-show="parseStage.percentage > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="parseStage.percentage > 0" x-text="parseStage.percentage + '%'"></div>
-                        <template x-if="parseStage.details">
-                          <div class="text-xs mt-1 p-2 bg-base-200 rounded w-full" x-html="parseStage.details"></div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-xs opacity-70 truncate" x-text="uploadStage.message"></div>
+                        <progress x-show="uploadStage.status === 'IN_PROGRESS' && uploadStage.percentage > 0" class="progress progress-primary w-full h-1 mt-1" :value="uploadStage.percentage" max="100"></progress>
+                      </div>
+                    </div>
+
+                    <!-- Step 2: 파일 파싱 -->
+                    <div class="flex items-start gap-2 p-2 rounded-lg" :class="{'bg-base-200': parseStage.status !== 'IDLE'}">
+                      <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <span class="text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                              :class="{
+                                'bg-primary text-primary-content': parseStage.status === 'IN_PROGRESS',
+                                'bg-success text-success-content': parseStage.status === 'COMPLETED',
+                                'bg-error text-error-content': parseStage.status === 'FAILED',
+                                'bg-base-300 text-base-content/50': parseStage.status === 'IDLE'
+                              }">2</span>
+                        <span class="text-xs font-medium">파싱</span>
+                        <span x-show="parseStage.status === 'IN_PROGRESS'" class="loading loading-spinner loading-xs text-primary"></span>
+                        <svg x-show="parseStage.status === 'COMPLETED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-success"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                        <svg x-show="parseStage.status === 'FAILED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-error"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-xs opacity-70 truncate" x-text="parseStage.message"></div>
+                        <progress x-show="parseStage.status === 'IN_PROGRESS' && parseStage.percentage > 0" class="progress progress-primary w-full h-1 mt-1" :value="parseStage.percentage" max="100"></progress>
+                        <template x-if="parseStage.details && parseStage.status === 'COMPLETED'">
+                          <div class="flex flex-wrap gap-1 mt-1" x-html="parseStage.details"></div>
                         </template>
                       </div>
-                    </li>
-                    <!-- Step 3: 인증서 검증 + DB 저장 -->
-                    <li class="step mb-3" :class="{
-                          'step-primary': validateStage.status === 'IN_PROGRESS' || dbSaveStage.status === 'IN_PROGRESS',
-                          'step-success': dbSaveStage.status === 'COMPLETED',
-                          'step-error': validateStage.status === 'FAILED' || dbSaveStage.status === 'FAILED'
-                        }">
-                      <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title text-sm font-medium">검증 + DB 저장</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="getValidateDbStageMessage()"></div>
-                        <progress class="progress progress-primary w-full h-1.5" :value="getValidateDbStagePercentage()" max="100" x-show="getValidateDbStagePercentage() > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="getValidateDbStagePercentage() > 0" x-text="getValidateDbStagePercentage() + '%'"></div>
-                        <template x-if="validateStage.details || dbSaveStage.details">
-                          <div class="text-xs mt-1 p-2 bg-base-200 rounded w-full">
-                            <div x-show="validateStage.details" class="mb-1">
-                              <span class="font-semibold text-warning">검증:</span> <span x-html="validateStage.details"></span>
-                            </div>
-                            <div x-show="dbSaveStage.details">
-                              <span class="font-semibold text-info">DB:</span> <span x-html="dbSaveStage.details"></span>
-                            </div>
+                    </div>
+
+                    <!-- Step 3: 검증 + DB 저장 -->
+                    <div class="flex items-start gap-2 p-2 rounded-lg" :class="{'bg-base-200': validateStage.status !== 'IDLE' || dbSaveStage.status !== 'IDLE'}">
+                      <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <span class="text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                              :class="{
+                                'bg-primary text-primary-content': validateStage.status === 'IN_PROGRESS' || dbSaveStage.status === 'IN_PROGRESS',
+                                'bg-success text-success-content': dbSaveStage.status === 'COMPLETED',
+                                'bg-error text-error-content': validateStage.status === 'FAILED' || dbSaveStage.status === 'FAILED',
+                                'bg-base-300 text-base-content/50': validateStage.status === 'IDLE' && dbSaveStage.status === 'IDLE'
+                              }">3</span>
+                        <span class="text-xs font-medium">검증+DB</span>
+                        <span x-show="validateStage.status === 'IN_PROGRESS' || dbSaveStage.status === 'IN_PROGRESS'" class="loading loading-spinner loading-xs text-primary"></span>
+                        <svg x-show="dbSaveStage.status === 'COMPLETED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-success"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                        <svg x-show="validateStage.status === 'FAILED' || dbSaveStage.status === 'FAILED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-error"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-xs opacity-70 truncate" x-text="getValidateDbStageMessage()"></div>
+                        <progress x-show="(validateStage.status === 'IN_PROGRESS' || dbSaveStage.status === 'IN_PROGRESS') && getValidateDbStagePercentage() > 0" class="progress progress-primary w-full h-1 mt-1" :value="getValidateDbStagePercentage()" max="100"></progress>
+                        <template x-if="(validateStage.details || dbSaveStage.details) && dbSaveStage.status === 'COMPLETED'">
+                          <div class="mt-1 space-y-1">
+                            <div x-show="validateStage.details" class="flex flex-wrap gap-1" x-html="validateStage.details"></div>
+                            <div x-show="dbSaveStage.details" class="flex flex-wrap gap-1" x-html="dbSaveStage.details"></div>
                           </div>
                         </template>
                       </div>
-                    </li>
+                    </div>
+
                     <!-- Step 4: LDAP 저장 -->
-                    <li class="step" :class="{
-                          'step-primary': ldapStage.status === 'IN_PROGRESS',
-                          'step-success': ldapStage.status === 'COMPLETED',
-                          'step-error': ldapStage.status === 'FAILED'
-                        }">
-                      <div class="flex flex-col items-start text-left w-full">
-                        <div class="step-title text-sm font-medium">LDAP 저장</div>
-                        <div class="text-xs opacity-70 whitespace-normal w-full overflow-hidden text-ellipsis" x-text="ldapStage.message"></div>
-                        <progress class="progress progress-primary w-full h-1.5" :value="ldapStage.percentage" max="100" x-show="ldapStage.percentage > 0"></progress>
-                        <div class="text-xs font-mono w-full" x-show="ldapStage.percentage > 0" x-text="ldapStage.percentage + '%'"></div>
-                        <template x-if="ldapStage.details">
-                          <div class="text-xs mt-1 p-2 bg-base-200 rounded w-full" x-html="ldapStage.details"></div>
+                    <div class="flex items-start gap-2 p-2 rounded-lg" :class="{'bg-base-200': ldapStage.status !== 'IDLE'}">
+                      <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <span class="text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                              :class="{
+                                'bg-primary text-primary-content': ldapStage.status === 'IN_PROGRESS',
+                                'bg-success text-success-content': ldapStage.status === 'COMPLETED',
+                                'bg-error text-error-content': ldapStage.status === 'FAILED',
+                                'bg-base-300 text-base-content/50': ldapStage.status === 'IDLE'
+                              }">4</span>
+                        <span class="text-xs font-medium">LDAP</span>
+                        <span x-show="ldapStage.status === 'IN_PROGRESS'" class="loading loading-spinner loading-xs text-primary"></span>
+                        <svg x-show="ldapStage.status === 'COMPLETED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-success"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                        <svg x-show="ldapStage.status === 'FAILED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 text-error"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-xs opacity-70 truncate" x-text="ldapStage.message"></div>
+                        <progress x-show="ldapStage.status === 'IN_PROGRESS' && ldapStage.percentage > 0" class="progress progress-primary w-full h-1 mt-1" :value="ldapStage.percentage" max="100"></progress>
+                        <template x-if="ldapStage.details && ldapStage.status === 'COMPLETED'">
+                          <div class="flex flex-wrap gap-1 mt-1" x-html="ldapStage.details"></div>
                         </template>
                       </div>
-                    </li>
-                  </ul>
+                    </div>
+                  </div>
 
                   <!-- Manual Mode Control Panel -->
-                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-4 border-t pt-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
-                    <h4 class="font-bold text-sm mb-2">수동 처리 제어</h4>
-                    <p class="text-xs opacity-70 mb-2">각 단계를 순서대로 수동으로 실행합니다</p>
+                  <div x-show="processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED'" class="mt-3 border-t pt-2" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-base-300'">
+                    <h4 class="font-bold text-xs mb-1.5">수동 처리 제어</h4>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                         <!-- 1. Parse Button -->
                         <button
@@ -306,7 +366,7 @@
                   </div>
 
                   <!-- Final Status Message -->
-                  <div x-show="overallStatus === 'FINALIZED' || overallStatus === 'FAILED'" class="mt-4 alert" :class="{'alert-success': overallStatus === 'FINALIZED', 'alert-error': overallStatus === 'FAILED'}">
+                  <div x-show="overallStatus === 'FINALIZED' || overallStatus === 'FAILED'" class="mt-3 alert alert-sm py-2" :class="{'alert-success': overallStatus === 'FINALIZED', 'alert-error': overallStatus === 'FAILED'}">
                     <!-- Heroicon: check-circle or exclamation-triangle -->
                     <svg x-show="overallStatus === 'FINALIZED'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -828,22 +888,19 @@
                             let badgeClass = 'badge-primary';
                             if (detail.includes('Master List') || detail.includes('ML')) badgeClass = 'badge-secondary';
                             else if (detail.includes('CSCA')) badgeClass = 'badge-success';
-                            else if (detail.includes('DSC_NC')) badgeClass = 'badge-accent';
+                            else if (detail.includes('DSC_NC') || detail.includes('Non-Conformant')) badgeClass = 'badge-accent';
                             else if (detail.includes('DSC')) badgeClass = 'badge-info';
                             else if (detail.includes('CRL')) badgeClass = 'badge-warning';
                             else if (detail.includes('유효')) badgeClass = 'badge-success';
-                            else if (detail.includes('무효') || detail.includes('실패')) badgeClass = 'badge-error';
-                            html += `<div><span class="badge badge-sm ${badgeClass}">${detail}</span></div>`;
+                            else if (detail.includes('무효') || detail.includes('실패') || detail.includes('만료')) badgeClass = 'badge-error';
+                            html += `<span class="badge badge-sm ${badgeClass}">${detail}</span>`;
                         }
                     });
                 } else if (progress.processedCount > 0 && progress.totalCount > 0) {
                     const percentage = Math.round((progress.processedCount / progress.totalCount) * 100);
-                    html = `<div class="col-span-3 flex items-center gap-2">
-                              <span class="text-xs font-medium">진행률: ${percentage}%</span>
-                              <span class="text-xs text-gray-500">(${progress.processedCount} / ${progress.totalCount})</span>
-                            </div>`;
+                    html = `<span class="badge badge-sm badge-outline">진행률: ${percentage}% (${progress.processedCount}/${progress.totalCount})</span>`;
                 } else if (progress.details) {
-                    html = `<div class="col-span-3"><span class="text-xs opacity-70">${progress.details}</span></div>`;
+                    html = `<span class="text-xs opacity-70">${progress.details}</span>`;
                 }
                 return html;
             },

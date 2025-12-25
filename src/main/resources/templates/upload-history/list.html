@@ -5,94 +5,128 @@
 >
   <body>
     <th:block th:fragment="content">
-      <div class="container mx-auto px-4 py-8 max-w-7xl">
+      <div class="w-full px-4 lg:px-6 py-4">
 
         <!-- Success Alert (DaisyUI) -->
         <div th:if="${successMessage}" class="alert alert-success mb-4 shadow-lg" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <!-- Heroicon: check-circle -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
           <span th:text="${successMessage}">Success message</span>
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
 
         <!-- Error Alert (DaisyUI) -->
         <div th:if="${errorMessage}" class="alert alert-error mb-4 shadow-lg" x-data="{ show: true }" x-show="show">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <!-- Heroicon: x-circle -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
           <span th:text="${errorMessage}">Error message</span>
           <button @click="show = false" class="btn btn-sm btn-ghost">✕</button>
         </div>
 
-        <!-- Page Header (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-          <div class="card-body">
-            <div class="flex justify-between items-center">
-              <h1 class="card-title text-3xl">
-                <i class="fas fa-history text-primary"></i>
-                파일 업로드 이력
-              </h1>
-              <button onclick="location.reload()" class="btn btn-primary btn-sm gap-2">
-                <i class="fas fa-sync-alt"></i>
-                새로고침
-              </button>
+        <!-- Page Header -->
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-base-content mb-1 flex items-center gap-2">
+            <!-- Heroicon: clock -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-primary">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            파일 업로드 이력
+          </h1>
+          <p class="text-base-content opacity-70 text-sm">
+            업로드된 PKD 파일의 처리 현황을 확인합니다.
+          </p>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex gap-2 mb-4">
+          <a href="/file/upload" class="btn btn-primary btn-sm">
+            <!-- Heroicon: arrow-up-tray -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            파일 업로드
+          </a>
+          <button onclick="location.reload()" class="btn btn-outline btn-sm">
+            <!-- Heroicon: arrow-path -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            새로고침
+          </button>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-primary">
+              <!-- Heroicon: document-text -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
             </div>
+            <div class="stat-title text-xs">전체 업로드</div>
+            <div class="stat-value text-xl text-primary" th:text="${totalElements ?: 0}">0</div>
+            <div class="stat-desc text-xs">총 업로드 건수</div>
+          </div>
 
-            <!-- Stats Cards (DaisyUI) -->
-            <div class="stats stats-vertical lg:stats-horizontal shadow mt-6">
-              <div class="stat">
-                <div class="stat-figure text-primary">
-                  <i class="fas fa-database text-4xl"></i>
-                </div>
-                <div class="stat-title">전체 업로드</div>
-                <div class="stat-value text-primary" th:text="${totalElements ?: 0}">0</div>
-                <div class="stat-desc">총 업로드 건수</div>
-              </div>
-
-              <div class="stat">
-                <div class="stat-figure text-success">
-                  <i class="fas fa-check-circle text-4xl"></i>
-                </div>
-                <div class="stat-title">성공</div>
-                <div class="stat-value text-success" th:text="${historyPage.content.?[status == 'COMPLETED'].size() ?: 0}">0</div>
-                <div class="stat-desc">처리 완료 건수</div>
-              </div>
-
-              <div class="stat">
-                <div class="stat-figure text-error">
-                  <i class="fas fa-times-circle text-4xl"></i>
-                </div>
-                <div class="stat-title">실패</div>
-                <div class="stat-value text-error" th:text="${historyPage.content.?[status == 'FAILED'].size() ?: 0}">0</div>
-                <div class="stat-desc">오류 발생 건수</div>
-              </div>
-
-              <div class="stat">
-                <div class="stat-figure text-secondary">
-                  <i class="fas fa-chart-line text-4xl"></i>
-                </div>
-                <div class="stat-title">진행 중</div>
-                <div class="stat-value text-secondary" th:text="${historyPage.content.?[status != 'COMPLETED' && status != 'FAILED'].size() ?: 0}">0</div>
-                <div class="stat-desc">처리 중인 건수</div>
-              </div>
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-success">
+              <!-- Heroicon: check-circle -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
             </div>
+            <div class="stat-title text-xs">성공</div>
+            <div class="stat-value text-xl text-success" th:text="${historyPage.content.?[status == 'COMPLETED'].size() ?: 0}">0</div>
+            <div class="stat-desc text-xs">처리 완료 건수</div>
+          </div>
+
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-error">
+              <!-- Heroicon: x-circle -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            </div>
+            <div class="stat-title text-xs">실패</div>
+            <div class="stat-value text-xl text-error" th:text="${historyPage.content.?[status == 'FAILED'].size() ?: 0}">0</div>
+            <div class="stat-desc text-xs">오류 발생 건수</div>
+          </div>
+
+          <div class="stat bg-base-100 shadow-xl border rounded-lg p-3" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+            <div class="stat-figure text-warning">
+              <!-- Heroicon: arrow-path -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </div>
+            <div class="stat-title text-xs">진행 중</div>
+            <div class="stat-value text-xl text-warning" th:text="${historyPage.content.?[status != 'COMPLETED' && status != 'FAILED'].size() ?: 0}">0</div>
+            <div class="stat-desc text-xs">처리 중인 건수</div>
           </div>
         </div>
 
-        <!-- Search & Filter (DaisyUI Card) -->
-        <div class="card bg-base-100 shadow-xl mb-6 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-          <div class="card-body">
-            <h2 class="card-title">
-              <i class="fas fa-filter text-primary"></i>
-              검색 및 필터
-            </h1>
+        <!-- Search & Filter Card -->
+        <div class="card bg-base-100 shadow-xl mb-4 border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
+          <div class="card-body p-5">
+            <h2 class="card-title text-base flex items-center gap-2">
+              <!-- Heroicon: funnel -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-info">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+              </svg>
+              검색 필터
+            </h2>
 
-            <form method="get" action="/upload-history" class="mt-4">
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <form method="get" action="/upload-history" class="mt-3">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <!-- 검색어 -->
-                <div class="form-control w-full">
-                  <label class="label">
-                    <span class="label-text font-semibold">
-                      <i class="fas fa-search text-primary mr-1"></i>
-                      검색어
-                    </span>
+                <div class="form-control">
+                  <label class="label py-1">
+                    <span class="label-text font-semibold text-sm">파일명</span>
                   </label>
                   <input
                     type="text"
@@ -104,14 +138,11 @@
                 </div>
 
                 <!-- 파일 포맷 -->
-                <div class="form-control w-full">
-                  <label class="label">
-                    <span class="label-text font-semibold">
-                      <i class="fas fa-file-alt text-primary mr-1"></i>
-                      파일 포맷
-                    </span>
+                <div class="form-control">
+                  <label class="label py-1">
+                    <span class="label-text font-semibold text-sm">파일 포맷</span>
                   </label>
-                  <select name="format" class="select select-bordered w-full">
+                  <select name="format" class="select select-bordered h-10 min-h-0 text-sm w-full">
                     <option value="">전체</option>
                     <option
                       th:each="fmt : ${fileFormatTypes}"
@@ -125,14 +156,11 @@
                 </div>
 
                 <!-- 업로드 상태 -->
-                <div class="form-control w-full">
-                  <label class="label">
-                    <span class="label-text font-semibold">
-                      <i class="fas fa-info-circle text-primary mr-1"></i>
-                      업로드 상태
-                    </span>
+                <div class="form-control">
+                  <label class="label py-1">
+                    <span class="label-text font-semibold text-sm">업로드 상태</span>
                   </label>
-                  <select name="status" class="select select-bordered w-full">
+                  <select name="status" class="select select-bordered h-10 min-h-0 text-sm w-full">
                     <option value="">전체</option>
                     <option
                       th:each="stat : ${uploadStatuses}"
@@ -146,15 +174,21 @@
                 </div>
               </div>
 
-              <div class="card-actions justify-end mt-4">
-                <button type="submit" class="btn btn-primary gap-2">
-                  <i class="fas fa-search"></i>
-                  검색
-                </button>
-                <a href="/upload-history" class="btn btn-outline gap-2">
-                  <i class="fas fa-redo"></i>
+              <div class="flex justify-end gap-2 mt-3">
+                <a href="/upload-history" class="btn btn-ghost btn-sm">
+                  <!-- Heroicon: arrow-path -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
                   초기화
                 </a>
+                <button type="submit" class="btn btn-primary btn-sm">
+                  <!-- Heroicon: magnifying-glass -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                  </svg>
+                  검색
+                </button>
               </div>
             </form>
           </div>
@@ -189,7 +223,10 @@
                     <td class="text-center font-mono text-xs" th:text="${#strings.substring(history.uploadId.toString(), 0, 8) + '...'}">12345678...</td>
                     <td>
                       <div class="flex items-center gap-2">
-                        <i class="fas fa-file text-primary"></i>
+                        <!-- Heroicon: document -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-primary flex-shrink-0">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                        </svg>
                         <span class="font-medium truncate max-w-md" th:text="${history.fileName}">filename.ldif</span>
                       </div>
                     </td>
@@ -200,7 +237,10 @@
                     <!-- 업로드 상태 -->
                     <td class="text-center">
                       <div class="badge badge-sm badge-success">
-                        <i class="fas fa-check text-xs"></i>
+                        <!-- Heroicon: check (mini) -->
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
                       </div>
                     </td>
                     <!-- 파싱 상태 -->
@@ -209,10 +249,22 @@
                         ((history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED') ? 'badge-success' :
                          (history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED') ? 'badge-error' :
                          (history.status == 'PARSING' ? 'badge-info' : 'badge-ghost'))}">
-                        <i th:class="${'fas text-xs ' +
-                          ((history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED') ? 'fa-check' :
-                           (history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED') ? 'fa-times' :
-                           (history.status == 'PARSING' ? 'fa-spinner fa-spin' : 'fa-minus'))}"></i>
+                        <!-- Heroicon: check (success) -->
+                        <svg th:if="${history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: x-mark (error) -->
+                        <svg th:if="${history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                        </svg>
+                        <!-- Heroicon: arrow-path (processing) -->
+                        <svg th:if="${history.status == 'PARSING'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 animate-spin">
+                          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0v2.43l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: minus (pending) -->
+                        <svg th:if="${history.status != 'PARSED' and history.status != 'UPLOADING_TO_LDAP' and history.status != 'COMPLETED' and history.status != 'FAILED' and history.status != 'CHECKSUM_INVALID' and history.status != 'DUPLICATE_DETECTED' and history.status != 'PARSING'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" />
+                        </svg>
                       </div>
                     </td>
                     <!-- 검증 상태 -->
@@ -221,10 +273,22 @@
                         (history.status == 'VALIDATED' or history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED' ? 'badge-success' :
                          history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED' ? 'badge-error' :
                          history.status == 'VALIDATING' ? 'badge-info' : 'badge-ghost')}">
-                        <i th:class="${'fas text-xs ' +
-                          (history.status == 'VALIDATED' or history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED' ? 'fa-check' :
-                           history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED' ? 'fa-times' :
-                           history.status == 'VALIDATING' ? 'fa-spinner fa-spin' : 'fa-minus')}"></i>
+                        <!-- Heroicon: check (success) -->
+                        <svg th:if="${history.status == 'VALIDATED' or history.status == 'PARSED' or history.status == 'UPLOADING_TO_LDAP' or history.status == 'COMPLETED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: x-mark (error) -->
+                        <svg th:if="${history.status == 'FAILED' or history.status == 'CHECKSUM_INVALID' or history.status == 'DUPLICATE_DETECTED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                        </svg>
+                        <!-- Heroicon: arrow-path (processing) -->
+                        <svg th:if="${history.status == 'VALIDATING'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 animate-spin">
+                          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0v2.43l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: minus (pending) -->
+                        <svg th:if="${history.status != 'VALIDATED' and history.status != 'PARSED' and history.status != 'UPLOADING_TO_LDAP' and history.status != 'COMPLETED' and history.status != 'FAILED' and history.status != 'CHECKSUM_INVALID' and history.status != 'DUPLICATE_DETECTED' and history.status != 'VALIDATING'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" />
+                        </svg>
                       </div>
                     </td>
                     <!-- LDAP 상태 -->
@@ -233,10 +297,22 @@
                         ((history.status == 'COMPLETED') ? 'badge-success' :
                          (history.status == 'FAILED') ? 'badge-error' :
                          (history.status == 'UPLOADING_TO_LDAP' ? 'badge-info' : 'badge-ghost'))}">
-                        <i th:class="${'fas text-xs ' +
-                          ((history.status == 'COMPLETED') ? 'fa-check' :
-                           (history.status == 'FAILED') ? 'fa-times' :
-                           (history.status == 'UPLOADING_TO_LDAP' ? 'fa-spinner fa-spin' : 'fa-minus'))}"></i>
+                        <!-- Heroicon: check (success) -->
+                        <svg th:if="${history.status == 'COMPLETED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: x-mark (error) -->
+                        <svg th:if="${history.status == 'FAILED'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                        </svg>
+                        <!-- Heroicon: arrow-path (processing) -->
+                        <svg th:if="${history.status == 'UPLOADING_TO_LDAP'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 animate-spin">
+                          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0v2.43l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
+                        </svg>
+                        <!-- Heroicon: minus (pending) -->
+                        <svg th:if="${history.status != 'COMPLETED' and history.status != 'FAILED' and history.status != 'UPLOADING_TO_LDAP'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                          <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" />
+                        </svg>
                       </div>
                     </td>
                     <td class="text-center text-sm" th:text="${#temporals.format(history.uploadedAt, 'yyyy-MM-dd HH:mm')}">
@@ -268,16 +344,30 @@
                                  data-ldap-saved-count=${history.totalLdapSavedCount}"
                         onclick="showDetailFromBtn(this)"
                       >
-                        <i class="fas fa-eye"></i>
+                        <!-- Heroicon: eye -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
                       </button>
                     </td>
                   </tr>
                   <tr th:if="${historyPage.empty}">
                     <td colspan="10" class="text-center py-12">
                       <div class="flex flex-col items-center gap-4 text-base-content opacity-50">
-                        <i class="fas fa-inbox text-6xl"></i>
+                        <!-- Heroicon: inbox -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z" />
+                        </svg>
                         <p class="text-lg font-semibold">업로드 이력이 없습니다.</p>
                         <p class="text-sm">파일을 업로드하면 이곳에 표시됩니다.</p>
+                        <a href="/file/upload" class="btn btn-primary btn-sm mt-2">
+                          <!-- Heroicon: arrow-up-tray -->
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                          </svg>
+                          파일 업로드하기
+                        </a>
                       </div>
                     </td>
                   </tr>
@@ -332,92 +422,123 @@
 
       <!-- Detail Modal (DaisyUI Modal) -->
       <dialog id="detailModal" class="modal">
-        <div class="modal-box max-w-3xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-          <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
-          </form>
-          <h3 class="font-bold text-lg mb-4">
-            <i class="fas fa-info-circle text-primary mr-2"></i>
-            업로드 상세 정보
-          </h3>
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">업로드 ID</p>
-                <p id="detail-id" class="text-sm font-mono">-</p>
+        <div class="modal-box max-w-4xl">
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+              <!-- Heroicon: information-circle -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-info">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+              </svg>
+              업로드 상세 정보
+            </h3>
+            <!-- Status Badge -->
+            <span id="detail-status-badge" class="badge badge-lg gap-1"></span>
+          </div>
+
+          <div class="space-y-6">
+            <!-- Basic Info Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- 업로드 ID & 시간 (Full Width) -->
+              <div class="md:col-span-3 bg-base-200 rounded-lg p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">업로드 ID</p>
+                    <p id="detail-id" class="font-mono text-sm break-all">-</p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">업로드 시간</p>
+                    <p id="detail-time" class="text-sm">-</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">파일명</p>
-                <p id="detail-filename" class="text-sm break-all">-</p>
+
+              <!-- 파일명 -->
+              <div class="md:col-span-2 bg-base-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">파일명</p>
+                <p id="detail-filename" class="text-sm font-medium break-all">-</p>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">파일 포맷</p>
-                <p id="detail-format" class="text-sm">-</p>
+
+              <!-- 파일 포맷 -->
+              <div class="bg-base-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">파일 포맷</p>
+                <p id="detail-format" class="text-sm">
+                  <span id="detail-format-badge" class="badge badge-primary"></span>
+                </p>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">파일 크기</p>
-                <p id="detail-size" class="text-sm">-</p>
+
+              <!-- 파일 크기 -->
+              <div class="bg-base-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">파일 크기</p>
+                <p id="detail-size" class="text-lg font-medium">-</p>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">업로드 상태</p>
-                <p id="detail-status" class="text-sm">-</p>
+
+              <!-- 업로드 상태 -->
+              <div class="bg-base-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">업로드 상태</p>
+                <p id="detail-status" class="text-lg font-medium">-</p>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-base-content opacity-70">업로드 시간</p>
-                <p id="detail-time" class="text-sm">-</p>
-              </div>
-              <div class="col-span-2">
-                <p class="text-sm font-semibold text-base-content opacity-70">파일 해시 (SHA-256)</p>
+
+              <!-- 파일 해시 (Full Width) -->
+              <div class="md:col-span-3 bg-base-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">파일 해시 (SHA-256)</p>
                 <div class="flex items-center gap-2">
                   <p id="detail-hash" class="text-xs font-mono break-all flex-1">-</p>
-                  <button onclick="copyToClipboard(document.getElementById('detail-hash').textContent)" class="btn btn-xs btn-outline">
-                    <i class="fas fa-copy"></i>
+                  <button onclick="copyToClipboard(document.getElementById('detail-hash').textContent)" class="btn btn-xs btn-ghost">
+                    <!-- Heroicon: clipboard-document -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                    </svg>
                   </button>
                 </div>
               </div>
             </div>
 
             <!-- Checksum Verification Section -->
-            <div id="checksum-section" class="mt-6" style="display: none;">
-              <div class="divider">
-                <span class="text-sm font-semibold text-base-content opacity-70">
-                  <i class="fas fa-shield-alt mr-1"></i>
-                  체크섬 검증 (SHA-1)
-                </span>
+            <div id="checksum-section" style="display: none;">
+              <div class="divider text-sm font-semibold">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                체크섬 검증 (SHA-1)
               </div>
 
-              <div id="checksum-verified" class="alert alert-success" style="display: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div id="checksum-verified" class="alert alert-success py-3" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <div>
-                  <h4 class="font-bold">체크섬 검증 성공</h4>
-                  <div class="text-xs mt-1">예상 체크섬과 계산된 체크섬이 일치합니다.</div>
+                  <span class="font-bold text-sm">체크섬 검증 성공</span>
+                  <span class="text-xs ml-2">예상 체크섬과 계산된 체크섬이 일치합니다.</span>
                 </div>
               </div>
 
-              <div id="checksum-mismatch" class="alert alert-error" style="display: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div id="checksum-mismatch" class="alert alert-error py-3" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <div>
-                  <h4 class="font-bold">체크섬 검증 실패</h4>
-                  <div class="text-xs mt-1">예상 체크섬과 계산된 체크섬이 일치하지 않습니다.</div>
+                  <span class="font-bold text-sm">체크섬 검증 실패</span>
+                  <span class="text-xs ml-2">예상 체크섬과 계산된 체크섬이 일치하지 않습니다.</span>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-4 mt-4">
-                <div>
-                  <p class="text-sm font-semibold text-base-content opacity-70">예상 체크섬</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="bg-base-200 rounded-lg p-4">
+                  <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">예상 체크섬</p>
                   <div class="flex items-center gap-2">
                     <p id="detail-expected-checksum" class="text-xs font-mono break-all flex-1">-</p>
-                    <button onclick="copyToClipboard(document.getElementById('detail-expected-checksum').textContent)" class="btn btn-xs btn-outline">
-                      <i class="fas fa-copy"></i>
+                    <button onclick="copyToClipboard(document.getElementById('detail-expected-checksum').textContent)" class="btn btn-xs btn-ghost">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                      </svg>
                     </button>
                   </div>
                 </div>
-                <div>
-                  <p class="text-sm font-semibold text-base-content opacity-70">계산된 체크섬</p>
+                <div class="bg-base-200 rounded-lg p-4">
+                  <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">계산된 체크섬</p>
                   <div class="flex items-center gap-2">
                     <p id="detail-calculated-checksum" class="text-xs font-mono break-all flex-1">-</p>
-                    <button onclick="copyToClipboard(document.getElementById('detail-calculated-checksum').textContent)" class="btn btn-xs btn-outline">
-                      <i class="fas fa-copy"></i>
+                    <button onclick="copyToClipboard(document.getElementById('detail-calculated-checksum').textContent)" class="btn btn-xs btn-ghost">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                      </svg>
                     </button>
                   </div>
                 </div>
@@ -425,91 +546,109 @@
             </div>
 
             <!-- Processing Statistics Section -->
-            <div id="statistics-section" class="mt-6" style="display: none;">
-              <div class="divider">
-                <span class="text-sm font-semibold text-base-content opacity-70">
-                  <i class="fas fa-chart-bar mr-1"></i>
-                  처리 통계
-                </span>
+            <div id="statistics-section" style="display: none;">
+              <div class="divider text-sm font-semibold">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                </svg>
+                처리 통계
               </div>
 
-              <!-- Parsing Statistics -->
-              <div class="mb-4">
-                <h4 class="text-sm font-semibold mb-2">
-                  <i class="fas fa-file-code text-primary mr-1"></i>
-                  파일 파싱
-                </h4>
-                <div class="stats stats-horizontal shadow bg-base-200">
-                  <div class="stat">
-                    <div class="stat-title">인증서</div>
-                    <div class="stat-value text-sm" id="detail-parsed-total">-</div>
+              <!-- Stats Grid - 3 columns -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Parsing Statistics Card -->
+                <div class="bg-base-200 rounded-lg p-4">
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2 h-2 rounded-full bg-primary"></div>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">파일 파싱</p>
                   </div>
-                  <div class="stat">
-                    <div class="stat-title">CRL</div>
-                    <div class="stat-value text-sm" id="detail-parsed-crl">-</div>
-                  </div>
-                  <div class="stat">
-                    <div class="stat-title">Master List</div>
-                    <div class="stat-value text-sm" id="detail-parsed-ml">-</div>
+                  <div class="space-y-2">
+                    <div id="detail-parsed-csca-row" class="flex justify-between items-center" style="display: none;">
+                      <span class="text-xs text-base-content/50">CSCA</span>
+                      <span id="detail-parsed-csca" class="font-mono font-medium">0</span>
+                    </div>
+                    <div id="detail-parsed-dsc-row" class="flex justify-between items-center" style="display: none;">
+                      <span class="text-xs text-base-content/50">DSC</span>
+                      <span id="detail-parsed-dsc" class="font-mono font-medium">0</span>
+                    </div>
+                    <div id="detail-parsed-dsc-nc-row" class="flex justify-between items-center" style="display: none;">
+                      <span class="text-xs text-base-content/50">DSC_NC</span>
+                      <span id="detail-parsed-dsc-nc" class="font-mono font-medium">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">CRL</span>
+                      <span id="detail-parsed-crl" class="font-mono font-medium">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">Master List</span>
+                      <span id="detail-parsed-ml" class="font-mono font-medium">0</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Validation Statistics -->
-              <div class="mb-4">
-                <h4 class="text-sm font-semibold mb-2">
-                  <i class="fas fa-check-circle text-success mr-1"></i>
-                  인증서 검증
-                </h4>
-                <div class="stats stats-horizontal shadow bg-base-200">
-                  <div class="stat">
-                    <div class="stat-title">검증 대상</div>
-                    <div class="stat-value text-sm" id="detail-validated-total">-</div>
+                <!-- Validation Statistics Card -->
+                <div class="bg-base-200 rounded-lg p-4">
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2 h-2 rounded-full bg-success"></div>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">인증서 검증</p>
                   </div>
-                  <div class="stat">
-                    <div class="stat-title">유효</div>
-                    <div class="stat-value text-sm text-success" id="detail-valid-count">-</div>
-                  </div>
-                  <div class="stat">
-                    <div class="stat-title">무효</div>
-                    <div class="stat-value text-sm text-error" id="detail-invalid-count">-</div>
-                  </div>
-                  <div class="stat">
-                    <div class="stat-title">만료</div>
-                    <div class="stat-value text-sm text-warning" id="detail-expired-count">-</div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">검증 대상</span>
+                      <span id="detail-validated-total" class="font-mono font-medium">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">유효</span>
+                      <span id="detail-valid-count" class="font-mono font-medium text-success">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">무효</span>
+                      <span id="detail-invalid-count" class="font-mono font-medium text-error">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">만료</span>
+                      <span id="detail-expired-count" class="font-mono font-medium text-warning">0</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-               <!-- LDAP Statistics -->
-              <div class="mb-4">
-                <h4 class="text-sm font-semibold mb-2">
-                  <i class="fas fa-database text-info mr-1"></i>
-                  LDAP 저장
-                </h4>
-                <div class="stats stats-horizontal shadow bg-base-200">
-                  <div class="stat">
-                    <div class="stat-title">저장된 인증서</div>
-                    <div class="stat-value text-sm text-info" id="detail-ldap-saved-count">-</div>
+                <!-- LDAP Statistics Card -->
+                <div class="bg-base-200 rounded-lg p-4">
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2 h-2 rounded-full bg-info"></div>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">LDAP 저장</p>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-base-content/50">저장 항목</span>
+                      <span id="detail-ldap-saved-count" class="font-mono font-medium text-info text-lg">0</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Error Section -->
-            <div class="space-y-4 mt-6">
-              <div id="error-section" class="col-span-2" style="display: none;">
-                <p class="text-sm font-semibold text-error">오류 메시지</p>
-                <div class="alert alert-error">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <span id="detail-error" class="text-sm">-</span>
+            <div id="error-section" style="display: none;">
+              <div class="alert alert-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div>
+                  <h4 class="font-bold text-sm">오류 상세</h4>
+                  <p id="detail-error" class="text-sm">-</p>
                 </div>
               </div>
             </div>
           </div>
-          <div class="modal-action">
+
+          <!-- Modal Footer -->
+          <div class="modal-action mt-6 pt-4 border-t border-base-300">
             <form method="dialog">
-              <button class="btn btn-primary">닫기</button>
+              <button class="btn btn-ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+                닫기
+              </button>
             </form>
           </div>
         </div>
@@ -524,11 +663,25 @@
         function showDetail(id, filename, format, size, status, time, hash, expectedChecksum, calculatedChecksum, errorMsg, stats) {
           document.getElementById('detail-id').textContent = id;
           document.getElementById('detail-filename').textContent = filename;
-          document.getElementById('detail-format').textContent = format;
+          document.getElementById('detail-format-badge').textContent = format;
           document.getElementById('detail-size').textContent = size;
           document.getElementById('detail-status').textContent = status;
           document.getElementById('detail-time').textContent = time;
           document.getElementById('detail-hash').textContent = hash;
+
+          // Update status badge
+          const statusBadge = document.getElementById('detail-status-badge');
+          statusBadge.className = 'badge badge-lg gap-1';
+          if (status.includes('완료')) {
+            statusBadge.classList.add('badge-success');
+            statusBadge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>' + status;
+          } else if (status.includes('실패') || status.includes('오류')) {
+            statusBadge.classList.add('badge-error');
+            statusBadge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>' + status;
+          } else {
+            statusBadge.classList.add('badge-info');
+            statusBadge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>' + status;
+          }
 
           // Checksum section
           const checksumSection = document.getElementById('checksum-section');
@@ -558,11 +711,43 @@
             checksumSection.style.display = 'none';
           }
 
-          // Statistics section
+          // Statistics section - show if any stats exist (including CRL-only delta files)
           const statsSection = document.getElementById('statistics-section');
-          if (stats && (stats.parsedTotal > 0 || stats.validatedTotal > 0)) {
-            // Parsing Statistics
-            document.getElementById('detail-parsed-total').textContent = stats.parsedTotal || '0';
+          const hasAnyStats = stats && (
+            stats.parsedTotal > 0 ||
+            stats.parsedCrl > 0 ||
+            stats.parsedMl > 0 ||
+            stats.validatedTotal > 0 ||
+            stats.ldapSavedCount > 0
+          );
+
+          if (hasAnyStats) {
+            // Parsing Statistics - Show CSCA/DSC/DSC_NC separately (only if count > 0)
+            const cscaRow = document.getElementById('detail-parsed-csca-row');
+            const dscRow = document.getElementById('detail-parsed-dsc-row');
+            const dscNcRow = document.getElementById('detail-parsed-dsc-nc-row');
+
+            if (stats.parsedCsca > 0) {
+              document.getElementById('detail-parsed-csca').textContent = stats.parsedCsca;
+              cscaRow.style.display = 'flex';
+            } else {
+              cscaRow.style.display = 'none';
+            }
+
+            if (stats.parsedDsc > 0) {
+              document.getElementById('detail-parsed-dsc').textContent = stats.parsedDsc;
+              dscRow.style.display = 'flex';
+            } else {
+              dscRow.style.display = 'none';
+            }
+
+            if (stats.parsedDscNc > 0) {
+              document.getElementById('detail-parsed-dsc-nc').textContent = stats.parsedDscNc;
+              dscNcRow.style.display = 'flex';
+            } else {
+              dscNcRow.style.display = 'none';
+            }
+
             document.getElementById('detail-parsed-crl').textContent = stats.parsedCrl || '0';
             document.getElementById('detail-parsed-ml').textContent = stats.parsedMl || '0';
 
@@ -596,9 +781,9 @@
           const d = btn.dataset;
           const stats = {
             parsedTotal: parseInt(d.parsedTotal) || 0,
-            parsedCsca: parseInt(d.parsedCsca) || 0, // This is not displayed, but kept for consistency
-            parsedDsc: parseInt(d.parsedDsc) || 0, // This is not displayed, but kept for consistency
-            parsedDscNc: parseInt(d.parsedDscNc) || 0, // This is not displayed, but kept for consistency
+            parsedCsca: parseInt(d.parsedCsca) || 0,
+            parsedDsc: parseInt(d.parsedDsc) || 0,
+            parsedDscNc: parseInt(d.parsedDscNc) || 0,
             parsedCrl: parseInt(d.parsedCrl) || 0,
             parsedMl: parseInt(d.parsedMl) || 0,
             validatedTotal: parseInt(d.validatedTotal) || 0,

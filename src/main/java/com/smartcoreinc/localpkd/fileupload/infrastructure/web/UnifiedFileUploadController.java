@@ -38,13 +38,14 @@ public class UnifiedFileUploadController {
     @GetMapping("/upload")
     public String showUploadPage(Model model) {
         log.info("Unified file upload page accessed");
+        model.addAttribute("navPage", "file-upload");
         return "file/upload";
     }
 
     @GetMapping("/dashboard")
     public String showDashboardPage(Model model) {
         log.info("PKD statistics dashboard page accessed");
-        model.addAttribute("currentPage", "file-dashboard");
+        model.addAttribute("navPage", "file-dashboard");
         return "file/dashboard";
     }
 

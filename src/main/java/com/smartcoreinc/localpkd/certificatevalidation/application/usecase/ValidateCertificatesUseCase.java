@@ -10,6 +10,7 @@ import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.Certifi
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository;
 import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
@@ -88,6 +89,7 @@ public class ValidateCertificatesUseCase {
     private final CertificateRepository certificateRepository;
     private final CertificateRevocationListRepository crlRepository;
     private final ParsedFileRepository parsedFileRepository;
+    private final MasterListRepository masterListRepository;
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -149,6 +151,13 @@ public class ValidateCertificatesUseCase {
             // ✅ 파일 형식 확인 (ML vs LDIF)
             String fileFormat = parsedFile.getFileFormat().toStorageValue();
             log.info("File format: {}", fileFormat);
+
+            // ✅ 인증서 타입 레이블 결정: ML 파일(CSCA만 있음)이면 "CSCA", DSC/CRL LDIF 파일이면 "DSC"
+            long dscCountForLabel = certificateDataList.stream()
+                .filter(cert -> !cert.isCsca())  // CSCA가 아닌 것 = DSC 또는 DSC_NC
+                .count();
+            String certLabel = (dscCountForLabel > 0) ? "DSC" : "CSCA";
+            log.info("Certificate label for progress messages: {} (DSC/DSC_NC count: {})", certLabel, dscCountForLabel);
 
             // ✅ DB 저장 시작 SSE 이벤트 발송
             progressService.sendProgress(
@@ -566,18 +575,47 @@ public class ValidateCertificatesUseCase {
             log.info("CRL validation completed: {} valid, {} invalid", validCrlIds.size(), invalidCrlIds.size());
 
             // ✅ DB 저장 완료 SSE 이벤트 발송
-            // 실제 저장된 인증서/CRL 수를 표시
+            // 실제 저장된 인증서/CRL/Master List 수를 표시
             int actualCrlsSaved = validCrlIds.size();
             int actualCertsSaved = totalDbSaved - actualCrlsSaved;
+
+            // Master List 개수 조회 (이 업로드에서 저장된 Master List)
+            long masterListCount = masterListRepository.countByUploadId(
+                new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId()));
+
+            // DB 저장 완료 메시지 생성 (인증서/CRL/Master List 개수 표시)
+            StringBuilder dbSaveDetails = new StringBuilder();
+            if (actualCertsSaved > 0) {
+                dbSaveDetails.append(String.format("%s %d개", certLabel, actualCertsSaved));
+            }
+            if (actualCrlsSaved > 0) {
+                if (dbSaveDetails.length() > 0) dbSaveDetails.append(", ");
+                dbSaveDetails.append(String.format("CRL %d개", actualCrlsSaved));
+            }
+            if (masterListCount > 0) {
+                if (dbSaveDetails.length() > 0) dbSaveDetails.append(", ");
+                dbSaveDetails.append(String.format("MasterList %d개", masterListCount));
+            }
+
+            // 모든 항목이 0인 경우 (Master List complete LDIF 등)
+            if (dbSaveDetails.length() == 0) {
+                if (masterListCount > 0) {
+                    dbSaveDetails.append(String.format("MasterList %d개", masterListCount));
+                } else {
+                    dbSaveDetails.append("저장된 항목 없음");
+                }
+            }
+
+            int totalSavedWithMl = totalDbSaved + (int) masterListCount;
             progressService.sendProgress(
                 ProcessingProgress.dbSavingCompleted(
                     command.uploadId(),
-                    totalDbSaved,
-                    String.format("인증서 %d개, CRL %d개", actualCertsSaved, actualCrlsSaved)
+                    totalSavedWithMl,
+                    dbSaveDetails.toString()
                 )
             );
-            log.info("DB saving completed: {} items saved (certs: {}, CRLs: {})", 
-                    totalDbSaved, actualCertsSaved, actualCrlsSaved);
+            log.info("DB saving completed: {} items saved ({}: {}, CRLs: {}, MasterLists: {})",
+                    totalSavedWithMl, certLabel, actualCertsSaved, actualCrlsSaved, masterListCount);
 
             // 5. CertificatesValidatedEvent 생성 및 발행
             CertificatesValidatedEvent event = new CertificatesValidatedEvent(
@@ -649,7 +687,7 @@ public class ValidateCertificatesUseCase {
                     .percentage(85)
                     .processedCount(totalProcessed)
                     .totalCount(totalProcessed)
-                    .message(String.format("인증서 검증 완료 (총 %d개)", totalProcessed))
+                    .message(String.format("%s 검증 완료 (총 %d개)", certLabel, totalProcessed))
                     .details(detailsMsg.toString())
                     .build()
             );

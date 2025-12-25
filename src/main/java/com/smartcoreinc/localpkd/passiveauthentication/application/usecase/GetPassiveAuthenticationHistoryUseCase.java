@@ -210,11 +210,13 @@ public class GetPassiveAuthenticationHistoryUseCase {
             ? passportData.getCompletedAt()
             : passportData.getStartedAt();
 
-        // Extract issuing country and document number from request metadata
-        // Since PassportData doesn't store these directly, we use placeholders
-        // TODO: Store country code and document number in PassportData entity
-        String issuingCountry = "UNKNOWN";  // Placeholder
-        String documentNumber = "UNKNOWN";  // Placeholder
+        // Extract issuing country and document number from PassportData
+        String issuingCountry = passportData.getIssuingCountry() != null
+            ? passportData.getIssuingCountry()
+            : "UNKNOWN";
+        String documentNumber = passportData.getDocumentNumber() != null
+            ? passportData.getDocumentNumber()
+            : "UNKNOWN";
 
         // Get errors from result if available
         List<PassiveAuthenticationError> errors = passportData.getResult() != null

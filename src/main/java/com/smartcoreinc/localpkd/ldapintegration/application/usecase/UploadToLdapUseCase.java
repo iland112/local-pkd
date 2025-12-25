@@ -340,6 +340,10 @@ public class UploadToLdapUseCase {
             // 통계 메시지 포맷팅 (신규/업데이트/동일하여 스킵)
             StringBuilder detailsMsg = new StringBuilder();
 
+            // 인증서 레이블 결정: ML 파일(CSCA만 있음)이면 "CSCA", DSC/CRL LDIF 파일이면 "DSC"
+            // DSC 또는 DSC_NC가 하나라도 있으면 DSC/CRL LDIF 파일로 간주
+            String certLabel = (dscTotalCount > 0 || dscNcTotalCount > 0) ? "DSC" : "CSCA";
+
             // 인증서 통계 (CSCA, DSC, DSC_NC 포함)
             int certTotal = uploadedCertificateCount + updatedCertificateCount + skippedCertificateCount;
             if (certTotal > 0) {
@@ -353,7 +357,7 @@ public class UploadToLdapUseCase {
                     if (certParts.length() > 0) certParts.append(", ");
                     certParts.append(String.format("동일하여 스킵 %d", skippedCertificateCount));
                 }
-                detailsMsg.append(String.format("인증서: %d개 (%s)", certTotal, certParts));
+                detailsMsg.append(String.format("%s: %d개 (%s)", certLabel, certTotal, certParts));
             }
 
             // CRL 통계

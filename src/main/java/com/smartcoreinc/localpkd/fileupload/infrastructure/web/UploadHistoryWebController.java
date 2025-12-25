@@ -68,6 +68,7 @@ public class UploadHistoryWebController {
             // Model에 데이터 추가
             model.addAttribute("historyPage", historyPage);
             model.addAttribute("currentPage", page);
+            model.addAttribute("navPage", "upload-history");
             model.addAttribute("totalPages", historyPage.getTotalPages());
             model.addAttribute("totalElements", historyPage.getTotalElements());
             model.addAttribute("size", size);

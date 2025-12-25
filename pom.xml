@@ -176,6 +176,7 @@
             <artifactId>htmx-spring-boot-thymeleaf</artifactId>
             <version>3.0.0</version>
         </dependency>
+        <!-- Preline UI - installed via npm (see package.json) -->
 
         <!-- Test -->
         <dependency>

@@ -142,6 +142,7 @@ public class ProcessingController {
 
     // Repositories for fetching required data
     private final com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository parsedFileRepository;
+    private final com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository masterListRepository;
     private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository certificateRepository;
     private final com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository crlRepository;
 
@@ -343,15 +344,19 @@ public class ProcessingController {
                         .body(ProcessingResponse.notManualMode(uploadUUID));
             }
 
-            // Count validated certificates and CRLs by uploadId
+            // Count validated certificates, CRLs, and Master Lists by uploadId
             long validCertificateCount = certificateRepository.findByUploadId(uploadUUID).stream()
                     .filter(cert -> cert.getStatus() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.VALID)
                     .count();
 
             long validCrlCount = crlRepository.findByUploadId(uploadUUID).size();
 
-            log.info("LDAP upload starting: uploadId={}, validCertificates={}, validCRLs={}",
-                    uploadId, validCertificateCount, validCrlCount);
+            // Master List 개수 조회 (Master List delta/complete LDIF 파일 지원)
+            UploadId uploadIdForMl = new UploadId(uploadUUID);
+            long masterListCount = masterListRepository.countByUploadId(uploadIdForMl);
+
+            log.info("LDAP upload starting: uploadId={}, validCertificates={}, validCRLs={}, masterLists={}",
+                    uploadId, validCertificateCount, validCrlCount, masterListCount);
 
             // LDAP 업로드 시작 전 상태 업데이트
             uploadedFile.updateStatusToUploadingToLdap();
@@ -364,6 +369,7 @@ public class ProcessingController {
                             .uploadId(uploadUUID)
                             .validCertificateCount((int) validCertificateCount)
                             .validCrlCount((int) validCrlCount)
+                            .masterListCount((int) masterListCount)
                             .batchSize(100)  // Default batch size
                             .build();
 

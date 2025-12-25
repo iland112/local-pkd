@@ -120,14 +120,42 @@ public class LdapUploadEventHandler {
             // 2. SSE 진행 상황 전송: COMPLETED (100%)
             if (event.isSuccess()) {
                 log.info("LDAP upload completed successfully");
+
+                // 동적 완료 메시지 생성 (인증서/CRL/MasterList 각각 표시)
+                StringBuilder completionMsg = new StringBuilder("처리 완료: ");
+                boolean hasItem = false;
+
+                if (event.getUploadedCertificateCount() > 0) {
+                    // Master List 파일인 경우 CSCA, 그 외는 DSC (CRL은 DSC와 함께 오므로 DSC 파일로 간주)
+                    String certLabel = (event.getUploadedMasterListCount() > 0 && event.getUploadedCrlCount() == 0) ? "CSCA" : "DSC";
+                    completionMsg.append(String.format("%d개 %s", event.getUploadedCertificateCount(), certLabel));
+                    hasItem = true;
+                }
+
+                if (event.getUploadedCrlCount() > 0) {
+                    if (hasItem) completionMsg.append(", ");
+                    completionMsg.append(String.format("%d개 CRL", event.getUploadedCrlCount()));
+                    hasItem = true;
+                }
+
+                if (event.getUploadedMasterListCount() > 0) {
+                    if (hasItem) completionMsg.append(", ");
+                    completionMsg.append(String.format("%d개 Master List", event.getUploadedMasterListCount()));
+                    hasItem = true;
+                }
+
+                if (hasItem) {
+                    completionMsg.append(" 업로드됨");
+                } else {
+                    completionMsg.append("업로드 항목 없음 (모두 동일하여 스킵됨)");
+                }
+
                 progressService.sendProgress(
                     ProcessingProgress.builder()
                         .uploadId(event.getUploadId())
                         .stage(ProcessingStage.COMPLETED)
                         .percentage(100)
-                        .message(String.format("처리 완료: %d개 DSC, %d개 CRL 업로드됨",
-                                event.getUploadedCertificateCount(),
-                                event.getUploadedCrlCount()))
+                        .message(completionMsg.toString())
                         .processedCount(event.getTotalUploaded())
                         .totalCount(event.getTotalProcessed())
                         .build()

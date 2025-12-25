@@ -3,3 +3,95 @@
 @plugin "daisyui" { themes: light --default, dark --prefersdark, winter; }
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
+
+/* Preline UI Custom Styles */
+/* Sidebar width variable */
+:root {
+  --sidebar-width: 16rem; /* 256px */
+  --sidebar-collapsed-width: 4.5rem; /* 72px */
+  --header-height: 4rem; /* 64px */
+}
+
+/* Sidebar base styles */
+.hs-overlay-open.hs-overlay-layout-open:not(.hs-overlay-backdrop-open) {
+  transform: translateX(0) !important;
+}
+
+/* Sidebar transition */
+#application-sidebar {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Main content margin when sidebar is open (desktop) */
+@media (min-width: 1024px) {
+  .lg\:ps-64 {
+    padding-inline-start: var(--sidebar-width);
+  }
+}
+
+/* Sidebar scrollbar styling */
+#application-sidebar nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+#application-sidebar nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+#application-sidebar nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#application-sidebar nav::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+/* Accordion styles for sidebar menu */
+.hs-accordion-content {
+  transition: height 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.hs-accordion:not(.active) > .hs-accordion-content {
+  display: none;
+}
+
+.hs-accordion.active > .hs-accordion-content {
+  display: block;
+}
+
+/* Sidebar menu item hover effect */
+.sidebar-link {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #3b82f6, #6366f1);
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.sidebar-link:hover::before,
+.sidebar-link.active::before {
+  transform: scaleY(1);
+}
+
+/* Dark mode sidebar adjustments */
+[data-theme="dark"] #application-sidebar {
+  --tw-bg-opacity: 1;
+  background-color: rgb(31 41 55 / var(--tw-bg-opacity));
+  border-color: rgb(55 65 81);
+}
+
+[data-theme="dark"] #application-sidebar nav::-webkit-scrollbar-thumb {
+  background-color: rgba(107, 114, 128, 0.5);
+}

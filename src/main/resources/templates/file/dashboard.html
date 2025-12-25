@@ -6,27 +6,111 @@
 >
   <body>
     <th:block th:fragment="content">
-      <div class="container mx-auto px-4 py-6 max-w-7xl">
-        <!-- 헤더 섹션 -->
+      <div class="w-full px-4 lg:px-6 py-4">
+        <!-- Page Header -->
         <div class="mb-8">
-          <div class="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-              <div>
-                <h1 class="text-3xl font-bold mb-2">
-                  <i class="fas fa-chart-bar mr-3"></i>PKD 통계 대시보드
-                </h1>
-                <p class="text-indigo-100 text-lg">
-                  인증서 및 파일 업로드 통계 현황
-                </p>
-              </div>
-              <div class="text-right">
-                <div class="text-indigo-100 text-sm">
-                  <i class="fas fa-calendar-alt mr-2"></i>
-                  <span x-text="currentDate"></span>
+          <div class="flex items-center gap-4">
+            <div class="p-3 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg">
+              <!-- Heroicon: chart-bar-square -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-white">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h1 class="text-2xl font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                PKD 통계 대시보드
+              </h1>
+              <p class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                인증서 및 파일 업로드 통계 현황을 시각화합니다.
+              </p>
+            </div>
+            <!-- Quick Actions -->
+            <div class="flex gap-2">
+              <a href="/file/upload" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg">
+                <!-- Heroicon: arrow-up-tray -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+                파일 업로드
+              </a>
+              <a href="/upload-history" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border"
+                 :class="$store.theme.darkMode ? 'text-gray-300 border-gray-600 hover:bg-gray-700' : 'text-gray-700 border-gray-300 hover:bg-gray-50'">
+                <!-- Heroicon: clock -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                업로드 이력
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+          <!-- 총 업로드 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-indigo-400 to-purple-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    총 업로드
+                  </h3>
+                  <div class="text-3xl font-bold text-indigo-500" x-text="statistics.totalCount"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'">전체 파일 수</p>
                 </div>
-                <div class="text-indigo-100 text-sm mt-1">
-                  <i class="fas fa-clock mr-2"></i>
-                  <span x-text="currentTime"></span>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-indigo-900/30' : 'bg-indigo-50'">
+                  <!-- Heroicon: document-text -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-indigo-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 성공률 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-green-400 to-emerald-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    성공률
+                  </h3>
+                  <div class="text-3xl font-bold text-green-500" x-text="statistics.successRate.toFixed(1) + '%'"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'" x-text="statistics.successCount + ' / ' + statistics.totalCount + ' 파일'"></p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-green-900/30' : 'bg-green-50'">
+                  <!-- Heroicon: check-circle -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-green-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 실패 수 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-red-400 to-rose-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    실패
+                  </h3>
+                  <div class="text-3xl font-bold text-red-500" x-text="statistics.failedCount"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'">실패한 파일 수</p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-red-900/30' : 'bg-red-50'">
+                  <!-- Heroicon: x-circle -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-red-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
                 </div>
               </div>
             </div>
@@ -34,102 +118,98 @@
         </div>
 
         <!-- Dashboard Grid Layout -->
-        <div class="grid grid-cols-1 gap-6 md:gap-8">
-          <!-- Row 1: Upload Statistics (3 cards) -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- 총 업로드 -->
-            <div class="border border-l-4 border-l-indigo-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    총 업로드
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-indigo-600" x-text="statistics.totalCount"></span>
-                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
-                  </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">전체 파일 수</p>
-                </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-upload text-4xl text-indigo-500"></i>
-                </div>
-              </div>
-            </div>
+        <div class="grid grid-cols-1 gap-5">
 
-            <!-- 성공률 -->
-            <div class="border border-l-4 border-l-green-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    성공률
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-green-600" x-text="statistics.successRate.toFixed(1) + '%'"></span>
+          <!-- Certificate by Country Statistics with Flags -->
+          <div x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0">
+            <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+                 :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+              <div class="p-5">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-cyan-900/30' : 'bg-cyan-50'">
+                    <!-- Heroicon: globe-alt -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-cyan-500">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+                    </svg>
                   </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    <span x-text="statistics.successCount"></span> / <span x-text="statistics.totalCount"></span> 파일
-                  </p>
+                  <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">국가별 인증서 통계 (Top 18)</h2>
                 </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-check-circle text-4xl text-green-500"></i>
-                </div>
-              </div>
-            </div>
-
-            <!-- 실패 수 -->
-            <div class="border border-l-4 border-l-red-500 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-5" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
-                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
-                    실패
-                  </h3>
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold text-red-600" x-text="statistics.failedCount"></span>
-                    <span class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">files</span>
-                  </div>
-                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">실패한 파일 수</p>
-                </div>
-                <div class="flex-shrink-0 ml-3">
-                  <i class="fas fa-times-circle text-4xl text-red-500"></i>
+                <!-- Country List with Flags and Progress Bars - 2 columns -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-1">
+                  <template x-for="(item, index) in getTopCountriesCert()" :key="item.country">
+                    <div class="flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors"
+                         :class="$store.theme.darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'">
+                      <!-- Rank -->
+                      <span class="w-5 flex-shrink-0 text-xs font-bold text-center"
+                            :class="index < 3 ? 'text-amber-500' : ($store.theme.darkMode ? 'text-gray-500' : 'text-gray-400')"
+                            x-text="index + 1"></span>
+                      <!-- Flag -->
+                      <img :src="'/svg/' + item.country.toLowerCase() + '.svg'"
+                           :alt="item.country"
+                           class="w-6 h-4 flex-shrink-0 object-cover rounded shadow-sm border"
+                           :class="$store.theme.darkMode ? 'border-gray-600' : 'border-gray-200'"
+                           onerror="this.style.display='none'"/>
+                      <!-- Country Code -->
+                      <span class="w-16 flex-shrink-0 font-mono font-semibold text-xs truncate" x-text="item.country"></span>
+                      <!-- Progress Bar with Count -->
+                      <div class="flex-1 flex items-center gap-2">
+                        <div class="flex-1 h-5 rounded-full overflow-hidden"
+                             :class="$store.theme.darkMode ? 'bg-gray-700' : 'bg-gray-100'">
+                          <div class="h-full rounded-full transition-all duration-500"
+                               :style="`width: ${item.percentage}%; background: ${getCountryColorCert(index)}`">
+                          </div>
+                        </div>
+                        <span class="w-12 flex-shrink-0 text-xs font-bold text-right"
+                              :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'"
+                              x-text="item.count.toLocaleString()"></span>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Row 3: Certificate by Country Statistics as Bar Chart (full width) -->
-          <div class="grid grid-cols-1" x-show="Object.keys(certificateStatistics.certificatesByCountry).length > 0">
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-globe-asia text-orange-500 mr-3"></i>
-                국가별 인증서 통계
-              </h3>
-              <div class="relative h-80">
-                <canvas id="certificateCountryBarChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <!-- Row 4: Certificate Statistics as Pie Charts (2 columns) -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="certificateStatistics.totalCertificates > 0">
-            <!-- Stored Certificate Statistics Pie Chart -->
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-certificate text-blue-500 mr-3"></i>
-                인증서 상태 통계
-              </h3>
-              <div class="relative h-64 md:h-72">
-                  <canvas id="certificateStatusPieChart"></canvas>
+          <!-- Certificate Statistics as Pie Charts (2 columns) -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5" x-show="certificateStatistics.totalCertificates > 0">
+            <!-- Certificate Status Statistics Pie Chart -->
+            <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+                 :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+              <div class="p-5">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-green-900/30' : 'bg-green-50'">
+                    <!-- Heroicon: chart-pie -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-green-500">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+                    </svg>
+                  </div>
+                  <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">인증서 상태 통계</h2>
+                </div>
+                <div class="h-72">
+                  <div id="certificateStatusChart" class="w-full h-full"></div>
+                </div>
               </div>
             </div>
 
             <!-- Certificate Type Statistics Pie Chart -->
-            <div class="border rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6" x-show="Object.keys(certificateStatistics.certificatesByType).length > 0" :class="$store.theme.darkMode ? 'bg-base-100 border-gray-700' : 'bg-white border-gray-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
-                <i class="fas fa-tags text-purple-500 mr-3"></i>
-                인증서 유형별 통계
-              </h3>
-              <div class="relative h-64 md:h-72">
-                  <canvas id="certificateTypePieChart"></canvas>
+            <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+                 x-show="Object.keys(certificateStatistics.certificatesByType).length > 0"
+                 :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+              <div class="p-5">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-indigo-900/30' : 'bg-indigo-50'">
+                    <!-- Heroicon: tag -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-indigo-500">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z" />
+                    </svg>
+                  </div>
+                  <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">인증서 유형별 통계</h2>
+                </div>
+                <div class="h-72">
+                  <div id="certificateTypeChart" class="w-full h-full"></div>
+                </div>
               </div>
             </div>
           </div>

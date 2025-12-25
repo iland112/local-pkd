@@ -16,6 +16,9 @@
         .hero-icon-3xl { width: 3rem; height: 3rem; }
     </style>
 
+    <!-- Apache ECharts (Apache License 2.0) -->
+    <script type="text/javascript" th:src="@{/js/vendor/echarts/echarts.min.js}"></script>
+
     <!-- Alpine.js Core -->
     <script
       type="text/javascript"
@@ -118,10 +121,19 @@
               recentActivity: [],
               loadingRecent: false,
 
-              // Chart instances (initialized to null)
-              certificateStatusPieChartInstance: null,
-              certificateTypePieChartInstance: null,
-              certificateCountryBarChartInstance: null,
+              // ECharts instances (initialized to null)
+              certificateStatusChartInstance: null,
+              certificateTypeChartInstance: null,
+
+              // Pastel color palette for charts
+              pastelColors: {
+                light: ['#A5B4FC', '#FCA5A5', '#86EFAC', '#FDE68A', '#C4B5FD', '#FBCFE8', '#99F6E4', '#FED7AA', '#A7F3D0', '#DDD6FE'],
+                dark: ['#818CF8', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6', '#2DD4BF', '#FB923C', '#34D399', '#C4B5FD']
+              },
+              statusColors: {
+                valid: { light: '#86EFAC', dark: '#4ADE80' },
+                invalid: { light: '#FCA5A5', dark: '#F87171' }
+              },
 
 
               // 초기화
@@ -140,9 +152,18 @@
                 }, 300000);
 
                 this.$watch('$store.theme.darkMode', () => {
-                    this.updateAllChartColors();
+                    this.recreateAllCharts();
                 });
-                
+
+                // Window resize handler for ECharts
+                window.addEventListener('resize', () => {
+                  this.resizeAllCharts();
+                });
+              },
+
+              resizeAllCharts() {
+                if (this.certificateStatusChartInstance) this.certificateStatusChartInstance.resize();
+                if (this.certificateTypeChartInstance) this.certificateTypeChartInstance.resize();
               },
   
               // 날짜/시간 업데이트
@@ -222,9 +243,8 @@
                           };
                           
                           this.$nextTick(() => {
-                              this.createCertificateStatusPieChart();
-                              this.createCertificateTypePieChart();
-                              this.createCertificateCountryBarChart();
+                              this.createCertificateStatusDonutChart();
+                              this.createCertificateTypeDonutChart();
                           });
 
                       } else {
@@ -271,169 +291,167 @@
                 return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
               },
 
-              // Chart.js Helpers
-              getChartFontColor() {
-                return this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
+              // ECharts Helpers
+              getCurrentPastelColors() {
+                return this.$store.theme.darkMode ? this.pastelColors.dark : this.pastelColors.light;
               },
 
-              updateAllChartColors() {
-                  try {
-                      const charts = [
-                          this.certificateStatusPieChartInstance,
-                          this.certificateTypePieChartInstance,
-                          this.certificateCountryBarChartInstance
-                      ];
-                      charts.forEach(chart => {
-                          if (chart) {
-                              this.updateChartColors(chart);
-                          }
-                      });
-                  } catch (error) {
-                      console.error('Error updating chart colors:', error);
-                  }
+              getTextColor() {
+                return this.$store.theme.darkMode ? '#9CA3AF' : '#6B7280';
               },
 
-              updateChartColors(chart) {
-                  if (!chart || !chart.options || !chart.data) {
-                      console.warn('Invalid chart object provided to updateChartColors');
-                      return;
-                  }
-                  try {
-                  const newFontColor = this.getChartFontColor();
-                  chart.options.plugins.legend.labels.color = newFontColor;
-                  if (chart.config.type === 'bar') {
-                      chart.options.scales.x.ticks.color = newFontColor;
-                      chart.options.scales.y.ticks.color = newFontColor;
-                      chart.options.scales.x.title.color = newFontColor;
-                      chart.options.scales.y.title.color = newFontColor;
-                      chart.options.scales.x.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-                      chart.options.scales.y.grid.color = this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-                      chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? '#6366F1' : '#4F46E5';
-                      chart.data.datasets[0].borderColor = this.$store.theme.darkMode ? '#4338CA' : '#3730A3';
-                  } else if(chart.config.type === 'pie') {
-                      if(chart.canvas.id === 'certificateStatusPieChart') {
-                          chart.data.datasets[0].backgroundColor = this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'];
-                      } else {
-                          chart.data.datasets[0].backgroundColor = this.getPieChartBackgroundColors(this.$store.theme.darkMode);
-                      }
-                  }
-                  chart.update();
-                  } catch (error) {
-                      console.error('Error updating chart colors:', error);
-                  }
-              },
-              
-              getPieChartBackgroundColors(darkMode = false) {
-                const baseColorsLight = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#8B5CF6', '#F472B6', '#FCD34D', '#34D399'];
-                const baseColorsDark = ['#818CF8', '#F472B6', '#FBBF24', '#34D399', '#F87171', '#60A5FA', '#A78BFA', '#FDCED5', '#FDE047', '#6EE7B7'];
-                return darkMode ? baseColorsDark : baseColorsLight;
+              // Recreate all charts on theme change
+              recreateAllCharts() {
+                this.createCertificateStatusDonutChart();
+                this.createCertificateTypeDonutChart();
               },
 
-              createOrUpdateChart(canvasId, type, data, options) {
-                  try {
-                      const canvas = document.getElementById(canvasId);
-                      if (!canvas) {
-                          // Silently return null if canvas not found (chart not needed on this page)
-                          return null;
-                      }
-                      const ctx = canvas.getContext('2d');
-                      if (!ctx) {
-                          console.warn(`Could not get 2d context for canvas '${canvasId}'`);
-                          return null;
-                      }
-                      const existingChart = Chart.getChart(ctx);
-                      if (existingChart) {
-                          existingChart.destroy();
-                      }
-                      return new Chart(ctx, { type, data, options });
-                  } catch (error) {
-                      console.error(`Error creating chart '${canvasId}':`, error);
-                      return null;
-                  }
+              // Helper functions for Certificate Country List (PKD Dashboard)
+              getTopCountriesCert() {
+                const entries = Object.entries(this.certificateStatistics.certificatesByCountry);
+                if (entries.length === 0) return [];
+                const sorted = entries.sort((a, b) => b[1] - a[1]).slice(0, 18);
+                const maxCount = sorted[0][1];
+                return sorted.map(([country, count]) => ({
+                  country,
+                  count,
+                  percentage: Math.max(5, (count / maxCount) * 100) // minimum 5% for visibility
+                }));
               },
 
-              // Create Pie Chart for Certificate Status (Valid/Invalid)
-              createCertificateStatusPieChart() {
-                const data = {
-                    labels: ['유효', '무효'],
-                    datasets: [{
-                        data: [this.certificateStatistics.validCertificates, this.certificateStatistics.invalidCertificates],
-                        backgroundColor: this.$store.theme.darkMode ? ['#10B981', '#EF4444'] : ['#34D399', '#F87171'],
-                        hoverOffset: 4
-                    }]
-                };
-                const options = this.getPieChartOptions();
-                this.certificateStatusPieChartInstance = this.createOrUpdateChart('certificateStatusPieChart', 'pie', data, options);
+              getCountryColorCert(index) {
+                const colors = [
+                  '#06B6D4', '#0891B2', '#0E7490', '#14B8A6', '#0D9488',
+                  '#6366F1', '#4F46E5', '#8B5CF6', '#7C3AED', '#A855F7',
+                  '#EC4899', '#DB2777', '#F97316', '#EA580C', '#EAB308',
+                  '#84CC16', '#22C55E', '#10B981'
+                ];
+                return colors[index % colors.length];
               },
 
-              // Create Pie Chart for Certificate Type Statistics
-              createCertificateTypePieChart() {
-                const labels = Object.keys(this.certificateStatistics.certificatesByType);
-                const dataValues = Object.values(this.certificateStatistics.certificatesByType);
-                const data = {
-                    labels: labels,
-                    datasets: [{
-                        data: dataValues,
-                        backgroundColor: this.getPieChartBackgroundColors(this.$store.theme.darkMode),
-                        hoverOffset: 4
-                    }]
-                };
-                const options = this.getPieChartOptions();
-                this.certificateTypePieChartInstance = this.createOrUpdateChart('certificateTypePieChart', 'pie', data, options);
-              },
+              // Create Donut Chart for Certificate Status (Valid/Invalid)
+              createCertificateStatusDonutChart() {
+                const container = document.getElementById('certificateStatusChart');
+                if (!container) return;
 
-              // Create Bar Chart for Certificate by Country Statistics
-              createCertificateCountryBarChart() {
-                const labels = Object.keys(this.certificateStatistics.certificatesByCountry);
-                const dataValues = Object.values(this.certificateStatistics.certificatesByCountry);
-                const data = {
-                    labels: labels,
-                    datasets: [{
-                        label: '인증서 수',
-                        data: dataValues,
-                        backgroundColor: this.$store.theme.darkMode ? '#6366F1' : '#4F46E5',
-                        borderColor: this.$store.theme.darkMode ? '#4338CA' : '#3730A3',
-                        borderWidth: 1
-                    }]
-                };
-                const options = this.getBarChartOptions();
-                this.certificateCountryBarChartInstance = this.createOrUpdateChart('certificateCountryBarChart', 'bar', data, options);
-              },
+                if (this.certificateStatusChartInstance) {
+                  this.certificateStatusChartInstance.dispose();
+                }
 
-              getPieChartOptions() {
-                return {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { color: this.getChartFontColor() }},
-                        tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed.toLocaleString()}개` }}
+                const isDark = this.$store.theme.darkMode;
+                const total = this.certificateStatistics.validCertificates + this.certificateStatistics.invalidCertificates;
+
+                this.certificateStatusChartInstance = echarts.init(container, isDark ? 'dark' : null);
+
+                const option = {
+                  backgroundColor: 'transparent',
+                  tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}개 ({d}%)'
+                  },
+                  legend: {
+                    bottom: '5%',
+                    left: 'center',
+                    textStyle: { color: this.getTextColor() }
+                  },
+                  graphic: {
+                    type: 'text',
+                    left: 'center',
+                    top: 'center',
+                    style: {
+                      text: `총 인증서\n${total.toLocaleString()}`,
+                      textAlign: 'center',
+                      fill: isDark ? '#F3F4F6' : '#1F2937',
+                      fontSize: 14,
+                      fontWeight: 'bold'
                     }
-                };
-              },
-
-              getBarChartOptions() {
-                return {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (c) => `${c.raw.toLocaleString()}개` }}
+                  },
+                  series: [{
+                    type: 'pie',
+                    radius: ['50%', '70%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+                    label: { show: false },
+                    emphasis: {
+                      label: { show: true, fontSize: 14, fontWeight: 'bold' },
+                      itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
                     },
-                    scales: {
-                        x: { 
-                            title: { display: true, text: '국가', color: this.getChartFontColor() }, 
-                            ticks: { 
-                                color: this.getChartFontColor() // Set color for text labels
-                            }, 
-                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
-                        },
-                        y: { 
-                            beginAtZero: true, 
-                            title: { display: true, text: '인증서 수', color: this.getChartFontColor() }, 
-                            ticks: { color: this.getChartFontColor() }, 
-                            grid: { color: this.$store.theme.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' } 
-                        }
-                    }
+                    labelLine: { show: false },
+                    data: [
+                      { value: this.certificateStatistics.validCertificates, name: '유효', itemStyle: { color: isDark ? this.statusColors.valid.dark : this.statusColors.valid.light } },
+                      { value: this.certificateStatistics.invalidCertificates, name: '무효', itemStyle: { color: isDark ? this.statusColors.invalid.dark : this.statusColors.invalid.light } }
+                    ]
+                  }]
                 };
-              }
+
+                this.certificateStatusChartInstance.setOption(option);
+              },
+
+              // Create Donut Chart for Certificate Type Statistics
+              createCertificateTypeDonutChart() {
+                const container = document.getElementById('certificateTypeChart');
+                if (!container) return;
+
+                if (this.certificateTypeChartInstance) {
+                  this.certificateTypeChartInstance.dispose();
+                }
+
+                const isDark = this.$store.theme.darkMode;
+                const colors = this.getCurrentPastelColors();
+                const typeData = this.certificateStatistics.certificatesByType;
+                const total = Object.values(typeData).reduce((a, b) => a + b, 0);
+
+                this.certificateTypeChartInstance = echarts.init(container, isDark ? 'dark' : null);
+
+                const seriesData = Object.entries(typeData).map(([name, value], index) => ({
+                  value,
+                  name,
+                  itemStyle: { color: colors[index % colors.length] }
+                }));
+
+                const option = {
+                  backgroundColor: 'transparent',
+                  tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}개 ({d}%)'
+                  },
+                  legend: {
+                    bottom: '5%',
+                    left: 'center',
+                    textStyle: { color: this.getTextColor() }
+                  },
+                  graphic: {
+                    type: 'text',
+                    left: 'center',
+                    top: 'center',
+                    style: {
+                      text: `총 인증서\n${total.toLocaleString()}`,
+                      textAlign: 'center',
+                      fill: isDark ? '#F3F4F6' : '#1F2937',
+                      fontSize: 14,
+                      fontWeight: 'bold'
+                    }
+                  },
+                  series: [{
+                    type: 'pie',
+                    radius: ['50%', '70%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+                    label: { show: false },
+                    emphasis: {
+                      label: { show: true, fontSize: 14, fontWeight: 'bold' },
+                      itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+                    },
+                    labelLine: { show: false },
+                    data: seriesData
+                  }]
+                };
+
+                this.certificateTypeChartInstance.setOption(option);
+              },
+
             }
           }
     </script>
