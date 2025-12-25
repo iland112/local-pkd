@@ -14,24 +14,28 @@ import jakarta.persistence.Enumerated;
  * FileFormat - 파일 포맷 Value Object
  *
  * <p>ICAO PKD 파일의 형식을 나타내는 도메인 객체입니다.
- * LDIF 파일(CSCA, eMRTD)과 Master List 파일을 구분합니다.</p>
+ * LDIF 파일(DSC, CSCA, DSC NC)과 Master List 파일을 구분합니다.</p>
  *
  * <h3>지원 포맷</h3>
  * <ul>
- *   <li>CSCA_COMPLETE_LDIF - CSCA Complete LDIF (Collection 001)</li>
- *   <li>CSCA_DELTA_LDIF - CSCA Delta LDIF (Collection 001)</li>
- *   <li>EMRTD_COMPLETE_LDIF - eMRTD Complete LDIF (Collection 002)</li>
- *   <li>EMRTD_DELTA_LDIF - eMRTD Delta LDIF (Collection 002)</li>
+ *   <li>DSC_COMPLETE_LDIF - DSC Complete LDIF (Collection 001)</li>
+ *   <li>DSC_DELTA_LDIF - DSC Delta LDIF (Collection 001)</li>
+ *   <li>CSCA_COMPLETE_LDIF - CSCA Complete LDIF (Collection 002)</li>
+ *   <li>CSCA_DELTA_LDIF - CSCA Delta LDIF (Collection 002)</li>
+ *   <li>DSC_NC_COMPLETE_LDIF - Non-Conformant DSC Complete LDIF (Collection 003)</li>
+ *   <li>DSC_NC_DELTA_LDIF - Non-Conformant DSC Delta LDIF (Collection 003)</li>
  *   <li>ML_SIGNED_CMS - Master List Signed CMS (Collection 002)</li>
  *   <li>ML_UNSIGNED - Master List Unsigned (Collection 002)</li>
  * </ul>
  *
  * <h3>파일명 패턴</h3>
  * <ul>
- *   <li>CSCA Complete: icaopkd-001-complete-{version}.ldif</li>
- *   <li>CSCA Delta: icaopkd-001-delta-{version}.ldif</li>
- *   <li>eMRTD Complete: icaopkd-002-complete-{version}.ldif</li>
- *   <li>eMRTD Delta: icaopkd-002-delta-{version}.ldif</li>
+ *   <li>DSC Complete: icaopkd-001-complete-{version}.ldif</li>
+ *   <li>DSC Delta: icaopkd-001-delta-{version}.ldif</li>
+ *   <li>CSCA Complete: icaopkd-002-complete-{version}.ldif</li>
+ *   <li>CSCA Delta: icaopkd-002-delta-{version}.ldif</li>
+ *   <li>DSC NC Complete: icaopkd-003-complete-{version}.ldif</li>
+ *   <li>DSC NC Delta: icaopkd-003-delta-{version}.ldif</li>
  *   <li>Master List: ICAO_ml_{version}.ml 또는 masterlist-{version}.ml</li>
  * </ul>
  *
@@ -61,10 +65,19 @@ public class FileFormat {
      * 파일 포맷 타입
      */
     public enum Type {
-        CSCA_COMPLETE_LDIF("CSCA Complete LDIF", "ldif/csca-complete", ".ldif", "001"),
-        CSCA_DELTA_LDIF("CSCA Delta LDIF", "ldif/csca-delta", ".ldif", "001"),
-        EMRTD_COMPLETE_LDIF("eMRTD Complete LDIF", "ldif/emrtd-complete", ".ldif", "002"),
-        EMRTD_DELTA_LDIF("eMRTD Delta LDIF", "ldif/emrtd-delta", ".ldif", "002"),
+        // Collection 001: DSC (Document Signer Certificate)
+        DSC_COMPLETE_LDIF("DSC Complete LDIF", "ldif/dsc-complete", ".ldif", "001"),
+        DSC_DELTA_LDIF("DSC Delta LDIF", "ldif/dsc-delta", ".ldif", "001"),
+        // Legacy aliases for backward compatibility (same as DSC)
+        EMRTD_COMPLETE_LDIF("DSC Complete LDIF", "ldif/dsc-complete", ".ldif", "001"),
+        EMRTD_DELTA_LDIF("DSC Delta LDIF", "ldif/dsc-delta", ".ldif", "001"),
+        // Collection 002: CSCA (Country Signing CA)
+        CSCA_COMPLETE_LDIF("CSCA Complete LDIF", "ldif/csca-complete", ".ldif", "002"),
+        CSCA_DELTA_LDIF("CSCA Delta LDIF", "ldif/csca-delta", ".ldif", "002"),
+        // Collection 003: Non-Conformant DSC
+        DSC_NC_COMPLETE_LDIF("Non-Conformant DSC Complete LDIF", "ldif/dsc-nc-complete", ".ldif", "003"),
+        DSC_NC_DELTA_LDIF("Non-Conformant DSC Delta LDIF", "ldif/dsc-nc-delta", ".ldif", "003"),
+        // Master List
         ML_SIGNED_CMS("Master List (Signed CMS)", "ml/signed-cms", ".ml", "002"),
         ML_UNSIGNED("Master List (Unsigned)", "ml/unsigned", ".ml", "002");
 
@@ -133,10 +146,12 @@ public class FileFormat {
      *
      * <h4>감지 규칙</h4>
      * <ul>
-     *   <li>Collection 001 + complete → CSCA_COMPLETE_LDIF</li>
-     *   <li>Collection 001 + delta → CSCA_DELTA_LDIF</li>
-     *   <li>Collection 002 + complete → EMRTD_COMPLETE_LDIF</li>
-     *   <li>Collection 002 + delta → EMRTD_DELTA_LDIF</li>
+     *   <li>Collection 001 + complete → DSC_COMPLETE_LDIF (Document Signer Certificate)</li>
+     *   <li>Collection 001 + delta → DSC_DELTA_LDIF</li>
+     *   <li>Collection 002 + complete → CSCA_COMPLETE_LDIF (Country Signing CA)</li>
+     *   <li>Collection 002 + delta → CSCA_DELTA_LDIF</li>
+     *   <li>Collection 003 + complete → DSC_NC_COMPLETE_LDIF (Non-Conformant DSC)</li>
+     *   <li>Collection 003 + delta → DSC_NC_DELTA_LDIF</li>
      *   <li>.ml 확장자 → ML_SIGNED_CMS (기본값)</li>
      * </ul>
      *
@@ -156,16 +171,16 @@ public class FileFormat {
 
         // LDIF 파일 감지
         if (name.endsWith(".ldif")) {
-            // Collection 001 (eMRTD) - CORRECTED: 001 is eMRTD, not CSCA
+            // Collection 001: DSC (Document Signer Certificate)
             if (name.contains("001")) {
                 if (name.contains("complete")) {
-                    return new FileFormat(Type.EMRTD_COMPLETE_LDIF);
+                    return new FileFormat(Type.DSC_COMPLETE_LDIF);
                 } else if (name.contains("delta")) {
-                    return new FileFormat(Type.EMRTD_DELTA_LDIF);
+                    return new FileFormat(Type.DSC_DELTA_LDIF);
                 }
             }
 
-            // Collection 002 (CSCA) - CORRECTED: 002 is CSCA, not eMRTD
+            // Collection 002: CSCA (Country Signing CA)
             if (name.contains("002")) {
                 if (name.contains("complete")) {
                     return new FileFormat(Type.CSCA_COMPLETE_LDIF);
@@ -174,8 +189,17 @@ public class FileFormat {
                 }
             }
 
-            // 기본값: eMRTD Complete (Collection 001로 간주)
-            return new FileFormat(Type.EMRTD_COMPLETE_LDIF);
+            // Collection 003: Non-Conformant DSC
+            if (name.contains("003")) {
+                if (name.contains("complete")) {
+                    return new FileFormat(Type.DSC_NC_COMPLETE_LDIF);
+                } else if (name.contains("delta")) {
+                    return new FileFormat(Type.DSC_NC_DELTA_LDIF);
+                }
+            }
+
+            // 기본값: DSC Complete (Collection 001로 간주)
+            return new FileFormat(Type.DSC_COMPLETE_LDIF);
         }
 
         // Master List 파일 감지
@@ -229,8 +253,12 @@ public class FileFormat {
      * @return LDIF 파일이면 true
      */
     public boolean isLdif() {
-        return type == Type.CSCA_COMPLETE_LDIF ||
+        return type == Type.DSC_COMPLETE_LDIF ||
+                type == Type.DSC_DELTA_LDIF ||
+                type == Type.CSCA_COMPLETE_LDIF ||
                 type == Type.CSCA_DELTA_LDIF ||
+                type == Type.DSC_NC_COMPLETE_LDIF ||
+                type == Type.DSC_NC_DELTA_LDIF ||
                 type == Type.EMRTD_COMPLETE_LDIF ||
                 type == Type.EMRTD_DELTA_LDIF;
     }
@@ -250,7 +278,9 @@ public class FileFormat {
      * @return Complete 파일이면 true
      */
     public boolean isComplete() {
-        return type == Type.CSCA_COMPLETE_LDIF ||
+        return type == Type.DSC_COMPLETE_LDIF ||
+                type == Type.CSCA_COMPLETE_LDIF ||
+                type == Type.DSC_NC_COMPLETE_LDIF ||
                 type == Type.EMRTD_COMPLETE_LDIF ||
                 isMasterList();  // ML은 항상 complete로 간주
     }
@@ -261,25 +291,51 @@ public class FileFormat {
      * @return Delta 파일이면 true
      */
     public boolean isDelta() {
-        return type == Type.CSCA_DELTA_LDIF || type == Type.EMRTD_DELTA_LDIF;
+        return type == Type.DSC_DELTA_LDIF ||
+                type == Type.CSCA_DELTA_LDIF ||
+                type == Type.DSC_NC_DELTA_LDIF ||
+                type == Type.EMRTD_DELTA_LDIF;
     }
 
     /**
-     * CSCA Collection 여부 확인
+     * DSC Collection 여부 확인 (Collection 001)
      *
-     * @return CSCA Collection (001)이면 true
+     * @return DSC Collection이면 true
+     */
+    public boolean isDsc() {
+        return type == Type.DSC_COMPLETE_LDIF ||
+                type == Type.DSC_DELTA_LDIF ||
+                type == Type.EMRTD_COMPLETE_LDIF ||
+                type == Type.EMRTD_DELTA_LDIF;
+    }
+
+    /**
+     * CSCA Collection 여부 확인 (Collection 002)
+     *
+     * @return CSCA Collection이면 true
      */
     public boolean isCsca() {
         return type == Type.CSCA_COMPLETE_LDIF || type == Type.CSCA_DELTA_LDIF;
     }
 
     /**
-     * eMRTD Collection 여부 확인
+     * Non-Conformant DSC Collection 여부 확인 (Collection 003)
      *
-     * @return eMRTD Collection (002)이면 true
+     * @return DSC NC Collection이면 true
      */
+    public boolean isDscNc() {
+        return type == Type.DSC_NC_COMPLETE_LDIF || type == Type.DSC_NC_DELTA_LDIF;
+    }
+
+    /**
+     * eMRTD Collection 여부 확인 (Legacy - Collection 001과 동일)
+     *
+     * @return eMRTD Collection이면 true
+     * @deprecated Use {@link #isDsc()} instead
+     */
+    @Deprecated
     public boolean isEmrtd() {
-        return type == Type.EMRTD_COMPLETE_LDIF || type == Type.EMRTD_DELTA_LDIF;
+        return isDsc();
     }
 
     /**

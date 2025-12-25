@@ -5,11 +5,12 @@ import com.smartcoreinc.localpkd.certificatevalidation.application.response.Cert
 
 import com.smartcoreinc.localpkd.certificatevalidation.domain.model.*;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.event.CertificatesValidatedEvent;
-import com.smartcoreinc.localpkd.ldapintegration.domain.event.LdapBatchUploadEvent;
+// LdapBatchUploadEvent import 제거됨 - 동기 LDAP 업로드만 사용 (통계 정확성 확보)
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRepository;
 import com.smartcoreinc.localpkd.certificatevalidation.domain.repository.CertificateRevocationListRepository;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.CertificateData;
 import com.smartcoreinc.localpkd.fileparsing.domain.model.ParsedFile;
+import com.smartcoreinc.localpkd.fileparsing.domain.repository.MasterListRepository;
 import com.smartcoreinc.localpkd.fileparsing.domain.repository.ParsedFileRepository;
 import com.smartcoreinc.localpkd.fileupload.domain.model.FileFormat;
 import com.smartcoreinc.localpkd.fileupload.domain.model.UploadId;
@@ -88,6 +89,7 @@ public class ValidateCertificatesUseCase {
     private final CertificateRepository certificateRepository;
     private final CertificateRevocationListRepository crlRepository;
     private final ParsedFileRepository parsedFileRepository;
+    private final MasterListRepository masterListRepository;
     private final ProgressService progressService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -138,17 +140,29 @@ public class ValidateCertificatesUseCase {
             List<Certificate> cscaBatch = new ArrayList<>();
             final int BATCH_SIZE = 1000;
 
-            // ✅ 비동기 LDAP 업로드를 위한 배치 카운터
-            int cscaBatchNumber = 0;
-            int dscBatchNumber = 0;
-            int crlBatchNumber = 0;
-            // 총 배치 수 추정 (배치 크기 기준)
-            int estimatedCscaBatches = (totalCertificates / BATCH_SIZE) + 1;
-            int estimatedDscBatches = (totalCertificates / BATCH_SIZE) + 1;
+            // ✅ DB 저장 카운터 (SSE 진행률 용)
+            int totalDbSaved = 0;
+            int totalCrls = parsedFile.getCrls().size();
+            int totalToSave = totalCertificates + totalCrls;
+
+            // 비동기 LDAP 업로드 코드 제거됨 - 동기 업로드만 사용 (통계 정확성 확보)
+            // CertificatesValidatedEvent → CertificateValidatedEventHandler → UploadToLdapUseCase 경로로 처리
 
             // ✅ 파일 형식 확인 (ML vs LDIF)
             String fileFormat = parsedFile.getFileFormat().toStorageValue();
             log.info("File format: {}", fileFormat);
+
+            // ✅ 인증서 타입 레이블 결정: ML 파일(CSCA만 있음)이면 "CSCA", DSC/CRL LDIF 파일이면 "DSC"
+            long dscCountForLabel = certificateDataList.stream()
+                .filter(cert -> !cert.isCsca())  // CSCA가 아닌 것 = DSC 또는 DSC_NC
+                .count();
+            String certLabel = (dscCountForLabel > 0) ? "DSC" : "CSCA";
+            log.info("Certificate label for progress messages: {} (DSC/DSC_NC count: {})", certLabel, dscCountForLabel);
+
+            // ✅ DB 저장 시작 SSE 이벤트 발송
+            progressService.sendProgress(
+                ProcessingProgress.dbSavingStarted(command.uploadId(), totalToSave)
+            );
 
             // ✅ Phase 1-1: 배치 중복 체크 (Pass 1 - CSCA)
             // 모든 CSCA fingerprint 수집
@@ -242,18 +256,19 @@ public class ValidateCertificatesUseCase {
                     if (cscaBatch.size() >= BATCH_SIZE) {
                         log.info("Saving CSCA batch: {} certificates", cscaBatch.size());
                         certificateRepository.saveAll(cscaBatch);
-                        log.info("CSCA batch saved successfully: {} certificates", cscaBatch.size());
+                        totalDbSaved += cscaBatch.size();
+                        log.info("CSCA batch saved successfully: {} certificates (total DB saved: {})", cscaBatch.size(), totalDbSaved);
 
-                        // ✅ 비동기 LDAP 배치 업로드 이벤트 발행 (MSA 전환 대비)
-                        cscaBatchNumber++;
-                        List<UUID> batchIds = cscaBatch.stream()
-                            .map(cert -> cert.getId().getId())
-                            .toList();
-                        LdapBatchUploadEvent ldapEvent = LdapBatchUploadEvent.forCertificates(
-                            command.uploadId(), batchIds, cscaBatchNumber, estimatedCscaBatches);
-                        eventPublisher.publishEvent(ldapEvent);
-                        log.info("CSCA batch LDAP upload event published: batch {}/{}, count={}",
-                            cscaBatchNumber, estimatedCscaBatches, batchIds.size());
+                        // ✅ DB 저장 진행률 SSE 이벤트 발송
+                        progressService.sendProgress(
+                            ProcessingProgress.dbSavingInProgress(
+                                command.uploadId(),
+                                totalDbSaved,
+                                totalToSave,
+                                String.format("CSCA DB 저장 중 (%d/%d)", totalDbSaved, totalToSave),
+                                72, 80  // 72-80% 범위 (CSCA)
+                            )
+                        );
 
                         cscaBatch.clear();
                     }
@@ -276,18 +291,19 @@ public class ValidateCertificatesUseCase {
             if (!cscaBatch.isEmpty()) {
                 log.info("Saving final CSCA batch: {} certificates", cscaBatch.size());
                 certificateRepository.saveAll(cscaBatch);
-                log.info("Final CSCA batch saved successfully: {} certificates", cscaBatch.size());
+                totalDbSaved += cscaBatch.size();
+                log.info("Final CSCA batch saved successfully: {} certificates (total DB saved: {})", cscaBatch.size(), totalDbSaved);
 
-                // ✅ 비동기 LDAP 배치 업로드 이벤트 발행 (MSA 전환 대비)
-                cscaBatchNumber++;
-                List<UUID> batchIds = cscaBatch.stream()
-                    .map(cert -> cert.getId().getId())
-                    .toList();
-                LdapBatchUploadEvent ldapEvent = LdapBatchUploadEvent.forCertificates(
-                    command.uploadId(), batchIds, cscaBatchNumber, cscaBatchNumber);
-                eventPublisher.publishEvent(ldapEvent);
-                log.info("Final CSCA batch LDAP upload event published: batch {}/{}, count={}",
-                    cscaBatchNumber, cscaBatchNumber, batchIds.size());
+                // ✅ DB 저장 진행률 SSE 이벤트 발송
+                progressService.sendProgress(
+                    ProcessingProgress.dbSavingInProgress(
+                        command.uploadId(),
+                        totalDbSaved,
+                        totalToSave,
+                        String.format("CSCA DB 저장 완료 (%d/%d)", totalDbSaved, totalToSave),
+                        72, 80
+                    )
+                );
 
                 cscaBatch.clear();
             }
@@ -411,18 +427,19 @@ public class ValidateCertificatesUseCase {
                     if (dscBatch.size() >= BATCH_SIZE) {
                         log.info("Saving DSC batch: {} certificates", dscBatch.size());
                         certificateRepository.saveAll(dscBatch);
-                        log.info("DSC batch saved successfully: {} certificates", dscBatch.size());
+                        totalDbSaved += dscBatch.size();
+                        log.info("DSC batch saved successfully: {} certificates (total DB saved: {})", dscBatch.size(), totalDbSaved);
 
-                        // ✅ 비동기 LDAP 배치 업로드 이벤트 발행 (MSA 전환 대비)
-                        dscBatchNumber++;
-                        List<UUID> batchIds = dscBatch.stream()
-                            .map(cert -> cert.getId().getId())
-                            .toList();
-                        LdapBatchUploadEvent ldapEvent = LdapBatchUploadEvent.forCertificates(
-                            command.uploadId(), batchIds, dscBatchNumber, estimatedDscBatches);
-                        eventPublisher.publishEvent(ldapEvent);
-                        log.info("DSC batch LDAP upload event published: batch {}/{}, count={}",
-                            dscBatchNumber, estimatedDscBatches, batchIds.size());
+                        // ✅ DB 저장 진행률 SSE 이벤트 발송
+                        progressService.sendProgress(
+                            ProcessingProgress.dbSavingInProgress(
+                                command.uploadId(),
+                                totalDbSaved,
+                                totalToSave,
+                                String.format("DSC DB 저장 중 (%d/%d)", totalDbSaved, totalToSave),
+                                80, 83  // 80-83% 범위 (DSC)
+                            )
+                        );
 
                         dscBatch.clear();
                     }
@@ -444,18 +461,19 @@ public class ValidateCertificatesUseCase {
             if (!dscBatch.isEmpty()) {
                 log.info("Saving final DSC batch: {} certificates", dscBatch.size());
                 certificateRepository.saveAll(dscBatch);
-                log.info("Final DSC batch saved successfully: {} certificates", dscBatch.size());
+                totalDbSaved += dscBatch.size();
+                log.info("Final DSC batch saved successfully: {} certificates (total DB saved: {})", dscBatch.size(), totalDbSaved);
 
-                // ✅ 비동기 LDAP 배치 업로드 이벤트 발행 (MSA 전환 대비)
-                dscBatchNumber++;
-                List<UUID> batchIds = dscBatch.stream()
-                    .map(cert -> cert.getId().getId())
-                    .toList();
-                LdapBatchUploadEvent ldapEvent = LdapBatchUploadEvent.forCertificates(
-                    command.uploadId(), batchIds, dscBatchNumber, dscBatchNumber);
-                eventPublisher.publishEvent(ldapEvent);
-                log.info("Final DSC batch LDAP upload event published: batch {}/{}, count={}",
-                    dscBatchNumber, dscBatchNumber, batchIds.size());
+                // ✅ DB 저장 진행률 SSE 이벤트 발송
+                progressService.sendProgress(
+                    ProcessingProgress.dbSavingInProgress(
+                        command.uploadId(),
+                        totalDbSaved,
+                        totalToSave,
+                        String.format("DSC DB 저장 완료 (%d/%d)", totalDbSaved, totalToSave),
+                        80, 83
+                    )
+                );
 
                 dscBatch.clear();
             }
@@ -537,21 +555,67 @@ public class ValidateCertificatesUseCase {
             if (!crlBatch.isEmpty()) {
                 log.info("Saving {} CRLs to database...", crlBatch.size());
                 crlRepository.saveAll(crlBatch);
-                log.info("CRL persistence completed: {} CRLs saved", crlBatch.size());
+                totalDbSaved += crlBatch.size();
+                log.info("CRL persistence completed: {} CRLs saved (total DB saved: {})", crlBatch.size(), totalDbSaved);
 
-                // ✅ 비동기 LDAP 배치 업로드 이벤트 발행 (MSA 전환 대비)
-                crlBatchNumber++;
-                List<UUID> batchIds = crlBatch.stream()
-                    .map(crl -> crl.getId().getId())
-                    .toList();
-                LdapBatchUploadEvent ldapEvent = LdapBatchUploadEvent.forCrls(
-                    command.uploadId(), batchIds, crlBatchNumber, crlBatchNumber);
-                eventPublisher.publishEvent(ldapEvent);
-                log.info("CRL batch LDAP upload event published: batch {}/{}, count={}",
-                    crlBatchNumber, crlBatchNumber, batchIds.size());
+                // ✅ DB 저장 진행률 SSE 이벤트 발송 (CRL)
+                progressService.sendProgress(
+                    ProcessingProgress.dbSavingInProgress(
+                        command.uploadId(),
+                        totalDbSaved,
+                        totalToSave,
+                        String.format("CRL DB 저장 완료 (%d/%d)", totalDbSaved, totalToSave),
+                        83, 85  // 83-85% 범위 (CRL)
+                    )
+                );
+
+
             }
 
             log.info("CRL validation completed: {} valid, {} invalid", validCrlIds.size(), invalidCrlIds.size());
+
+            // ✅ DB 저장 완료 SSE 이벤트 발송
+            // 실제 저장된 인증서/CRL/Master List 수를 표시
+            int actualCrlsSaved = validCrlIds.size();
+            int actualCertsSaved = totalDbSaved - actualCrlsSaved;
+
+            // Master List 개수 조회 (이 업로드에서 저장된 Master List)
+            long masterListCount = masterListRepository.countByUploadId(
+                new com.smartcoreinc.localpkd.fileupload.domain.model.UploadId(command.uploadId()));
+
+            // DB 저장 완료 메시지 생성 (인증서/CRL/Master List 개수 표시)
+            StringBuilder dbSaveDetails = new StringBuilder();
+            if (actualCertsSaved > 0) {
+                dbSaveDetails.append(String.format("%s %d개", certLabel, actualCertsSaved));
+            }
+            if (actualCrlsSaved > 0) {
+                if (dbSaveDetails.length() > 0) dbSaveDetails.append(", ");
+                dbSaveDetails.append(String.format("CRL %d개", actualCrlsSaved));
+            }
+            if (masterListCount > 0) {
+                if (dbSaveDetails.length() > 0) dbSaveDetails.append(", ");
+                dbSaveDetails.append(String.format("MasterList %d개", masterListCount));
+            }
+
+            // 모든 항목이 0인 경우 (Master List complete LDIF 등)
+            if (dbSaveDetails.length() == 0) {
+                if (masterListCount > 0) {
+                    dbSaveDetails.append(String.format("MasterList %d개", masterListCount));
+                } else {
+                    dbSaveDetails.append("저장된 항목 없음");
+                }
+            }
+
+            int totalSavedWithMl = totalDbSaved + (int) masterListCount;
+            progressService.sendProgress(
+                ProcessingProgress.dbSavingCompleted(
+                    command.uploadId(),
+                    totalSavedWithMl,
+                    dbSaveDetails.toString()
+                )
+            );
+            log.info("DB saving completed: {} items saved ({}: {}, CRLs: {}, MasterLists: {})",
+                    totalSavedWithMl, certLabel, actualCertsSaved, actualCrlsSaved, masterListCount);
 
             // 5. CertificatesValidatedEvent 생성 및 발행
             CertificatesValidatedEvent event = new CertificatesValidatedEvent(
@@ -623,7 +687,7 @@ public class ValidateCertificatesUseCase {
                     .percentage(85)
                     .processedCount(totalProcessed)
                     .totalCount(totalProcessed)
-                    .message(String.format("인증서 검증 완료 (총 %d개)", totalProcessed))
+                    .message(String.format("%s 검증 완료 (총 %d개)", certLabel, totalProcessed))
                     .details(detailsMsg.toString())
                     .build()
             );

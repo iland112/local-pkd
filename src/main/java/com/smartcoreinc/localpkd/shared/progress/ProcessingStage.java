@@ -47,14 +47,19 @@ public enum ProcessingStage {
     PARSING_IN_PROGRESS("파일 파싱 중", 30, StageCategory.PARSING),
     PARSING_COMPLETED("파일 파싱 완료", 60, StageCategory.PARSING),
 
-    // 검증 단계 (65-85%)
-    VALIDATION_STARTED("인증서 검증 시작", 65, StageCategory.VALIDATION),
-    VALIDATION_IN_PROGRESS("인증서 검증 중", 75, StageCategory.VALIDATION),
-    VALIDATION_COMPLETED("인증서 검증 완료", 85, StageCategory.VALIDATION),
+    // 검증 단계 (55-70%)
+    VALIDATION_STARTED("인증서 검증 시작", 55, StageCategory.VALIDATION),
+    VALIDATION_IN_PROGRESS("인증서 검증 중", 60, StageCategory.VALIDATION),
+    VALIDATION_COMPLETED("인증서 검증 완료", 70, StageCategory.VALIDATION),
 
-    // LDAP 저장 단계 (90-100%)
-    LDAP_SAVING_STARTED("LDAP 저장 시작", 90, StageCategory.LDAP_SAVE),
-    LDAP_SAVING_IN_PROGRESS("LDAP 저장 중", 95, StageCategory.LDAP_SAVE),
+    // DB 저장 단계 (72-85%)
+    DB_SAVING_STARTED("DB 저장 시작", 72, StageCategory.DB_SAVE),
+    DB_SAVING_IN_PROGRESS("DB 저장 중", 78, StageCategory.DB_SAVE),
+    DB_SAVING_COMPLETED("DB 저장 완료", 85, StageCategory.DB_SAVE),
+
+    // LDAP 저장 단계 (87-100%)
+    LDAP_SAVING_STARTED("LDAP 저장 시작", 87, StageCategory.LDAP_SAVE),
+    LDAP_SAVING_IN_PROGRESS("LDAP 저장 중", 93, StageCategory.LDAP_SAVE),
     LDAP_SAVING_COMPLETED("LDAP 저장 완료", 100, StageCategory.LDAP_SAVE),
 
     // 수동 일시 중지
@@ -81,10 +86,11 @@ public enum ProcessingStage {
         UPLOAD,
         PARSING,
         VALIDATION,
+        DB_SAVE,
         LDAP_SAVE,
         COMPLETE,
         FAILED,
-        PAUSE // New entry
+        PAUSE
     }
 
     /**
@@ -99,6 +105,13 @@ public enum ProcessingStage {
      */
     public boolean isValidation() {
         return category == StageCategory.VALIDATION;
+    }
+
+    /**
+     * DB 저장 중인 단계인지 확인
+     */
+    public boolean isDbSaving() {
+        return category == StageCategory.DB_SAVE;
     }
 
     /**

@@ -122,6 +122,14 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
     private CountryCode countryCode;
 
     /**
+     * CRL 번호
+     *
+     * <p>CRL의 고유 일련번호입니다. CSCA가 발급하는 CRL의 순차적 번호입니다.</p>
+     */
+    @Column(name = "crl_number", length = 50)
+    private String crlNumber;
+
+    /**
      * CRL 유효성 기간 (thisUpdate, nextUpdate)
      */
     @Embedded
@@ -164,6 +172,15 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      */
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * CRL 유효성 상태
+     *
+     * <p>CRL이 현재 유효한지 여부를 나타냅니다.
+     * 새로운 CRL이 업로드되면 이전 CRL은 무효화됩니다.</p>
+     */
+    @Column(name = "is_valid", nullable = false)
+    private boolean isValidCrl = true;
 
     /**
      * CertificateRevocationList Aggregate Root 생성 (Static Factory Method)
@@ -213,11 +230,13 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
         crl.uploadId = uploadId;
         crl.issuerName = issuerName;
         crl.countryCode = countryCode;
+        crl.crlNumber = null;  // CRL 번호는 파싱 시점에 별도 설정
         crl.validityPeriod = validityPeriod;
         crl.x509CrlData = x509CrlData;
         crl.revokedCertificates = revokedCertificates;
         crl.createdAt = LocalDateTime.now();
         crl.updatedAt = LocalDateTime.now();
+        crl.isValidCrl = true;  // 새로 생성된 CRL은 유효
 
         // TODO: Domain Event 발행
         // crl.registerEvent(new CrlCreatedEvent(id, issuerName, countryCode));
@@ -293,16 +312,19 @@ public class CertificateRevocationList extends AggregateRoot<CrlId> {
      * @return 폐기된 인증서 수
      */
     public int getRevokedCount() {
-        return revokedCertificates.getCount();
+        return revokedCertificates.calculateCount();
     }
 
     /**
      * CRL 바이너리 데이터 크기
      *
+     * <p>Note: 메서드명을 'getSize' 대신 'calculateSize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 바이트 단위 크기
      */
-    public int getSize() {
-        return x509CrlData.getSize();
+    public int calculateSize() {
+        return x509CrlData.calculateSize();
     }
 
     /**

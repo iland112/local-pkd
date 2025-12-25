@@ -521,7 +521,9 @@ public class PerformPassiveAuthenticationUseCase {
             sod,
             dataGroupList,
             metadata,
-            rawRequestData
+            rawRequestData,
+            command.issuingCountry().getValue(),
+            command.documentNumber()
         );
 
         // Record verification result

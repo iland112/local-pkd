@@ -9,81 +9,90 @@
 
   <th:block th:fragment="mode-selector(selected)">
     <div class="form-control w-full">
-      <label class="label">
-        <span class="label-text font-semibold">
-          <i class="fas fa-cog text-primary mr-1"></i>
+      <label class="label py-1">
+        <span class="label-text font-semibold text-sm flex items-center gap-1.5">
+          <!-- Heroicon: cog-6-tooth -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-primary" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
           파일 처리 방식
         </span>
       </label>
 
-      <!-- Grid for radio buttons (2 columns) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- Radio button group -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- AUTO Mode Option -->
-        <div class="form-control">
-          <label class="label cursor-pointer gap-3 items-start">
-            <input
-              type="radio"
-              name="processingMode"
-              value="AUTO"
-              class="radio radio-primary"
-              th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
-              x-model="processingMode"
-            />
-            <div class="flex flex-col w-full">
-              <div class="flex items-center gap-2">
-                <span class="font-semibold text-base text-primary">
-                  🤖 자동 처리 (AUTO)
-                </span>
-                <div class="tooltip tooltip-right tooltip-sm" data-tip="업로드 후 자동으로 파싱, 검증, LDAP 등록까지 처리됩니다. 프로덕션 환경에 권장됩니다.">
-                  <div tabindex="0" role="button" class="badge badge-circle badge-ghost badge-sm">
-                    <i class="fas fa-question text-xs"></i>
-                  </div>
-                </div>
-              </div>
+        <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:border-primary"
+               :class="processingMode === 'AUTO' ? 'border-primary bg-primary/5' : 'border-base-300'">
+          <input
+            type="radio"
+            name="processingMode"
+            value="AUTO"
+            class="radio radio-primary radio-sm"
+            th:checked="${(selected ?: 'AUTO') == 'AUTO'}"
+            x-model="processingMode"
+          />
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-sm" :class="processingMode === 'AUTO' ? 'text-primary' : 'text-base-content'">
+                자동 처리
+              </span>
+              <span class="badge badge-primary badge-xs">AUTO</span>
             </div>
-          </label>
-        </div>
-
-        <!-- MANUAL Mode Option -->
-        <div class="form-control">
-          <label class="label cursor-pointer gap-3 items-start">
-            <input
-              type="radio"
-              name="processingMode"
-              value="MANUAL"
-              class="radio radio-secondary"
-              th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
-              x-model="processingMode"
-            />
-            <div class="flex flex-col w-full">
-                <div class="flex items-center gap-2">
-                    <span class="font-semibold text-base text-secondary">
-                        🎮 수동 처리 (MANUAL)
-                    </span>
-                    <div class="tooltip tooltip-right tooltip-sm" data-tip="각 단계를 사용자가 수동으로 진행할 수 있습니다. 개발/테스트 환경이나 품질 검수에 권장됩니다.">
-                        <div tabindex="0" role="button" class="badge badge-circle badge-ghost badge-sm">
-                            <i class="fas fa-question text-xs"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <!-- Info Box -->
-      <div class="alert alert-info mt-4">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <div>
-          <h3 class="font-bold">처리 방식 선택</h3>
-          <div class="text-xs">
-            <p>
-              <strong>AUTO:</strong> 파일 업로드 → 파싱 → 검증 → LDAP 등록까지 자동으로 처리됩니다.
-            </p>
-            <p class="mt-2">
-              <strong>MANUAL:</strong> 각 단계마다 사용자가 '시작' 버튼을 클릭해야 진행됩니다. 중간 결과를 검토하고 싶을 때 사용하세요.
+            <p class="text-xs text-base-content/60 mt-0.5 leading-relaxed">
+              업로드 → 파싱 → 검증 → LDAP 등록 자동 진행
             </p>
           </div>
+          <!-- Tooltip -->
+          <div class="tooltip tooltip-left" data-tip="프로덕션 환경에 권장">
+            <!-- Heroicon: question-mark-circle -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-base-content/40" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+        </label>
+
+        <!-- MANUAL Mode Option -->
+        <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:border-secondary"
+               :class="processingMode === 'MANUAL' ? 'border-secondary bg-secondary/5' : 'border-base-300'">
+          <input
+            type="radio"
+            name="processingMode"
+            value="MANUAL"
+            class="radio radio-secondary radio-sm"
+            th:checked="${(selected ?: 'AUTO') == 'MANUAL'}"
+            x-model="processingMode"
+          />
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-sm" :class="processingMode === 'MANUAL' ? 'text-secondary' : 'text-base-content'">
+                수동 처리
+              </span>
+              <span class="badge badge-secondary badge-xs">MANUAL</span>
+            </div>
+            <p class="text-xs text-base-content/60 mt-0.5 leading-relaxed">
+              각 단계별 수동 진행, 중간 결과 검토 가능
+            </p>
+          </div>
+          <!-- Tooltip -->
+          <div class="tooltip tooltip-left" data-tip="개발/테스트 환경에 권장">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-base-content/40" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+        </label>
+      </div>
+
+      <!-- Compact Info Box -->
+      <div class="flex items-start gap-2 mt-3 p-2.5 bg-info/10 rounded-lg text-xs">
+        <!-- Heroicon: information-circle -->
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-info flex-shrink-0 mt-0.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+        </svg>
+        <div class="text-base-content/70 leading-relaxed">
+          <span class="font-medium text-info">AUTO</span>는 모든 단계를 자동 처리하고,
+          <span class="font-medium text-info">MANUAL</span>은 각 단계마다 버튼 클릭으로 진행합니다.
         </div>
       </div>
     </div>

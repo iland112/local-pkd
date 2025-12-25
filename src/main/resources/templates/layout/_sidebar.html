@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<!-- Preline Mini Sidebar with Toggle (Content Push Pattern) -->
+<aside th:fragment="sidebar-content"
+       id="application-sidebar"
+       x-data="{ expanded: localStorage.getItem('sidebarExpanded') !== 'false' }"
+       x-init="$watch('expanded', val => localStorage.setItem('sidebarExpanded', val))"
+       :class="expanded ? 'lg:w-64' : 'lg:w-[70px]'"
+       class="hs-overlay [--auto-close:lg]
+              hs-overlay-open:translate-x-0
+              -translate-x-full transition-all duration-300 transform
+              w-64 h-full
+              fixed inset-y-0 start-0 z-[60]
+              bg-base-100 border-e border-base-300
+              lg:block lg:translate-x-0 lg:end-auto lg:bottom-0"
+       role="dialog"
+       tabindex="-1"
+       aria-label="Sidebar"
+>
+    <div class="flex flex-col h-full">
+        <!-- Sidebar Header / Logo -->
+        <div class="px-4 pt-4 pb-2">
+            <a href="/" class="flex items-center gap-3 group" aria-label="홈으로 이동">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow flex-shrink-0">
+                    <!-- Heroicon: shield-check -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-white">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0 overflow-hidden" x-show="expanded" x-transition:enter="transition-opacity duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                    <h2 class="text-base font-bold text-base-content truncate">ICAO PKD</h2>
+                    <p class="text-xs text-base-content/60 truncate">Local Manager</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Sidebar Toggle Button (Desktop) -->
+        <div class="hidden lg:flex justify-end px-3 pb-2">
+            <button @click="expanded = !expanded"
+                    class="btn btn-ghost btn-xs btn-circle"
+                    :aria-label="expanded ? '사이드바 축소' : '사이드바 확장'"
+            >
+                <!-- Heroicon: chevron-double-left / chevron-double-right -->
+                <svg x-show="expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5" />
+                </svg>
+                <svg x-show="!expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Sidebar Menu -->
+        <nav class="flex-1 overflow-y-auto px-3 py-4">
+            <ul class="space-y-1.5" data-hs-accordion-always-open>
+                <!-- Home -->
+                <li>
+                    <a href="/"
+                       th:classappend="${navPage} == 'home' ? 'bg-primary/10 text-primary border-l-2 border-primary' : 'hover:bg-base-200'"
+                       class="sidebar-link flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors"
+                       :class="!expanded && 'lg:justify-center lg:px-2'"
+                       x-data="{ tooltip: 'Home' }"
+                       :title="!expanded ? tooltip : ''"
+                    >
+                        <!-- Heroicon: home -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                        </svg>
+                        <span x-show="expanded" x-transition.opacity>Home</span>
+                    </a>
+                </li>
+
+                <!-- PKD Upload Section Header -->
+                <li class="pt-3" x-show="expanded" x-transition.opacity>
+                    <p class="px-3 text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2">
+                        PKD Upload
+                    </p>
+                </li>
+                <li class="pt-3 lg:hidden" x-show="!expanded">
+                    <hr class="border-base-300"/>
+                </li>
+
+                <!-- PKD Upload Accordion -->
+                <li class="hs-accordion" id="pkd-upload-accordion"
+                    th:classappend="${navPage != null and (navPage.startsWith('file-') or navPage == 'upload-history')} ? 'active' : ''">
+                    <button type="button"
+                            class="hs-accordion-toggle w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg hover:bg-base-200 transition-colors"
+                            :class="!expanded && 'lg:justify-center lg:px-2'"
+                            aria-expanded="true"
+                            aria-controls="pkd-upload-accordion-content"
+                            x-data="{ tooltip: 'PKD 관리' }"
+                            :title="!expanded ? tooltip : ''"
+                    >
+                        <!-- Heroicon: circle-stack -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                        </svg>
+                        <span class="flex-1 text-start" x-show="expanded" x-transition.opacity>PKD 관리</span>
+                        <!-- Chevron -->
+                        <svg x-show="expanded" class="hs-accordion-active:rotate-180 w-4 h-4 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </button>
+
+                    <div id="pkd-upload-accordion-content" class="hs-accordion-content w-full overflow-hidden transition-[height] duration-300" :class="!expanded && 'lg:hidden'">
+                        <ul class="pt-1 ps-7 space-y-1" :class="!expanded && 'lg:ps-0'">
+                            <li>
+                                <a href="/file/upload"
+                                   th:classappend="${navPage} == 'file-upload' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: arrow-up-tray -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>파일 업로드</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/upload-history"
+                                   th:classappend="${navPage} == 'upload-history' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: clock -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>업로드 이력</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/file/dashboard"
+                                   th:classappend="${navPage} == 'file-dashboard' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: chart-bar -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>통계 대시보드</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </li>
+
+                <!-- Passive Authentication Section Header -->
+                <li class="pt-3" x-show="expanded" x-transition.opacity>
+                    <p class="px-3 text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2">
+                        Passive Auth
+                    </p>
+                </li>
+                <li class="pt-3 lg:hidden" x-show="!expanded">
+                    <hr class="border-base-300"/>
+                </li>
+
+                <!-- PA Accordion -->
+                <li class="hs-accordion" id="pa-accordion"
+                    th:classappend="${navPage != null and navPage.startsWith('pa-')} ? 'active' : ''">
+                    <button type="button"
+                            class="hs-accordion-toggle w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg hover:bg-base-200 transition-colors"
+                            :class="!expanded && 'lg:justify-center lg:px-2'"
+                            aria-expanded="true"
+                            aria-controls="pa-accordion-content"
+                            x-data="{ tooltip: 'PA 검증' }"
+                            :title="!expanded ? tooltip : ''"
+                    >
+                        <!-- Heroicon: identification -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
+                        </svg>
+                        <span class="flex-1 text-start" x-show="expanded" x-transition.opacity>PA 검증</span>
+                        <!-- Chevron -->
+                        <svg x-show="expanded" class="hs-accordion-active:rotate-180 w-4 h-4 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </button>
+
+                    <div id="pa-accordion-content" class="hs-accordion-content w-full overflow-hidden transition-[height] duration-300" :class="!expanded && 'lg:hidden'">
+                        <ul class="pt-1 ps-7 space-y-1" :class="!expanded && 'lg:ps-0'">
+                            <li>
+                                <a href="/pa/verify"
+                                   th:classappend="${navPage} == 'pa-verify' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: check-badge -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>PA 검증 수행</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/pa/history"
+                                   th:classappend="${navPage} == 'pa-history' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: clock -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>검증 이력</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/pa/dashboard"
+                                   th:classappend="${navPage} == 'pa-dashboard' ? 'text-primary bg-primary/5' : 'text-base-content/70 hover:text-base-content'"
+                                   class="flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg hover:bg-base-200 transition-colors"
+                                >
+                                    <!-- Heroicon: presentation-chart-line -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+                                    </svg>
+                                    <span x-show="expanded" x-transition.opacity>통계 대시보드</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </li>
+
+                <!-- Divider -->
+                <li class="pt-4" x-show="expanded" x-transition.opacity>
+                    <hr class="border-base-300"/>
+                </li>
+
+                <!-- System Section Header -->
+                <li class="pt-2" x-show="expanded" x-transition.opacity>
+                    <p class="px-3 text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2">
+                        System
+                    </p>
+                </li>
+
+                <li>
+                    <button @click="showSystemInfo()"
+                            class="w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg hover:bg-base-200 transition-colors text-base-content/70 hover:text-base-content"
+                            :class="!expanded && 'lg:justify-center lg:px-2'"
+                            x-data="{ tooltip: '시스템 정보' }"
+                            :title="!expanded ? tooltip : ''"
+                    >
+                        <!-- Heroicon: information-circle -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                        </svg>
+                        <span x-show="expanded" x-transition.opacity>시스템 정보</span>
+                    </button>
+                </li>
+
+                <li>
+                    <button @click="showHelp()"
+                            class="w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg hover:bg-base-200 transition-colors text-base-content/70 hover:text-base-content"
+                            :class="!expanded && 'lg:justify-center lg:px-2'"
+                            x-data="{ tooltip: '도움말' }"
+                            :title="!expanded ? tooltip : ''"
+                    >
+                        <!-- Heroicon: question-mark-circle -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+                        </svg>
+                        <span x-show="expanded" x-transition.opacity>도움말</span>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="border-t border-base-300 px-4 py-3">
+            <div class="flex items-center" :class="expanded ? 'justify-between' : 'justify-center'">
+                <!-- Theme Toggle -->
+                <button
+                    @click="$store.theme.toggle()"
+                    class="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors text-base-content/70 hover:text-base-content"
+                    :class="!expanded && 'lg:px-2'"
+                    aria-label="다크 모드 토글"
+                    x-data="{ tooltip: '테마 변경' }"
+                    :title="!expanded ? tooltip : ''"
+                >
+                    <!-- Sun icon (light mode) -->
+                    <svg x-show="!$store.theme.darkMode" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                    </svg>
+                    <!-- Moon icon (dark mode) -->
+                    <svg x-show="$store.theme.darkMode" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
+                    </svg>
+                    <span class="text-xs" x-show="expanded" x-text="$store.theme.darkMode ? 'Dark' : 'Light'" x-transition.opacity></span>
+                </button>
+
+                <!-- Version Badge -->
+                <span class="text-xs text-base-content/40" x-show="expanded" x-transition.opacity>v5.3</span>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<!-- Sidebar Backdrop (for mobile) -->
+<div th:fragment="sidebar-backdrop"
+     class="hs-overlay-backdrop fixed inset-0 bg-gray-900/50 z-[55] hidden"
+     data-hs-overlay-backdrop-template>
+</div>
+
+</html>

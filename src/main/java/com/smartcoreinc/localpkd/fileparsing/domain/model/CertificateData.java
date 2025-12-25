@@ -41,6 +41,7 @@ public class CertificateData implements ValueObject {
     @Column(name = "not_after", nullable = false)
     private LocalDateTime notAfter;
 
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "certificate_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] certificateBinary;
 

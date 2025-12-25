@@ -3,6 +3,7 @@ package com.smartcoreinc.localpkd.ldapintegration.application.usecase;
 import com.smartcoreinc.localpkd.ldapintegration.application.command.UploadToLdapCommand;
 import com.smartcoreinc.localpkd.ldapintegration.application.response.UploadToLdapResponse;
 import com.smartcoreinc.localpkd.ldapintegration.domain.event.LdapUploadCompletedEvent;
+import com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter.UnboundIdLdapAdapter;
 import com.smartcoreinc.localpkd.shared.exception.DomainException;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingProgress;
 import com.smartcoreinc.localpkd.shared.progress.ProcessingStage;
@@ -124,9 +125,12 @@ public class UploadToLdapUseCase {
             int skippedCertificateCount = 0;
             int failedCertificateCount = 0;
 
-            // ✅ 인증서 LDAP 배치 업로드 (including CSCAs from Master List)
+            // ✅ 인증서 LDAP 배치 업로드 (RFC 5280 준수 - DN 기반 비교 및 업데이트)
+            // including CSCAs from Master List
             List<String> certBatch = new ArrayList<>();
             List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> certBatchObjects = new ArrayList<>();
+            int updatedCertificateCount = 0;
+
             for (int i = 0; i < certificates.size(); i++) {
                 com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate cert = certificates.get(i);
                 try {
@@ -135,14 +139,16 @@ public class UploadToLdapUseCase {
                     certBatch.add(ldifEntry);
                     certBatchObjects.add(cert);
 
-                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 배치 업로드
+                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 RFC 5280 비교 후 업로드
                     if (certBatch.size() >= command.batchSize() || (i + 1) == certificates.size()) {
-                        log.info("Uploading certificate batch: {} entries", certBatch.size());
-                        int successCount = ldapAdapter.addLdifEntriesBatch(certBatch);
-                        uploadedCertificateCount += successCount;
-                        skippedCertificateCount += (certBatch.size() - successCount);
-                        log.info("Certificate batch uploaded: {} success, {} skipped",
-                            successCount, certBatch.size() - successCount);
+                        log.info("Uploading certificate batch: {} entries (RFC 5280 comparison)", certBatch.size());
+                        UnboundIdLdapAdapter.CertBatchResult batchResult =
+                            ldapAdapter.addOrUpdateCertificateEntriesBatch(certBatch);
+                        uploadedCertificateCount += batchResult.added();
+                        updatedCertificateCount += batchResult.updated();
+                        skippedCertificateCount += batchResult.skipped();
+                        log.info("Certificate batch uploaded: {} added, {} updated, {} skipped",
+                            batchResult.added(), batchResult.updated(), batchResult.skipped());
 
                         // ✅ Update uploaded_to_ldap flag for successfully uploaded certificates
                         // Note: Even skipped entries (duplicates) are considered uploaded
@@ -194,14 +200,14 @@ public class UploadToLdapUseCase {
                     String ldifEntry = ldifConverter.crlToLdif(crl);
                     crlBatch.add(ldifEntry);
 
-                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 배치 업로드
+                    // ✅ 배치 크기에 도달하거나 마지막 항목이면 RFC 5280 CRL Number 비교 후 업로드
                     if (crlBatch.size() >= command.batchSize() || (i + 1) == crls.size()) {
-                        log.info("Uploading CRL batch: {} entries", crlBatch.size());
-                        int successCount = ldapAdapter.addLdifEntriesBatch(crlBatch);
-                        uploadedCrlCount += successCount;
-                        skippedCrlCount += (crlBatch.size() - successCount);
-                        log.info("CRL batch uploaded: {} success, {} skipped",
-                            successCount, crlBatch.size() - successCount);
+                        log.info("Uploading CRL batch: {} entries (RFC 5280 CRL Number comparison)", crlBatch.size());
+                        UnboundIdLdapAdapter.CrlBatchResult batchResult = ldapAdapter.addOrUpdateCrlEntriesBatch(crlBatch);
+                        uploadedCrlCount += batchResult.totalSuccess();
+                        skippedCrlCount += batchResult.skipped();
+                        log.info("CRL batch uploaded: {} added, {} updated, {} skipped (already latest)",
+                            batchResult.added(), batchResult.updated(), batchResult.skipped());
                         crlBatch.clear();
                     }
 
@@ -237,6 +243,8 @@ public class UploadToLdapUseCase {
             int skippedMasterListCount = 0;
             int failedMasterListCount = 0;
 
+            int updatedMasterListCount = 0;
+
             for (int i = 0; i < masterLists.size(); i++) {
                 com.smartcoreinc.localpkd.fileparsing.domain.model.MasterList ml = masterLists.get(i);
                 try {
@@ -248,17 +256,27 @@ public class UploadToLdapUseCase {
                     // Convert Master List to LDIF format for o=ml,c={COUNTRY}
                     String ldifEntry = ldifConverter.masterListForCountryToLdif(ml, countryCode, cscaDn, serialNumber);
 
-                    // Upload single Master List entry
-                    List<String> mlBatch = new ArrayList<>();
-                    mlBatch.add(ldifEntry);
-                    int successCount = ldapAdapter.addLdifEntriesBatch(mlBatch);
+                    // ✅ Master List 추가/업데이트 (바이너리 비교)
+                    UnboundIdLdapAdapter.MasterListAddResult result =
+                        ldapAdapter.addOrUpdateMasterListEntry(ldifEntry);
 
-                    if (successCount > 0) {
-                        uploadedMasterListCount++;
-                        log.debug("Master List uploaded: country={}, mlId={}", countryCode, ml.getId().getId());
-                    } else {
-                        skippedMasterListCount++;
-                        log.debug("Master List skipped (duplicate): country={}, mlId={}", countryCode, ml.getId().getId());
+                    switch (result) {
+                        case ADDED -> {
+                            uploadedMasterListCount++;
+                            log.debug("Master List added: country={}, mlId={}", countryCode, ml.getId().getId());
+                        }
+                        case UPDATED -> {
+                            updatedMasterListCount++;
+                            log.debug("Master List updated: country={}, mlId={}", countryCode, ml.getId().getId());
+                        }
+                        case SKIPPED -> {
+                            skippedMasterListCount++;
+                            log.debug("Master List skipped (identical): country={}, mlId={}", countryCode, ml.getId().getId());
+                        }
+                        case ERROR -> {
+                            failedMasterListCount++;
+                            log.warn("Master List upload error: country={}, mlId={}", countryCode, ml.getId().getId());
+                        }
                     }
 
                     // Send progress every 10 items or at the end
@@ -282,53 +300,97 @@ public class UploadToLdapUseCase {
                 }
             }
 
-            log.info("Master List LDAP upload completed: {} uploaded, {} skipped, {} failed",
-                    uploadedMasterListCount, skippedMasterListCount, failedMasterListCount);
+            log.info("Master List LDAP upload completed: {} added, {} updated, {} skipped, {} failed",
+                    uploadedMasterListCount, updatedMasterListCount, skippedMasterListCount, failedMasterListCount);
 
             // 6. LDAP 업로드 결과 통계 계산
-            // Calculate totals first
-            int totalUploaded = uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
+            // Calculate totals first (업데이트도 성공으로 카운트)
+            int totalUpdated = updatedCertificateCount + updatedMasterListCount;
+            int totalUploaded = uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount + totalUpdated;
+            int totalSkipped = skippedCertificateCount + skippedCrlCount + skippedMasterListCount;
             int totalFailed = failedCertificateCount + failedCrlCount + failedMasterListCount;
 
-            // 업로드된 인증서를 타입별로 집계
+            // ✅ 실제 LDAP에 업로드된 인증서 타입별 통계 (업로드 과정에서 추적)
+            // 주의: uploadedCertificateCount는 실제 LDAP에 성공적으로 추가된 수 (중복 제외)
+            // DB 전체 수가 아닌 실제 업로드 수를 표시
+            log.info("LDAP upload completed: Certificates: {} (new), CRLs: {} (new), MasterLists: {} (new)",
+                    uploadedCertificateCount, uploadedCrlCount, uploadedMasterListCount);
+            log.info("Skipped (duplicates): {} certificates, {} CRLs, {} Master Lists", 
+                    skippedCertificateCount, skippedCrlCount, skippedMasterListCount);
+            log.info("Failed: {} certificates, {} CRLs, {} Master Lists", 
+                    failedCertificateCount, failedCrlCount, failedMasterListCount);
+
+            // DB에 저장된 전체 인증서 수 (참고용 로그)
             java.util.List<com.smartcoreinc.localpkd.certificatevalidation.domain.model.Certificate> allCertificates =
                     certificateRepository.findByUploadId(command.uploadId());
 
-            long cscaUploadedCount = allCertificates.stream()
+            long cscaTotalCount = allCertificates.stream()
                     .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.CSCA)
                     .count();
-            long dscUploadedCount = allCertificates.stream()
+            long dscTotalCount = allCertificates.stream()
                     .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC)
                     .count();
-            long dscNcUploadedCount = allCertificates.stream()
+            long dscNcTotalCount = allCertificates.stream()
                     .filter(cert -> cert.getCertificateType() == com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateType.DSC_NC)
                     .count();
 
-            log.info("LDAP upload completed: CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}, CRL: {}, MasterList: {}",
-                    cscaUploadedCount, masterListCscaCount, dscUploadedCount, dscNcUploadedCount, uploadedCrlCount, uploadedMasterListCount);
-            log.info("Skipped (duplicates): {} certificates, {} CRLs, {} Master Lists", skippedCertificateCount, skippedCrlCount, skippedMasterListCount);
+            log.info("DB total certificates (this upload): CSCA: {} (from MasterList: {}), DSC: {}, DSC_NC: {}",
+                    cscaTotalCount, masterListCscaCount, dscTotalCount, dscNcTotalCount);
 
-            // 통계 메시지 포맷팅
+            // 통계 메시지 포맷팅 (신규/업데이트/동일하여 스킵)
             StringBuilder detailsMsg = new StringBuilder();
-            if (cscaUploadedCount > 0) {
-                detailsMsg.append(String.format("CSCA: %d개", cscaUploadedCount));
+
+            // 인증서 레이블 결정: ML 파일(CSCA만 있음)이면 "CSCA", DSC/CRL LDIF 파일이면 "DSC"
+            // DSC 또는 DSC_NC가 하나라도 있으면 DSC/CRL LDIF 파일로 간주
+            String certLabel = (dscTotalCount > 0 || dscNcTotalCount > 0) ? "DSC" : "CSCA";
+
+            // 인증서 통계 (CSCA, DSC, DSC_NC 포함)
+            int certTotal = uploadedCertificateCount + updatedCertificateCount + skippedCertificateCount;
+            if (certTotal > 0) {
+                StringBuilder certParts = new StringBuilder();
+                if (uploadedCertificateCount > 0) certParts.append(String.format("신규 %d", uploadedCertificateCount));
+                if (updatedCertificateCount > 0) {
+                    if (certParts.length() > 0) certParts.append(", ");
+                    certParts.append(String.format("업데이트 %d", updatedCertificateCount));
+                }
+                if (skippedCertificateCount > 0) {
+                    if (certParts.length() > 0) certParts.append(", ");
+                    certParts.append(String.format("동일하여 스킵 %d", skippedCertificateCount));
+                }
+                detailsMsg.append(String.format("%s: %d개 (%s)", certLabel, certTotal, certParts));
             }
-            if (dscUploadedCount > 0) {
+
+            // CRL 통계
+            int crlTotal = uploadedCrlCount + skippedCrlCount;
+            if (crlTotal > 0) {
                 if (detailsMsg.length() > 0) detailsMsg.append(", ");
-                detailsMsg.append(String.format("DSC: %d개", dscUploadedCount));
+                StringBuilder crlParts = new StringBuilder();
+                if (uploadedCrlCount > 0) crlParts.append(String.format("신규 %d", uploadedCrlCount));
+                if (skippedCrlCount > 0) {
+                    if (crlParts.length() > 0) crlParts.append(", ");
+                    crlParts.append(String.format("동일하여 스킵 %d", skippedCrlCount));
+                }
+                detailsMsg.append(String.format("CRL: %d개 (%s)", crlTotal, crlParts));
             }
-            if (dscNcUploadedCount > 0) {
+
+            // MasterList 통계
+            int mlTotal = uploadedMasterListCount + updatedMasterListCount + skippedMasterListCount;
+            if (mlTotal > 0) {
                 if (detailsMsg.length() > 0) detailsMsg.append(", ");
-                detailsMsg.append(String.format("DSC_NC: %d개", dscNcUploadedCount));
+                StringBuilder mlParts = new StringBuilder();
+                if (uploadedMasterListCount > 0) mlParts.append(String.format("신규 %d", uploadedMasterListCount));
+                if (updatedMasterListCount > 0) {
+                    if (mlParts.length() > 0) mlParts.append(", ");
+                    mlParts.append(String.format("업데이트 %d", updatedMasterListCount));
+                }
+                if (skippedMasterListCount > 0) {
+                    if (mlParts.length() > 0) mlParts.append(", ");
+                    mlParts.append(String.format("동일하여 스킵 %d", skippedMasterListCount));
+                }
+                detailsMsg.append(String.format("MasterList: %d개 (%s)", mlTotal, mlParts));
             }
-            if (uploadedCrlCount > 0) {
-                if (detailsMsg.length() > 0) detailsMsg.append(", ");
-                detailsMsg.append(String.format("CRL: %d개", uploadedCrlCount));
-            }
-            if (uploadedMasterListCount > 0) {
-                if (detailsMsg.length() > 0) detailsMsg.append(", ");
-                detailsMsg.append(String.format("MasterList: %d개", uploadedMasterListCount));
-            }
+
+            // 실패 통계
             if (totalFailed > 0) {
                 if (detailsMsg.length() > 0) detailsMsg.append(", ");
                 detailsMsg.append(String.format("실패: %d개", totalFailed));
@@ -349,12 +411,34 @@ public class UploadToLdapUseCase {
             log.info("LdapUploadCompletedEvent published: uploadId={}", command.uploadId());
 
             // 8. SSE 진행 상황 전송: LDAP_SAVING_COMPLETED (100%)
+            // 메시지: 신규/업데이트/스킵 정보를 명확하게 표시
+            int totalNew = uploadedCertificateCount + uploadedCrlCount + uploadedMasterListCount;
+            StringBuilder summaryMsg = new StringBuilder("LDAP 저장 완료");
+            if (totalNew > 0 || totalUpdated > 0 || totalSkipped > 0) {
+                summaryMsg.append(" (");
+                boolean first = true;
+                if (totalNew > 0) {
+                    summaryMsg.append(String.format("신규 %d개", totalNew));
+                    first = false;
+                }
+                if (totalUpdated > 0) {
+                    if (!first) summaryMsg.append(", ");
+                    summaryMsg.append(String.format("업데이트 %d개", totalUpdated));
+                    first = false;
+                }
+                if (totalSkipped > 0) {
+                    if (!first) summaryMsg.append(", ");
+                    summaryMsg.append(String.format("동일하여 스킵 %d개", totalSkipped));
+                }
+                summaryMsg.append(")");
+            }
+
             progressService.sendProgress(
                 ProcessingProgress.builder()
                     .uploadId(command.uploadId())
                     .stage(ProcessingStage.LDAP_SAVING_COMPLETED)
                     .percentage(100)
-                    .message(String.format("LDAP 저장 완료 (총 %d개)", totalUploaded))
+                    .message(summaryMsg.toString())
                     .details(detailsMsg.toString())
                     .processedCount(totalUploaded + totalFailed)
                     .totalCount(command.getTotalCount())

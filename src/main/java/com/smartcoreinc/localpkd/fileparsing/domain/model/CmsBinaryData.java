@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 
 /**
  * CmsBinaryData - CMS (Cryptographic Message Syntax) signed binary data
@@ -25,6 +26,7 @@ public class CmsBinaryData {
 
     // @Lob
     // @Column(name = "cms_binary", nullable = false)
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "cms_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] value;
 
@@ -65,13 +67,16 @@ public class CmsBinaryData {
 
     /**
      * Get the size of the binary data in bytes
+     *
+     * <p>Note: 메서드명을 'getSize' 대신 'calculateSize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
      */
-    public int getSize() {
+    public int calculateSize() {
         return value != null ? value.length : 0;
     }
 
     @Override
     public String toString() {
-        return "CmsBinaryData[" + getSize() + " bytes]";
+        return "CmsBinaryData[" + calculateSize() + " bytes]";
     }
 }

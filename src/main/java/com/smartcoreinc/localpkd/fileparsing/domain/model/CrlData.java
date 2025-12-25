@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -84,6 +85,7 @@ public class CrlData implements ValueObject {
      * NOTE: @Lob 제거 - Hibernate/PostgreSQL bytea 매핑 버그 회피
      * columnDefinition="BYTEA"만으로도 충분함
      */
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "crl_binary", nullable = false, columnDefinition = "BYTEA")
     private byte[] crlBinary;
 

@@ -170,16 +170,13 @@
             <artifactId>chartjs</artifactId>
             <version>4.4.3</version>
         </dependency>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>font-awesome</artifactId>
-            <version>6.7.2</version>
-        </dependency>
+        <!-- FontAwesome removed - replaced with inline Heroicons SVG -->
         <dependency>
             <groupId>io.github.wimdeblauwe</groupId>
             <artifactId>htmx-spring-boot-thymeleaf</artifactId>
             <version>3.0.0</version>
         </dependency>
+        <!-- Preline UI - installed via npm (see package.json) -->
 
         <!-- Test -->
         <dependency>

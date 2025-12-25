@@ -74,6 +74,12 @@ public class PassportData extends AggregateRoot<PassportDataId> {
     @Column(name = "verification_status", length = 20, insertable = false, updatable = false)
     private PassiveAuthenticationStatus verificationStatus;
 
+    @Column(name = "issuing_country", length = 3)
+    private String issuingCountry;
+
+    @Column(name = "document_number", length = 20)
+    private String documentNumber;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_request_data", columnDefinition = "JSONB")
     private String rawRequestData;
@@ -85,13 +91,17 @@ public class PassportData extends AggregateRoot<PassportDataId> {
      * @param dataGroups list of data groups
      * @param requestMetadata request metadata for audit
      * @param rawRequestData raw request data (JSON)
+     * @param issuingCountry issuing country code (ISO 3166-1 alpha-2 or alpha-3)
+     * @param documentNumber passport document number
      * @return PassportData instance
      */
     public static PassportData create(
         SecurityObjectDocument sod,
         List<DataGroup> dataGroups,
         RequestMetadata requestMetadata,
-        String rawRequestData
+        String rawRequestData,
+        String issuingCountry,
+        String documentNumber
     ) {
         validateCreationParameters(sod, dataGroups);
 
@@ -103,6 +113,8 @@ public class PassportData extends AggregateRoot<PassportDataId> {
         passportData.rawRequestData = rawRequestData;
         passportData.startedAt = LocalDateTime.now();
         passportData.verificationStatus = PassiveAuthenticationStatus.VALID;  // Initial optimistic status
+        passportData.issuingCountry = issuingCountry;
+        passportData.documentNumber = documentNumber;
 
         return passportData;
     }

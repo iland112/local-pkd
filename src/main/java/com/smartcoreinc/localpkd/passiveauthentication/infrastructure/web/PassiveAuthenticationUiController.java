@@ -36,7 +36,8 @@ public class PassiveAuthenticationUiController {
      * PA Verify Page
      */
     @GetMapping("/pa/verify")
-    public String verifyPage() {
+    public String verifyPage(org.springframework.ui.Model model) {
+        model.addAttribute("navPage", "pa-verify");
         return "pa/verify";
     }
 
@@ -44,7 +45,8 @@ public class PassiveAuthenticationUiController {
      * PA History Page
      */
     @GetMapping("/pa/history")
-    public String historyPage() {
+    public String historyPage(org.springframework.ui.Model model) {
+        model.addAttribute("navPage", "pa-history");
         return "pa/history";
     }
 
@@ -52,7 +54,8 @@ public class PassiveAuthenticationUiController {
      * PA Dashboard Page
      */
     @GetMapping("/pa/dashboard")
-    public String dashboardPage() {
+    public String dashboardPage(org.springframework.ui.Model model) {
+        model.addAttribute("navPage", "pa-dashboard");
         return "pa/dashboard";
     }
 

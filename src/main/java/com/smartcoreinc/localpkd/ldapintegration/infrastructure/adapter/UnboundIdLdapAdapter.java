@@ -3,6 +3,9 @@ package com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter;
 import com.unboundid.ldap.sdk.*;
 import com.unboundid.ldif.LDIFReader;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.cert.X509CRLHolder;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.ASN1Integer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -10,8 +13,10 @@ import jakarta.annotation.PreDestroy;
 import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -821,5 +826,940 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
                 (connectionPool.getMaximumAvailableConnections() -
                  connectionPool.getCurrentAvailableConnections())
         );
+    }
+
+    // ============================================================================
+    // CRL Comparison and Update Methods (RFC 5280 Compliant)
+    // ============================================================================
+
+    /**
+     * CRL 비교 결과
+     */
+    public enum CrlCompareResult {
+        /** 새 CRL이 더 최신 (업데이트 필요) */
+        NEWER,
+        /** 기존 CRL이 더 최신이거나 동일 (스킵) */
+        OLDER_OR_EQUAL,
+        /** 기존 CRL 없음 (신규 추가) */
+        NOT_EXISTS,
+        /** 비교 실패 */
+        ERROR
+    }
+
+    /**
+     * LDAP에서 기존 CRL의 CRL Number를 조회
+     *
+     * <p>RFC 5280에 따라 CRL Number (OID 2.5.29.20) 확장을 추출합니다.</p>
+     *
+     * @param dn CRL 엔트리의 DN
+     * @return CRL Number (Optional - 없으면 empty)
+     */
+    public Optional<BigInteger> getCrlNumberFromLdap(String dn) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                // DN으로 CRL 엔트리 검색
+                SearchResult searchResult = connection.search(
+                    dn,
+                    SearchScope.BASE,
+                    "(objectClass=*)",
+                    "certificateRevocationList;binary"
+                );
+
+                if (searchResult.getEntryCount() == 0) {
+                    log.debug("CRL entry not found: {}", dn);
+                    return Optional.empty();
+                }
+
+                Entry entry = searchResult.getSearchEntries().get(0);
+                byte[] crlBinary = entry.getAttributeValueBytes("certificateRevocationList;binary");
+
+                if (crlBinary == null || crlBinary.length == 0) {
+                    log.warn("CRL entry has no binary data: {}", dn);
+                    return Optional.empty();
+                }
+
+                // X.509 CRL 파싱하여 CRL Number 추출
+                return extractCrlNumber(crlBinary);
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            if (e.getResultCode() == ResultCode.NO_SUCH_OBJECT) {
+                log.debug("CRL entry does not exist: {}", dn);
+                return Optional.empty();
+            }
+            log.error("Failed to get CRL Number from LDAP: dn={}, error={}", dn, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * X.509 CRL 바이너리에서 CRL Number 추출
+     *
+     * <p>RFC 5280 Section 5.2.3: CRL Number Extension (OID 2.5.29.20)</p>
+     *
+     * @param crlBinary DER-encoded CRL binary
+     * @return CRL Number (Optional)
+     */
+    public Optional<BigInteger> extractCrlNumber(byte[] crlBinary) {
+        try {
+            X509CRLHolder crlHolder = new X509CRLHolder(crlBinary);
+            Extension crlNumberExt = crlHolder.getExtension(Extension.cRLNumber);
+
+            if (crlNumberExt == null) {
+                log.debug("CRL does not have CRL Number extension");
+                return Optional.empty();
+            }
+
+            ASN1Integer crlNumber = ASN1Integer.getInstance(crlNumberExt.getParsedValue());
+            return Optional.of(crlNumber.getValue());
+
+        } catch (Exception e) {
+            log.error("Failed to extract CRL Number from binary: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 새 CRL과 기존 CRL 비교 (RFC 5280 기준)
+     *
+     * <p>RFC 5280에 따라 CRL Number를 비교하여 어떤 CRL이 최신인지 결정합니다.</p>
+     * <ul>
+     *   <li>새 CRL Number > 기존 CRL Number: NEWER (업데이트 필요)</li>
+     *   <li>새 CRL Number <= 기존 CRL Number: OLDER_OR_EQUAL (스킵)</li>
+     *   <li>기존 CRL 없음: NOT_EXISTS (신규 추가)</li>
+     * </ul>
+     *
+     * @param dn CRL 엔트리의 DN
+     * @param newCrlBinary 새 CRL의 바이너리 데이터
+     * @return 비교 결과
+     */
+    public CrlCompareResult compareCrl(String dn, byte[] newCrlBinary) {
+        try {
+            // 기존 CRL Number 조회
+            Optional<BigInteger> existingCrlNumber = getCrlNumberFromLdap(dn);
+
+            if (existingCrlNumber.isEmpty()) {
+                log.debug("No existing CRL at DN: {}", dn);
+                return CrlCompareResult.NOT_EXISTS;
+            }
+
+            // 새 CRL Number 추출
+            Optional<BigInteger> newCrlNumber = extractCrlNumber(newCrlBinary);
+
+            if (newCrlNumber.isEmpty()) {
+                log.warn("New CRL has no CRL Number extension, treating as NEWER");
+                // CRL Number가 없는 경우 thisUpdate 비교로 폴백할 수 있지만,
+                // RFC 5280 권장사항에 따라 CRL Number가 없으면 최신으로 간주
+                return CrlCompareResult.NEWER;
+            }
+
+            // CRL Number 비교
+            int comparison = newCrlNumber.get().compareTo(existingCrlNumber.get());
+
+            if (comparison > 0) {
+                log.info("New CRL is newer: newCrlNumber={}, existingCrlNumber={}",
+                    newCrlNumber.get(), existingCrlNumber.get());
+                return CrlCompareResult.NEWER;
+            } else {
+                log.debug("Existing CRL is same or newer: newCrlNumber={}, existingCrlNumber={}",
+                    newCrlNumber.get(), existingCrlNumber.get());
+                return CrlCompareResult.OLDER_OR_EQUAL;
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to compare CRL: dn={}, error={}", dn, e.getMessage());
+            return CrlCompareResult.ERROR;
+        }
+    }
+
+    /**
+     * LDAP에 CRL 엔트리 업데이트 (MODIFY 연산)
+     *
+     * <p>기존 CRL 엔트리의 certificateRevocationList;binary 속성을 교체합니다.</p>
+     *
+     * @param dn CRL 엔트리의 DN
+     * @param newCrlBinary 새 CRL의 바이너리 데이터
+     * @return 성공 여부
+     */
+    public boolean modifyCrlEntry(String dn, byte[] newCrlBinary) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                // MODIFY 요청 생성 - certificateRevocationList;binary 속성 교체
+                Modification modification = new Modification(
+                    ModificationType.REPLACE,
+                    "certificateRevocationList;binary",
+                    newCrlBinary
+                );
+
+                ModifyRequest modifyRequest = new ModifyRequest(dn, modification);
+                LDAPResult result = connection.modify(modifyRequest);
+
+                if (result.getResultCode() == ResultCode.SUCCESS) {
+                    log.info("CRL entry updated successfully: {}", dn);
+                    return true;
+                } else {
+                    log.error("Failed to update CRL entry: {} ({})", dn, result.getResultCode());
+                    return false;
+                }
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            log.error("LDAP error while updating CRL: dn={}, error={}", dn, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * CRL 추가 또는 업데이트 (RFC 5280 기준 비교 포함)
+     *
+     * <p>CRL Number를 비교하여 다음과 같이 처리합니다:</p>
+     * <ul>
+     *   <li>기존 CRL 없음: ADD 연산으로 신규 추가</li>
+     *   <li>새 CRL이 더 최신: MODIFY 연산으로 교체</li>
+     *   <li>기존 CRL이 더 최신/동일: 스킵</li>
+     * </ul>
+     *
+     * @param ldifEntryText LDIF 형식의 CRL 엔트리
+     * @return 결과 (SUCCESS=추가됨, SKIPPED=스킵됨, UPDATED=업데이트됨, ERROR=오류)
+     */
+    public CrlAddResult addOrUpdateCrlEntry(String ldifEntryText) {
+        try {
+            // LDIF 파싱
+            LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(ldifEntryText.getBytes()));
+            Entry entry;
+            try {
+                entry = ldifReader.readEntry();
+            } finally {
+                try { ldifReader.close(); } catch (IOException ignored) {}
+            }
+
+            if (entry == null) {
+                return CrlAddResult.ERROR;
+            }
+
+            // DN 변환
+            String originalDn = entry.getDN();
+            String convertedDn = convertDn(originalDn);
+
+            // CRL 바이너리 추출
+            byte[] crlBinary = entry.getAttributeValueBytes("certificateRevocationList;binary");
+            if (crlBinary == null || crlBinary.length == 0) {
+                log.warn("CRL entry has no binary data: {}", convertedDn);
+                return CrlAddResult.ERROR;
+            }
+
+            // 부모 엔트리 생성
+            ensureParentEntriesExist(convertedDn);
+
+            // CRL 비교
+            CrlCompareResult compareResult = compareCrl(convertedDn, crlBinary);
+
+            switch (compareResult) {
+                case NOT_EXISTS:
+                    // 신규 추가
+                    Entry convertedEntry = new Entry(convertedDn, entry.getAttributes());
+                    LDAPConnection connection = connectionPool.getConnection();
+                    try {
+                        AddRequest addRequest = new AddRequest(convertedEntry);
+                        LDAPResult result = connection.add(addRequest);
+
+                        if (result.getResultCode() == ResultCode.SUCCESS) {
+                            log.info("CRL entry added: {}", convertedDn);
+                            return CrlAddResult.ADDED;
+                        } else if (result.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
+                            // Race condition: 다른 스레드가 먼저 추가함 - 업데이트 시도
+                            if (modifyCrlEntry(convertedDn, crlBinary)) {
+                                return CrlAddResult.UPDATED;
+                            }
+                            return CrlAddResult.SKIPPED;
+                        } else {
+                            log.error("Failed to add CRL: {} ({})", convertedDn, result.getResultCode());
+                            return CrlAddResult.ERROR;
+                        }
+                    } finally {
+                        connectionPool.releaseConnection(connection);
+                    }
+
+                case NEWER:
+                    // 새 CRL이 더 최신 - MODIFY 연산
+                    if (modifyCrlEntry(convertedDn, crlBinary)) {
+                        return CrlAddResult.UPDATED;
+                    }
+                    return CrlAddResult.ERROR;
+
+                case OLDER_OR_EQUAL:
+                    // 기존 CRL이 더 최신/동일 - 스킵
+                    log.debug("Skipping older or equal CRL: {}", convertedDn);
+                    return CrlAddResult.SKIPPED;
+
+                case ERROR:
+                default:
+                    return CrlAddResult.ERROR;
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to add or update CRL: {}", e.getMessage(), e);
+            return CrlAddResult.ERROR;
+        }
+    }
+
+    /**
+     * CRL 추가/업데이트 결과
+     */
+    public enum CrlAddResult {
+        /** 신규 추가됨 */
+        ADDED,
+        /** 기존 CRL 업데이트됨 */
+        UPDATED,
+        /** 스킵됨 (기존 CRL이 더 최신/동일) */
+        SKIPPED,
+        /** 오류 발생 */
+        ERROR
+    }
+
+    /**
+     * CRL 배치 추가/업데이트 (RFC 5280 기준 비교 포함)
+     *
+     * @param ldifEntries LDIF 형식의 CRL 엔트리 목록
+     * @return 추가/업데이트된 CRL 수 (added + updated)
+     */
+    public CrlBatchResult addOrUpdateCrlEntriesBatch(List<String> ldifEntries) {
+        if (ldifEntries == null || ldifEntries.isEmpty()) {
+            return new CrlBatchResult(0, 0, 0, 0);
+        }
+
+        long startTime = System.currentTimeMillis();
+        log.info("=== CRL Batch Add/Update started: {} entries (RFC 5280 Comparison) ===", ldifEntries.size());
+
+        AtomicInteger addedCount = new AtomicInteger(0);
+        AtomicInteger updatedCount = new AtomicInteger(0);
+        AtomicInteger skippedCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+
+        for (String ldifEntryText : ldifEntries) {
+            CrlAddResult result = addOrUpdateCrlEntry(ldifEntryText);
+
+            switch (result) {
+                case ADDED -> addedCount.incrementAndGet();
+                case UPDATED -> updatedCount.incrementAndGet();
+                case SKIPPED -> skippedCount.incrementAndGet();
+                case ERROR -> errorCount.incrementAndGet();
+            }
+        }
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.info("=== CRL Batch Add/Update completed in {}ms: {} added, {} updated, {} skipped, {} errors ===",
+            elapsed, addedCount.get(), updatedCount.get(), skippedCount.get(), errorCount.get());
+
+        return new CrlBatchResult(addedCount.get(), updatedCount.get(), skippedCount.get(), errorCount.get());
+    }
+
+    /**
+     * CRL 배치 처리 결과
+     */
+    public record CrlBatchResult(int added, int updated, int skipped, int errors) {
+        public int totalSuccess() {
+            return added + updated;
+        }
+    }
+
+    // ============================================================================
+    // Certificate (CSCA/DSC) Comparison and Update Methods (RFC 5280 Compliant)
+    // ============================================================================
+
+    /**
+     * 인증서 비교 결과
+     */
+    public enum CertCompareResult {
+        /** 신규 인증서 (추가 필요) */
+        NOT_EXISTS,
+        /** 동일 인증서 - 바이너리 동일 (스킵) */
+        IDENTICAL,
+        /** 동일 인증서 - 검증 상태만 다름 (업데이트 필요) */
+        DESCRIPTION_CHANGED,
+        /** 비교 실패 */
+        ERROR
+    }
+
+    /**
+     * LDAP에서 기존 인증서 정보 조회
+     *
+     * <p>RFC 5280에 따라 DN (Subject DN + Serial Number)으로 인증서를 식별합니다.</p>
+     *
+     * @param dn 인증서 엔트리의 DN
+     * @return 인증서 바이너리와 description (Optional)
+     */
+    public Optional<CertificateEntryInfo> getCertificateFromLdap(String dn) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                SearchResult searchResult = connection.search(
+                    dn,
+                    SearchScope.BASE,
+                    "(objectClass=*)",
+                    "userCertificate;binary", "description"
+                );
+
+                if (searchResult.getEntryCount() == 0) {
+                    log.debug("Certificate entry not found: {}", dn);
+                    return Optional.empty();
+                }
+
+                Entry entry = searchResult.getSearchEntries().get(0);
+                byte[] certBinary = entry.getAttributeValueBytes("userCertificate;binary");
+                String description = entry.getAttributeValue("description");
+
+                return Optional.of(new CertificateEntryInfo(certBinary, description));
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            if (e.getResultCode() == ResultCode.NO_SUCH_OBJECT) {
+                log.debug("Certificate entry does not exist: {}", dn);
+                return Optional.empty();
+            }
+            log.error("Failed to get certificate from LDAP: dn={}, error={}", dn, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 인증서 엔트리 정보
+     */
+    public record CertificateEntryInfo(byte[] certBinary, String description) {}
+
+    /**
+     * 새 인증서와 기존 인증서 비교 (RFC 5280 기준)
+     *
+     * <p>RFC 5280에 따라 DN (Subject DN + Serial Number)이 동일한 인증서를 비교합니다.</p>
+     * <ul>
+     *   <li>기존 인증서 없음: NOT_EXISTS (신규 추가)</li>
+     *   <li>바이너리 동일: IDENTICAL (스킵)</li>
+     *   <li>바이너리 동일, description만 다름: DESCRIPTION_CHANGED (업데이트)</li>
+     * </ul>
+     *
+     * @param dn 인증서 엔트리의 DN
+     * @param newCertBinary 새 인증서의 바이너리 데이터
+     * @param newDescription 새 description (검증 상태)
+     * @return 비교 결과
+     */
+    public CertCompareResult compareCertificate(String dn, byte[] newCertBinary, String newDescription) {
+        try {
+            Optional<CertificateEntryInfo> existingCert = getCertificateFromLdap(dn);
+
+            if (existingCert.isEmpty()) {
+                log.debug("No existing certificate at DN: {}", dn);
+                return CertCompareResult.NOT_EXISTS;
+            }
+
+            CertificateEntryInfo existing = existingCert.get();
+
+            // 바이너리 비교 (인증서 자체가 동일한지)
+            if (existing.certBinary() != null && newCertBinary != null) {
+                if (!java.util.Arrays.equals(existing.certBinary(), newCertBinary)) {
+                    // 바이너리가 다르면 다른 인증서 (하지만 DN이 같으므로 이론적으로 발생하지 않아야 함)
+                    log.warn("Certificate binary mismatch at same DN: {}", dn);
+                    // 이 경우는 기존 엔트리 업데이트로 처리
+                    return CertCompareResult.DESCRIPTION_CHANGED;
+                }
+            }
+
+            // 바이너리 동일 - description 비교
+            String existingDesc = existing.description() != null ? existing.description() : "";
+            String newDesc = newDescription != null ? newDescription : "";
+
+            if (!existingDesc.equals(newDesc)) {
+                log.info("Certificate description changed: dn={}, old={}, new={}",
+                    dn, existingDesc, newDesc);
+                return CertCompareResult.DESCRIPTION_CHANGED;
+            }
+
+            log.debug("Certificate is identical: {}", dn);
+            return CertCompareResult.IDENTICAL;
+
+        } catch (Exception e) {
+            log.error("Failed to compare certificate: dn={}, error={}", dn, e.getMessage());
+            return CertCompareResult.ERROR;
+        }
+    }
+
+    /**
+     * LDAP에 인증서 엔트리 업데이트 (MODIFY 연산)
+     *
+     * <p>기존 인증서 엔트리의 description 속성을 교체합니다.</p>
+     *
+     * @param dn 인증서 엔트리의 DN
+     * @param newDescription 새 description (검증 상태)
+     * @return 성공 여부
+     */
+    public boolean modifyCertificateDescription(String dn, String newDescription) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                Modification modification = new Modification(
+                    ModificationType.REPLACE,
+                    "description",
+                    newDescription
+                );
+
+                ModifyRequest modifyRequest = new ModifyRequest(dn, modification);
+                LDAPResult result = connection.modify(modifyRequest);
+
+                if (result.getResultCode() == ResultCode.SUCCESS) {
+                    log.info("Certificate description updated: {}", dn);
+                    return true;
+                } else {
+                    log.error("Failed to update certificate description: {} ({})", dn, result.getResultCode());
+                    return false;
+                }
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            log.error("LDAP error while updating certificate: dn={}, error={}", dn, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 인증서 추가/업데이트 결과
+     */
+    public enum CertAddResult {
+        /** 신규 추가됨 */
+        ADDED,
+        /** 기존 인증서 업데이트됨 (description 변경) */
+        UPDATED,
+        /** 스킵됨 (완전 동일) */
+        SKIPPED,
+        /** 오류 발생 */
+        ERROR
+    }
+
+    /**
+     * 인증서 추가 또는 업데이트 (RFC 5280 기준 비교 포함)
+     *
+     * <p>DN (Subject DN + Serial Number)을 기준으로 비교하여 처리합니다:</p>
+     * <ul>
+     *   <li>기존 인증서 없음: ADD 연산으로 신규 추가</li>
+     *   <li>description만 다름: MODIFY 연산으로 업데이트</li>
+     *   <li>완전 동일: 스킵</li>
+     * </ul>
+     *
+     * @param ldifEntryText LDIF 형식의 인증서 엔트리
+     * @return 결과 (ADDED, UPDATED, SKIPPED, ERROR)
+     */
+    public CertAddResult addOrUpdateCertificateEntry(String ldifEntryText) {
+        try {
+            // LDIF 파싱
+            LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(ldifEntryText.getBytes()));
+            Entry entry;
+            try {
+                entry = ldifReader.readEntry();
+            } finally {
+                try { ldifReader.close(); } catch (IOException ignored) {}
+            }
+
+            if (entry == null) {
+                return CertAddResult.ERROR;
+            }
+
+            // DN 변환
+            String originalDn = entry.getDN();
+            String convertedDn = convertDn(originalDn);
+
+            // 인증서 바이너리 추출
+            byte[] certBinary = entry.getAttributeValueBytes("userCertificate;binary");
+            String description = entry.getAttributeValue("description");
+
+            // 부모 엔트리 생성
+            ensureParentEntriesExist(convertedDn);
+
+            // 인증서 비교
+            CertCompareResult compareResult = compareCertificate(convertedDn, certBinary, description);
+
+            switch (compareResult) {
+                case NOT_EXISTS:
+                    // 신규 추가
+                    Entry convertedEntry = new Entry(convertedDn, entry.getAttributes());
+                    LDAPConnection connection = connectionPool.getConnection();
+                    try {
+                        AddRequest addRequest = new AddRequest(convertedEntry);
+                        LDAPResult result = connection.add(addRequest);
+
+                        if (result.getResultCode() == ResultCode.SUCCESS) {
+                            log.debug("Certificate entry added: {}", convertedDn);
+                            return CertAddResult.ADDED;
+                        } else if (result.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
+                            // Race condition: 다른 스레드가 먼저 추가함
+                            log.debug("Certificate already exists (race condition): {}", convertedDn);
+                            return CertAddResult.SKIPPED;
+                        } else {
+                            log.error("Failed to add certificate: {} ({})", convertedDn, result.getResultCode());
+                            return CertAddResult.ERROR;
+                        }
+                    } finally {
+                        connectionPool.releaseConnection(connection);
+                    }
+
+                case DESCRIPTION_CHANGED:
+                    // description만 다름 - MODIFY 연산
+                    if (modifyCertificateDescription(convertedDn, description)) {
+                        return CertAddResult.UPDATED;
+                    }
+                    return CertAddResult.ERROR;
+
+                case IDENTICAL:
+                    // 완전 동일 - 스킵
+                    log.debug("Skipping identical certificate: {}", convertedDn);
+                    return CertAddResult.SKIPPED;
+
+                case ERROR:
+                default:
+                    return CertAddResult.ERROR;
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to add or update certificate: {}", e.getMessage(), e);
+            return CertAddResult.ERROR;
+        }
+    }
+
+    /**
+     * 인증서 배치 추가/업데이트 (RFC 5280 기준 비교 포함)
+     *
+     * @param ldifEntries LDIF 형식의 인증서 엔트리 목록
+     * @return 처리 결과
+     */
+    public CertBatchResult addOrUpdateCertificateEntriesBatch(List<String> ldifEntries) {
+        if (ldifEntries == null || ldifEntries.isEmpty()) {
+            return new CertBatchResult(0, 0, 0, 0);
+        }
+
+        long startTime = System.currentTimeMillis();
+        log.info("=== Certificate Batch Add/Update started: {} entries (RFC 5280 Comparison) ===", ldifEntries.size());
+
+        // 캐시 초기화
+        clearCaches();
+
+        // Phase 1: 모든 엔트리 사전 파싱 및 부모 DN 수집
+        List<ParsedLdifEntry> parsedEntries = new ArrayList<>();
+        Set<String> allParentDns = ConcurrentHashMap.newKeySet();
+
+        for (String ldifEntryText : ldifEntries) {
+            try {
+                ParsedLdifEntry parsed = parseLdifEntry(ldifEntryText);
+                if (parsed != null) {
+                    parsedEntries.add(parsed);
+                    collectParentDns(parsed.convertedDn, allParentDns);
+                }
+            } catch (Exception e) {
+                log.debug("Failed to parse LDIF entry: {}", e.getMessage());
+            }
+        }
+
+        log.info("Parsed {} certificate entries, {} unique parent DNs",
+            parsedEntries.size(), allParentDns.size());
+
+        // Phase 2: 부모 엔트리 생성
+        ensureAllParentEntriesExist(allParentDns);
+
+        // Phase 3: 인증서 병렬 업로드
+        AtomicInteger addedCount = new AtomicInteger(0);
+        AtomicInteger updatedCount = new AtomicInteger(0);
+        AtomicInteger skippedCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+
+        int poolSize = Math.min(PARALLEL_UPLOAD_THREADS, connectionPool.getMaximumAvailableConnections());
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+
+        List<CompletableFuture<Void>> futures = ldifEntries.stream()
+            .map(ldifEntryText -> CompletableFuture.runAsync(() -> {
+                CertAddResult result = addOrUpdateCertificateEntry(ldifEntryText);
+                switch (result) {
+                    case ADDED -> addedCount.incrementAndGet();
+                    case UPDATED -> updatedCount.incrementAndGet();
+                    case SKIPPED -> skippedCount.incrementAndGet();
+                    case ERROR -> errorCount.incrementAndGet();
+                }
+            }, executor))
+            .collect(Collectors.toList());
+
+        // 모든 작업 완료 대기
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        executor.shutdown();
+        try {
+            executor.awaitTermination(5, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Executor interrupted during shutdown");
+        }
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.info("=== Certificate Batch Add/Update completed in {}ms: {} added, {} updated, {} skipped, {} errors ===",
+            elapsed, addedCount.get(), updatedCount.get(), skippedCount.get(), errorCount.get());
+
+        return new CertBatchResult(addedCount.get(), updatedCount.get(), skippedCount.get(), errorCount.get());
+    }
+
+    /**
+     * 인증서 배치 처리 결과
+     */
+    public record CertBatchResult(int added, int updated, int skipped, int errors) {
+        public int totalSuccess() {
+            return added + updated;
+        }
+    }
+
+    // ============================================================================
+    // Master List Comparison and Update Methods
+    // ============================================================================
+
+    /**
+     * Master List 비교 결과
+     */
+    public enum MasterListCompareResult {
+        /** 신규 Master List (추가 필요) */
+        NOT_EXISTS,
+        /** 동일 Master List (스킵) */
+        IDENTICAL,
+        /** 다른 Master List (업데이트 필요) */
+        DIFFERENT,
+        /** 비교 실패 */
+        ERROR
+    }
+
+    /**
+     * LDAP에서 기존 Master List 정보 조회
+     *
+     * @param dn Master List 엔트리의 DN
+     * @return Master List CMS 바이너리 (Optional)
+     */
+    public Optional<byte[]> getMasterListFromLdap(String dn) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                SearchResult searchResult = connection.search(
+                    dn,
+                    SearchScope.BASE,
+                    "(objectClass=*)",
+                    "pkdMasterListContent"
+                );
+
+                if (searchResult.getEntryCount() == 0) {
+                    log.debug("Master List entry not found: {}", dn);
+                    return Optional.empty();
+                }
+
+                Entry entry = searchResult.getSearchEntries().get(0);
+                byte[] mlBinary = entry.getAttributeValueBytes("pkdMasterListContent");
+
+                return Optional.ofNullable(mlBinary);
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            if (e.getResultCode() == ResultCode.NO_SUCH_OBJECT) {
+                log.debug("Master List entry does not exist: {}", dn);
+                return Optional.empty();
+            }
+            log.error("Failed to get Master List from LDAP: dn={}, error={}", dn, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Master List 비교
+     *
+     * <p>CMS 바이너리를 비교하여 동일 여부를 판단합니다.</p>
+     *
+     * @param dn Master List 엔트리의 DN
+     * @param newMlBinary 새 Master List의 CMS 바이너리
+     * @return 비교 결과
+     */
+    public MasterListCompareResult compareMasterList(String dn, byte[] newMlBinary) {
+        try {
+            Optional<byte[]> existingMl = getMasterListFromLdap(dn);
+
+            if (existingMl.isEmpty()) {
+                log.debug("No existing Master List at DN: {}", dn);
+                return MasterListCompareResult.NOT_EXISTS;
+            }
+
+            // 바이너리 비교
+            if (java.util.Arrays.equals(existingMl.get(), newMlBinary)) {
+                log.debug("Master List is identical: {}", dn);
+                return MasterListCompareResult.IDENTICAL;
+            }
+
+            log.info("Master List content differs: {}", dn);
+            return MasterListCompareResult.DIFFERENT;
+
+        } catch (Exception e) {
+            log.error("Failed to compare Master List: dn={}, error={}", dn, e.getMessage());
+            return MasterListCompareResult.ERROR;
+        }
+    }
+
+    /**
+     * LDAP에 Master List 엔트리 업데이트 (MODIFY 연산)
+     *
+     * @param dn Master List 엔트리의 DN
+     * @param newMlBinary 새 Master List의 CMS 바이너리
+     * @return 성공 여부
+     */
+    public boolean modifyMasterListEntry(String dn, byte[] newMlBinary) {
+        try {
+            LDAPConnection connection = connectionPool.getConnection();
+            try {
+                Modification modification = new Modification(
+                    ModificationType.REPLACE,
+                    "pkdMasterListContent",
+                    newMlBinary
+                );
+
+                ModifyRequest modifyRequest = new ModifyRequest(dn, modification);
+                LDAPResult result = connection.modify(modifyRequest);
+
+                if (result.getResultCode() == ResultCode.SUCCESS) {
+                    log.info("Master List entry updated: {}", dn);
+                    return true;
+                } else {
+                    log.error("Failed to update Master List entry: {} ({})", dn, result.getResultCode());
+                    return false;
+                }
+
+            } finally {
+                connectionPool.releaseConnection(connection);
+            }
+
+        } catch (LDAPException e) {
+            log.error("LDAP error while updating Master List: dn={}, error={}", dn, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Master List 추가/업데이트 결과
+     */
+    public enum MasterListAddResult {
+        /** 신규 추가됨 */
+        ADDED,
+        /** 기존 엔트리 업데이트됨 */
+        UPDATED,
+        /** 스킵됨 (동일) */
+        SKIPPED,
+        /** 오류 발생 */
+        ERROR
+    }
+
+    /**
+     * Master List 추가 또는 업데이트
+     *
+     * @param ldifEntryText LDIF 형식의 Master List 엔트리
+     * @return 결과 (ADDED, UPDATED, SKIPPED, ERROR)
+     */
+    public MasterListAddResult addOrUpdateMasterListEntry(String ldifEntryText) {
+        try {
+            // LDIF 파싱
+            LDIFReader ldifReader = new LDIFReader(new ByteArrayInputStream(ldifEntryText.getBytes()));
+            Entry entry;
+            try {
+                entry = ldifReader.readEntry();
+            } finally {
+                try { ldifReader.close(); } catch (IOException ignored) {}
+            }
+
+            if (entry == null) {
+                return MasterListAddResult.ERROR;
+            }
+
+            // DN 변환
+            String originalDn = entry.getDN();
+            String convertedDn = convertDn(originalDn);
+
+            // Master List 바이너리 추출
+            byte[] mlBinary = entry.getAttributeValueBytes("pkdMasterListContent");
+            if (mlBinary == null || mlBinary.length == 0) {
+                log.warn("Master List entry has no binary data: {}", convertedDn);
+                return MasterListAddResult.ERROR;
+            }
+
+            // 부모 엔트리 생성
+            ensureParentEntriesExist(convertedDn);
+
+            // Master List 비교
+            MasterListCompareResult compareResult = compareMasterList(convertedDn, mlBinary);
+
+            switch (compareResult) {
+                case NOT_EXISTS:
+                    // 신규 추가
+                    Entry convertedEntry = new Entry(convertedDn, entry.getAttributes());
+                    LDAPConnection connection = connectionPool.getConnection();
+                    try {
+                        AddRequest addRequest = new AddRequest(convertedEntry);
+                        LDAPResult result = connection.add(addRequest);
+
+                        if (result.getResultCode() == ResultCode.SUCCESS) {
+                            log.info("Master List entry added: {}", convertedDn);
+                            return MasterListAddResult.ADDED;
+                        } else if (result.getResultCode() == ResultCode.ENTRY_ALREADY_EXISTS) {
+                            // Race condition: 다른 스레드가 먼저 추가함 - 업데이트 시도
+                            if (modifyMasterListEntry(convertedDn, mlBinary)) {
+                                return MasterListAddResult.UPDATED;
+                            }
+                            return MasterListAddResult.SKIPPED;
+                        } else {
+                            log.error("Failed to add Master List: {} ({})", convertedDn, result.getResultCode());
+                            return MasterListAddResult.ERROR;
+                        }
+                    } finally {
+                        connectionPool.releaseConnection(connection);
+                    }
+
+                case DIFFERENT:
+                    // 다른 Master List - MODIFY 연산
+                    if (modifyMasterListEntry(convertedDn, mlBinary)) {
+                        return MasterListAddResult.UPDATED;
+                    }
+                    return MasterListAddResult.ERROR;
+
+                case IDENTICAL:
+                    // 동일 - 스킵
+                    log.debug("Skipping identical Master List: {}", convertedDn);
+                    return MasterListAddResult.SKIPPED;
+
+                case ERROR:
+                default:
+                    return MasterListAddResult.ERROR;
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to add or update Master List: {}", e.getMessage(), e);
+            return MasterListAddResult.ERROR;
+        }
+    }
+
+    /**
+     * Master List 배치 처리 결과
+     */
+    public record MasterListBatchResult(int added, int updated, int skipped, int errors) {
+        public int totalSuccess() {
+            return added + updated;
+        }
     }
 }

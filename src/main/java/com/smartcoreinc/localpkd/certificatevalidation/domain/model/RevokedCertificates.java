@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
  *
  * // 폐기 여부 확인
  * boolean isRevoked = revoked.contains("01234567890ABCDEF");  // true
- * int count = revoked.getCount();  // 2
+ * int count = revoked.calculateCount();  // 2
  * }</pre>
  *
  * @see CertificateRevocationList
@@ -173,9 +173,12 @@ public class RevokedCertificates implements ValueObject, Serializable {
     /**
      * 폐기된 인증서 개수
      *
+     * <p>Note: 메서드명을 'getCount' 대신 'calculateCount'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return 폐기된 인증서 수
      */
-    public int getCount() {
+    public int calculateCount() {
         if (serialNumbers == null || serialNumbers.isEmpty()) {
             return 0;
         }
@@ -217,6 +220,6 @@ public class RevokedCertificates implements ValueObject, Serializable {
      */
     @Override
     public String toString() {
-        return String.format("RevokedCertificates[count=%d]", getCount());
+        return String.format("RevokedCertificates[count=%d]", calculateCount());
     }
 }

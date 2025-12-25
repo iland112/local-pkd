@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 
 /**
  * Security Object Document (SOD) from ePassport.
@@ -27,6 +28,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)  // For JPA
 public class SecurityObjectDocument {
 
+    @JdbcTypeCode(java.sql.Types.BINARY)  // Hibernate 6: bytea 매핑을 위해 필수
     @Column(name = "sod_encoded", columnDefinition = "BYTEA")
     private byte[] encodedData;  // PKCS#7 SignedData binary
 
@@ -114,9 +116,12 @@ public class SecurityObjectDocument {
     /**
      * Get SOD size in bytes.
      *
+     * <p>Note: 메서드명을 'getSize' 대신 'calculateSize'로 사용하여
+     * Hibernate가 JavaBeans 프로퍼티로 인식하지 않도록 함</p>
+     *
      * @return size in bytes
      */
-    public int getSize() {
+    public int calculateSize() {
         return encodedData != null ? encodedData.length : 0;
     }
 }

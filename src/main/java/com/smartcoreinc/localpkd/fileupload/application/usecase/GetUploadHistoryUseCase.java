@@ -113,8 +113,8 @@ public class GetUploadHistoryUseCase {
             com.smartcoreinc.localpkd.certificatevalidation.domain.model.CertificateStatus.EXPIRED
         );
 
-        // LDAP Statistics
-        int totalLdapSavedCount = validCount; // 'VALID' 상태인 인증서가 LDAP에 저장된 것으로 간주
+        // LDAP Statistics: VALID 인증서 + CRL + Master List 모두 포함
+        int totalLdapSavedCount = validCount + parsedCrlCount + parsedMasterListCount;
 
         return UploadHistoryResponse.from(
             uploadId,

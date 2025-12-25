@@ -179,6 +179,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
      * 검증 오류 목록
      *
      * <p>검증 중 발생한 모든 오류를 기록합니다 (ERROR, WARNING 포함)</p>
+     * <p>@BatchSize: N+1 쿼리 방지 - 100개 단위로 배치 로딩</p>
      */
     @ElementCollection
     @CollectionTable(
@@ -189,6 +190,7 @@ public class Certificate extends AggregateRoot<CertificateId> {
     @AttributeOverride(name = "errorMessage", column = @Column(name = "error_message"))
     @AttributeOverride(name = "severity", column = @Column(name = "error_severity"))
     @AttributeOverride(name = "occurredAt", column = @Column(name = "error_occurred_at"))
+    @org.hibernate.annotations.BatchSize(size = 100)
     private List<ValidationError> validationErrors = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.JSON)

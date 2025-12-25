@@ -6,201 +6,255 @@
 >
   <body>
     <th:block th:fragment="content">
-      <script th:src="@{/webjars/chartjs/4.4.3/dist/chart.umd.js}"></script>
       <div
-        class="container mx-auto px-4 py-8 max-w-7xl"
+        class="w-full px-4 lg:px-6 py-4"
         x-data="paDashboardPageState()"
         @alpine:init="init()"
       >
         <!-- Page Header -->
         <div class="mb-8">
-          <h1 class="text-3xl font-bold text-base-content mb-2">
-            <i class="fas fa-chart-line text-primary"></i>
-            Passive Authentication Dashboard
-          </h1>
-          <p class="text-base-content opacity-70">
-            전자여권 검증 통계 및 추이를 시각화합니다.
-          </p>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="flex gap-2 mb-6">
-          <a href="/pa/verify" class="btn btn-primary">
-            <i class="fas fa-plus-circle mr-2"></i>
-            새 검증 수행
-          </a>
-          <a href="/pa/history" class="btn btn-outline">
-            <i class="fas fa-history mr-2"></i>
-            검증 이력
-          </a>
-          <button @click="refreshDashboard()" :disabled="loading" class="btn btn-ghost">
-            <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
-            <span class="ml-2">새로고침</span>
-          </button>
+          <div class="flex items-center gap-4">
+            <div class="p-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 shadow-lg">
+              <!-- Heroicon: presentation-chart-line -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-white">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h1 class="text-2xl font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+                Passive Authentication 대시보드
+              </h1>
+              <p class="text-sm" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                전자여권 검증 통계 및 추이를 시각화합니다.
+              </p>
+            </div>
+            <!-- Quick Actions -->
+            <div class="flex gap-2">
+              <a href="/pa/verify" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 transition-all duration-200 shadow-md hover:shadow-lg">
+                <!-- Heroicon: check-badge -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                </svg>
+                새 검증 수행
+              </a>
+              <a href="/pa/history" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border"
+                 :class="$store.theme.darkMode ? 'text-gray-300 border-gray-600 hover:bg-gray-700' : 'text-gray-700 border-gray-300 hover:bg-gray-50'">
+                <!-- Heroicon: clock -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                검증 이력
+              </a>
+              <button @click="refreshDashboard()" :disabled="loading"
+                      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200"
+                      :class="$store.theme.darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">
+                <template x-if="loading">
+                  <span class="loading loading-spinner loading-xs"></span>
+                </template>
+                <template x-if="!loading">
+                  <!-- Heroicon: arrow-path -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                </template>
+                새로고침
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Summary Statistics -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="stat-figure text-primary">
-              <i class="fas fa-file-alt text-3xl"></i>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+          <!-- 총 검증 건수 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-teal-400 to-cyan-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    총 검증 건수
+                  </h3>
+                  <div class="text-3xl font-bold text-teal-500" x-text="statistics.total"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'">전체 검증 수행 건수</p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-teal-900/30' : 'bg-teal-50'">
+                  <!-- Heroicon: document-text -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-teal-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                  </svg>
+                </div>
+              </div>
             </div>
-            <div class="stat-title">총 검증 건수</div>
-            <div class="stat-value text-primary" x-text="statistics.total"></div>
-            <div class="stat-desc">전체 검증 수행 건수</div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="stat-figure text-success">
-              <i class="fas fa-check-circle text-3xl"></i>
-            </div>
-            <div class="stat-title">검증 성공률</div>
-            <div class="stat-value text-success" x-text="statistics.successRate + '%'"></div>
-            <div class="stat-desc">
-              <span x-text="statistics.valid + ' / ' + statistics.total + ' 건'"></span>
+          <!-- 검증 성공률 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-green-400 to-emerald-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    검증 성공률
+                  </h3>
+                  <div class="text-3xl font-bold text-green-500" x-text="statistics.successRate + '%'"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'" x-text="statistics.valid + ' / ' + statistics.total + ' 건'"></p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-green-900/30' : 'bg-green-50'">
+                  <!-- Heroicon: check-circle -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-green-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="stat-figure text-info">
-              <i class="fas fa-globe text-3xl"></i>
+          <!-- 검증 국가 수 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    검증 국가 수
+                  </h3>
+                  <div class="text-3xl font-bold text-blue-500" x-text="statistics.countryCount"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'">서로 다른 발급 국가</p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-blue-900/30' : 'bg-blue-50'">
+                  <!-- Heroicon: globe-alt -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-blue-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+                  </svg>
+                </div>
+              </div>
             </div>
-            <div class="stat-title">검증 국가 수</div>
-            <div class="stat-value text-info" x-text="statistics.countryCount"></div>
-            <div class="stat-desc">서로 다른 발급 국가</div>
           </div>
 
-          <div class="stat bg-base-100 shadow-xl border rounded-lg" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="stat-figure text-warning">
-              <i class="fas fa-clock text-3xl"></i>
+          <!-- 오늘 검증 건수 -->
+          <div class="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500"></div>
+            <div class="pl-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xs font-semibold uppercase tracking-wider mb-2" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-500'">
+                    오늘 검증 건수
+                  </h3>
+                  <div class="text-3xl font-bold text-amber-500" x-text="statistics.todayCount"></div>
+                  <p class="text-xs mt-1" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'" x-text="'최근: ' + statistics.lastVerification"></p>
+                </div>
+                <div class="flex-shrink-0 p-3 rounded-xl" :class="$store.theme.darkMode ? 'bg-amber-900/30' : 'bg-amber-50'">
+                  <!-- Heroicon: calendar -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-amber-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                  </svg>
+                </div>
+              </div>
             </div>
-            <div class="stat-title">오늘 검증 건수</div>
-            <div class="stat-value text-warning" x-text="statistics.todayCount"></div>
-            <div class="stat-desc" x-text="'최근 검증: ' + statistics.lastVerification"></div>
           </div>
         </div>
 
         <!-- Charts Row 1 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
           <!-- Verification Status Chart -->
-          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-chart-pie text-success"></i>
-                검증 결과 분포
-              </h2>
-              <div class="h-80 flex items-center justify-center">
-                <canvas x-ref="statusChart"></canvas>
+          <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-green-900/30' : 'bg-green-50'">
+                  <!-- Heroicon: chart-pie -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-green-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+                  </svg>
+                </div>
+                <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">검증 결과 분포</h2>
+              </div>
+              <div class="h-72">
+                <div id="paStatusChart" class="w-full h-full"></div>
               </div>
             </div>
           </div>
 
           <!-- Country Distribution Chart -->
-          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-globe-americas text-info"></i>
-                국가별 검증 건수 (Top 10)
-              </h2>
-              <div class="h-80 flex items-center justify-center">
-                <canvas x-ref="countryChart"></canvas>
+          <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-cyan-900/30' : 'bg-cyan-50'">
+                  <!-- Heroicon: globe-alt -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-cyan-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+                  </svg>
+                </div>
+                <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">국가별 검증 건수 (Top 10)</h2>
+              </div>
+              <!-- Country List with Flags and Progress Bars -->
+              <div class="space-y-2 max-h-72 overflow-y-auto pr-2">
+                <template x-for="(item, index) in getTopCountries()" :key="item.country">
+                  <div class="flex items-center gap-3 p-2 rounded-lg transition-colors"
+                       :class="$store.theme.darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'">
+                    <!-- Rank -->
+                    <span class="w-5 flex-shrink-0 text-xs font-bold text-center"
+                          :class="index < 3 ? 'text-amber-500' : ($store.theme.darkMode ? 'text-gray-500' : 'text-gray-400')"
+                          x-text="index + 1"></span>
+                    <!-- Flag -->
+                    <img :src="'/svg/' + item.country.toLowerCase() + '.svg'"
+                         :alt="item.country"
+                         class="w-7 h-5 flex-shrink-0 object-cover rounded shadow-sm border"
+                         :class="$store.theme.darkMode ? 'border-gray-600' : 'border-gray-200'"
+                         onerror="this.style.display='none'"/>
+                    <!-- Country Code -->
+                    <span class="w-20 flex-shrink-0 font-mono font-semibold text-sm truncate" x-text="item.country"></span>
+                    <!-- Progress Bar with Count -->
+                    <div class="flex-1 flex items-center gap-2">
+                      <div class="flex-1 h-6 rounded-full overflow-hidden"
+                           :class="$store.theme.darkMode ? 'bg-gray-700' : 'bg-gray-100'">
+                        <div class="h-full rounded-full transition-all duration-500"
+                             :style="`width: ${item.percentage}%; background: ${getCountryColor(index)}`">
+                        </div>
+                      </div>
+                      <span class="w-14 flex-shrink-0 text-xs font-bold text-right"
+                            :class="$store.theme.darkMode ? 'text-gray-300' : 'text-gray-600'"
+                            x-text="item.count.toLocaleString()"></span>
+                    </div>
+                  </div>
+                </template>
+                <!-- Empty State -->
+                <div x-show="Object.keys(countryStats).length === 0" class="text-center py-8">
+                  <p class="text-sm" :class="$store.theme.darkMode ? 'text-gray-500' : 'text-gray-400'">데이터가 없습니다</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Charts Row 2 -->
-        <div class="grid grid-cols-1 gap-6 mb-6">
+        <div class="grid grid-cols-1 gap-5">
           <!-- Daily Trend Chart -->
-          <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-            <div class="card-body">
-              <h2 class="card-title text-lg">
-                <i class="fas fa-chart-line text-primary"></i>
-                일별 검증 추이 (최근 30일)
-              </h2>
-              <div class="h-80">
-                <canvas x-ref="trendChart"></canvas>
+          <div class="rounded-2xl transition-all duration-300 hover:shadow-xl"
+               :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+            <div class="p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="p-2.5 rounded-xl" :class="$store.theme.darkMode ? 'bg-teal-900/30' : 'bg-teal-50'">
+                  <!-- Heroicon: presentation-chart-line -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-teal-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+                  </svg>
+                </div>
+                <h2 class="text-lg font-bold" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">일별 검증 추이 (최근 30일)</h2>
+              </div>
+              <div class="h-72">
+                <div id="paTrendChart" class="w-full h-full"></div>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Recent Verifications -->
-        <div class="card bg-base-100 shadow-xl border" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-200'">
-          <div class="card-body">
-            <h2 class="card-title text-lg mb-4">
-              <i class="fas fa-clock text-warning"></i>
-              최근 검증 이력
-              <a href="/pa/history" class="btn btn-sm btn-ghost ml-auto">
-                전체 보기 <i class="fas fa-arrow-right ml-2"></i>
-              </a>
-            </h2>
-
-            <!-- Loading State -->
-            <div x-show="loading" class="flex justify-center py-10">
-              <span class="loading loading-spinner loading-lg text-primary"></span>
-            </div>
-
-            <!-- Empty State -->
-            <div x-show="!loading && recentVerifications.length === 0" class="text-center py-10">
-              <i class="fas fa-inbox text-5xl text-base-content opacity-30 mb-4"></i>
-              <p class="text-lg text-base-content opacity-70">아직 검증 이력이 없습니다</p>
-              <a href="/pa/verify" class="btn btn-primary mt-4">
-                <i class="fas fa-plus-circle mr-2"></i>
-                첫 검증 수행하기
-              </a>
-            </div>
-
-            <!-- Table -->
-            <div x-show="!loading && recentVerifications.length > 0" class="overflow-x-auto">
-              <table class="table table-zebra w-full">
-                <thead>
-                  <tr>
-                    <th>검증 시각</th>
-                    <th>국가</th>
-                    <th>여권 번호</th>
-                    <th>결과</th>
-                    <th>요청자</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template x-for="record in recentVerifications.slice(0, 10)" :key="record.verificationId">
-                    <tr>
-                      <td>
-                        <span class="text-sm" x-text="formatTimestamp(record.verifiedAt)"></span>
-                      </td>
-                      <td>
-                        <div class="flex items-center gap-2">
-                          <span class="fi" :class="'fi-' + record.issuingCountry.toLowerCase()"></span>
-                          <span x-text="record.issuingCountry"></span>
-                        </div>
-                      </td>
-                      <td>
-                        <span class="font-mono text-sm" x-text="record.documentNumber"></span>
-                      </td>
-                      <td>
-                        <span
-                          class="badge badge-sm"
-                          :class="{
-                            'badge-success': record.status === 'VALID',
-                            'badge-error': record.status === 'INVALID',
-                            'badge-warning': record.status === 'ERROR'
-                          }"
-                          x-text="record.status"
-                        ></span>
-                      </td>
-                      <td>
-                        <span class="text-sm" x-text="record.requestedBy || 'anonymous'"></span>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
 
     <!-- Alpine.js Component Script -->
     <script>
@@ -221,10 +275,21 @@
           countryStats: {},
           dailyStats: [],
 
-          // Charts
-          statusChart: null,
-          countryChart: null,
-          trendChart: null,
+          // ECharts instances
+          statusChartInstance: null,
+          countryChartInstance: null,
+          trendChartInstance: null,
+
+          // Pastel color palette
+          pastelColors: {
+            light: ['#A5B4FC', '#FCA5A5', '#86EFAC', '#FDE68A', '#C4B5FD', '#FBCFE8', '#99F6E4', '#FED7AA', '#A7F3D0', '#DDD6FE'],
+            dark: ['#818CF8', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6', '#2DD4BF', '#FB923C', '#34D399', '#C4B5FD']
+          },
+          statusColors: {
+            valid: { light: '#86EFAC', dark: '#4ADE80' },
+            invalid: { light: '#FCA5A5', dark: '#F87171' },
+            error: { light: '#FDE68A', dark: '#FBBF24' }
+          },
 
           // UI State
           loading: false,
@@ -233,6 +298,22 @@
             console.log('PA Dashboard initialized');
             await this.loadDashboardData();
             this.createCharts();
+
+            // Watch theme changes
+            this.$watch('$store.theme.darkMode', () => {
+              this.createCharts();
+            });
+
+            // Window resize handler for ECharts
+            window.addEventListener('resize', () => {
+              this.resizeCharts();
+            });
+          },
+
+          resizeCharts() {
+            if (this.statusChartInstance) this.statusChartInstance.resize();
+            // Country chart is now HTML-based, no resize needed
+            if (this.trendChartInstance) this.trendChartInstance.resize();
           },
 
           async loadDashboardData() {
@@ -330,190 +411,294 @@
             this.dailyStats = last30Days.map(date => dailyMap[date]);
           },
 
+          // Helper methods
+          getTextColor() {
+            return this.$store.theme.darkMode ? '#9CA3AF' : '#6B7280';
+          },
+
+          getCurrentPastelColors() {
+            return this.$store.theme.darkMode ? this.pastelColors.dark : this.pastelColors.light;
+          },
+
+          // Country chart helpers
+          getTopCountries() {
+            const entries = Object.entries(this.countryStats);
+            if (entries.length === 0) return [];
+
+            const sorted = entries.sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const maxCount = sorted[0][1];
+
+            return sorted.map(([country, count]) => ({
+              country,
+              count,
+              percentage: Math.max(15, (count / maxCount) * 100) // minimum 15% width for visibility
+            }));
+          },
+
+          getCountryColor(index) {
+            // Gradient colors from cyan to purple
+            const colors = [
+              '#06B6D4', // cyan-500
+              '#0891B2', // cyan-600
+              '#0E7490', // cyan-700
+              '#14B8A6', // teal-500
+              '#0D9488', // teal-600
+              '#6366F1', // indigo-500
+              '#4F46E5', // indigo-600
+              '#8B5CF6', // violet-500
+              '#7C3AED', // violet-600
+              '#A855F7'  // purple-500
+            ];
+            return colors[index % colors.length];
+          },
+
           createCharts() {
             this.createStatusChart();
-            this.createCountryChart();
+            // Country chart is now HTML-based, no ECharts needed
             this.createTrendChart();
           },
 
+          // Donut Chart for Verification Status
           createStatusChart() {
-            if (this.statusChart) {
-              this.statusChart.destroy();
+            const container = document.getElementById('paStatusChart');
+            if (!container) return;
+
+            if (this.statusChartInstance) {
+              this.statusChartInstance.dispose();
             }
 
-            // Check if canvas element exists (only on dashboard page)
-            if (!this.$refs.statusChart) {
-              return;
-            }
+            const isDark = this.$store.theme.darkMode;
+            const total = this.statistics.valid + this.statistics.invalid + this.statistics.error;
 
-            const ctx = this.$refs.statusChart.getContext('2d');
-            this.statusChart = new Chart(ctx, {
-              type: 'doughnut',
-              data: {
-                labels: ['Valid', 'Invalid', 'Error'],
-                datasets: [{
-                  data: [
-                    this.statistics.valid,
-                    this.statistics.invalid,
-                    this.statistics.error
-                  ],
-                  backgroundColor: [
-                    'rgb(34, 197, 94)',  // success green
-                    'rgb(239, 68, 68)',  // error red
-                    'rgb(251, 191, 36)'  // warning yellow
-                  ],
-                  borderWidth: 2,
-                  borderColor: this.$store.theme.darkMode ? '#1f2937' : '#ffffff'
-                }]
+            this.statusChartInstance = echarts.init(container, isDark ? 'dark' : null);
+
+            const option = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c}건 ({d}%)'
               },
-              options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    }
-                  }
+              legend: {
+                bottom: '5%',
+                left: 'center',
+                textStyle: { color: this.getTextColor() }
+              },
+              graphic: {
+                type: 'text',
+                left: 'center',
+                top: 'center',
+                style: {
+                  text: `총 검증\n${total.toLocaleString()}`,
+                  textAlign: 'center',
+                  fill: isDark ? '#F3F4F6' : '#1F2937',
+                  fontSize: 14,
+                  fontWeight: 'bold'
                 }
-              }
-            });
-          },
-
-          createCountryChart() {
-            if (this.countryChart) {
-              this.countryChart.destroy();
-            }
-
-            // Check if canvas element exists (only on dashboard page)
-            if (!this.$refs.countryChart) {
-              return;
-            }
-
-            // Get top 10 countries
-            const sortedCountries = Object.entries(this.countryStats)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 10);
-
-            const ctx = this.$refs.countryChart.getContext('2d');
-            this.countryChart = new Chart(ctx, {
-              type: 'bar',
-              data: {
-                labels: sortedCountries.map(c => c[0]),
-                datasets: [{
-                  label: '검증 건수',
-                  data: sortedCountries.map(c => c[1]),
-                  backgroundColor: 'rgba(59, 130, 246, 0.8)',  // info blue
-                  borderColor: 'rgb(59, 130, 246)',
-                  borderWidth: 1
-                }]
               },
-              options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                  legend: {
-                    display: false
-                  }
+              series: [{
+                type: 'pie',
+                radius: ['50%', '70%'],
+                center: ['50%', '45%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+                label: { show: false },
+                emphasis: {
+                  label: { show: true, fontSize: 14, fontWeight: 'bold' },
+                  itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
                 },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    },
-                    grid: {
-                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
-                    }
-                  },
-                  x: {
-                    ticks: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    },
-                    grid: {
-                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
-                    }
-                  }
-                }
-              }
-            });
-          },
-
-          createTrendChart() {
-            if (this.trendChart) {
-              this.trendChart.destroy();
-            }
-
-            // Check if canvas element exists (only on dashboard page)
-            if (!this.$refs.trendChart) {
-              return;
-            }
-
-            const ctx = this.$refs.trendChart.getContext('2d');
-            this.trendChart = new Chart(ctx, {
-              type: 'line',
-              data: {
-                labels: this.dailyStats.map(d => {
-                  const date = new Date(d.date);
-                  return (date.getMonth() + 1) + '/' + date.getDate();
-                }),
-                datasets: [
-                  {
-                    label: 'Valid',
-                    data: this.dailyStats.map(d => d.valid),
-                    borderColor: 'rgb(34, 197, 94)',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    tension: 0.3
-                  },
-                  {
-                    label: 'Invalid',
-                    data: this.dailyStats.map(d => d.invalid),
-                    borderColor: 'rgb(239, 68, 68)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.3
-                  },
-                  {
-                    label: 'Error',
-                    data: this.dailyStats.map(d => d.error),
-                    borderColor: 'rgb(251, 191, 36)',
-                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                    tension: 0.3
-                  }
+                labelLine: { show: false },
+                data: [
+                  { value: this.statistics.valid, name: 'Valid', itemStyle: { color: isDark ? this.statusColors.valid.dark : this.statusColors.valid.light } },
+                  { value: this.statistics.invalid, name: 'Invalid', itemStyle: { color: isDark ? this.statusColors.invalid.dark : this.statusColors.invalid.light } },
+                  { value: this.statistics.error, name: 'Error', itemStyle: { color: isDark ? this.statusColors.error.dark : this.statusColors.error.light } }
                 ]
+              }]
+            };
+
+            this.statusChartInstance.setOption(option);
+          },
+
+          // Treemap for Country Distribution
+          createCountryChart() {
+            const container = document.getElementById('paCountryChart');
+            if (!container) return;
+
+            if (this.countryChartInstance) {
+              this.countryChartInstance.dispose();
+            }
+
+            const isDark = this.$store.theme.darkMode;
+            const colors = this.getCurrentPastelColors();
+
+            this.countryChartInstance = echarts.init(container, isDark ? 'dark' : null);
+
+            // Get top 10 countries and transform for treemap
+            const seriesData = Object.entries(this.countryStats)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
+              .map(([name, value], index) => ({
+                name,
+                value,
+                itemStyle: { color: colors[index % colors.length] }
+              }));
+
+            const option = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                formatter: (info) => `${info.name}: ${info.value.toLocaleString()}건`
               },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    }
-                  }
+              series: [{
+                type: 'treemap',
+                width: '100%',
+                height: '100%',
+                roam: false,
+                nodeClick: false,
+                breadcrumb: { show: false },
+                label: {
+                  show: true,
+                  formatter: (params) => `${params.name}\n${params.value.toLocaleString()}건`,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: isDark ? '#1F2937' : '#FFFFFF'
                 },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    },
-                    grid: {
-                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
-                    }
-                  },
-                  x: {
-                    ticks: {
-                      color: this.$store.theme.darkMode ? '#e5e7eb' : '#1f2937'
-                    },
-                    grid: {
-                      color: this.$store.theme.darkMode ? '#374151' : '#e5e7eb'
-                    }
+                itemStyle: {
+                  borderColor: isDark ? '#374151' : '#FFFFFF',
+                  borderWidth: 2,
+                  gapWidth: 2
+                },
+                emphasis: {
+                  itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+                },
+                data: seriesData
+              }]
+            };
+
+            this.countryChartInstance.setOption(option);
+          },
+
+          // Area Chart for Daily Trend
+          createTrendChart() {
+            const container = document.getElementById('paTrendChart');
+            if (!container) return;
+
+            if (this.trendChartInstance) {
+              this.trendChartInstance.dispose();
+            }
+
+            const isDark = this.$store.theme.darkMode;
+
+            this.trendChartInstance = echarts.init(container, isDark ? 'dark' : null);
+
+            const xAxisData = this.dailyStats.map(d => {
+              const date = new Date(d.date);
+              return (date.getMonth() + 1) + '/' + date.getDate();
+            });
+
+            const option = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'axis',
+                formatter: (params) => {
+                  let result = params[0].axisValue + '<br/>';
+                  params.forEach(p => {
+                    result += `${p.marker} ${p.seriesName}: ${p.value.toLocaleString()}건<br/>`;
+                  });
+                  return result;
+                }
+              },
+              legend: {
+                bottom: '5%',
+                left: 'center',
+                textStyle: { color: this.getTextColor() }
+              },
+              grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '15%',
+                top: '10%',
+                containLabel: true
+              },
+              xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: xAxisData,
+                axisLabel: {
+                  color: this.getTextColor(),
+                  rotate: 45,
+                  fontSize: 10
+                },
+                axisLine: { show: false },
+                axisTick: { show: false }
+              },
+              yAxis: {
+                type: 'value',
+                axisLabel: { color: this.getTextColor() },
+                splitLine: {
+                  lineStyle: {
+                    color: isDark ? '#374151' : '#E5E7EB',
+                    type: 'dashed'
                   }
                 }
-              }
-            });
+              },
+              series: [
+                {
+                  name: 'Valid',
+                  type: 'line',
+                  smooth: true,
+                  symbol: 'none',
+                  lineStyle: { width: 2, color: isDark ? this.statusColors.valid.dark : this.statusColors.valid.light },
+                  areaStyle: {
+                    color: {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: (isDark ? this.statusColors.valid.dark : this.statusColors.valid.light) + '66' },
+                        { offset: 1, color: (isDark ? this.statusColors.valid.dark : this.statusColors.valid.light) + '1A' }
+                      ]
+                    }
+                  },
+                  data: this.dailyStats.map(d => d.valid)
+                },
+                {
+                  name: 'Invalid',
+                  type: 'line',
+                  smooth: true,
+                  symbol: 'none',
+                  lineStyle: { width: 2, color: isDark ? this.statusColors.invalid.dark : this.statusColors.invalid.light },
+                  areaStyle: {
+                    color: {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: (isDark ? this.statusColors.invalid.dark : this.statusColors.invalid.light) + '66' },
+                        { offset: 1, color: (isDark ? this.statusColors.invalid.dark : this.statusColors.invalid.light) + '1A' }
+                      ]
+                    }
+                  },
+                  data: this.dailyStats.map(d => d.invalid)
+                },
+                {
+                  name: 'Error',
+                  type: 'line',
+                  smooth: true,
+                  symbol: 'none',
+                  lineStyle: { width: 2, color: isDark ? this.statusColors.error.dark : this.statusColors.error.light },
+                  areaStyle: {
+                    color: {
+                      type: 'linear',
+                      x: 0, y: 0, x2: 0, y2: 1,
+                      colorStops: [
+                        { offset: 0, color: (isDark ? this.statusColors.error.dark : this.statusColors.error.light) + '66' },
+                        { offset: 1, color: (isDark ? this.statusColors.error.dark : this.statusColors.error.light) + '1A' }
+                      ]
+                    }
+                  },
+                  data: this.dailyStats.map(d => d.error)
+                }
+              ]
+            };
+
+            this.trendChartInstance.setOption(option);
           },
 
           async refreshDashboard() {
