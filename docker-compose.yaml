@@ -53,7 +53,11 @@ services:
       LDAP_ADMIN_PASSWORD: "core"
       LDAP_CONFIG_PASSWORD: "core"
       LDAP_TLS: "false"
-      LDAP_REPLICATION: "false"
+      # MMR Replication 설정
+      LDAP_REPLICATION: "true"
+      LDAP_REPLICATION_CONFIG_SYNCPROV: 'binddn="cn=admin,cn=config" bindmethod=simple credentials="core" searchbase="cn=config" type=refreshAndPersist retry="60 +" timeout=1'
+      LDAP_REPLICATION_DB_SYNCPROV: 'binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials="core" searchbase="dc=ldap,dc=smartcoreinc,dc=com" type=refreshAndPersist interval=00:00:00:10 retry="60 +" timeout=1'
+      LDAP_REPLICATION_HOSTS: "#DIFFHOST ldap://openldap1 ldap://openldap2"
     ports:
       - "3891:389"
     volumes:
@@ -81,7 +85,11 @@ services:
       LDAP_ADMIN_PASSWORD: "core"
       LDAP_CONFIG_PASSWORD: "core"
       LDAP_TLS: "false"
-      LDAP_REPLICATION: "false"
+      # MMR Replication 설정
+      LDAP_REPLICATION: "true"
+      LDAP_REPLICATION_CONFIG_SYNCPROV: 'binddn="cn=admin,cn=config" bindmethod=simple credentials="core" searchbase="cn=config" type=refreshAndPersist retry="60 +" timeout=1'
+      LDAP_REPLICATION_DB_SYNCPROV: 'binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials="core" searchbase="dc=ldap,dc=smartcoreinc,dc=com" type=refreshAndPersist interval=00:00:00:10 retry="60 +" timeout=1'
+      LDAP_REPLICATION_HOSTS: "#DIFFHOST ldap://openldap1 ldap://openldap2"
     ports:
       - "3892:389"
     volumes:
