@@ -32,10 +32,11 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.ldap")
 public class LdapProperties {
 
-    // ========== Spring LDAP 기본 설정 ==========
+    // ========== Spring LDAP 기본 설정 (Legacy - 단일 연결용) ==========
 
     /**
-     * LDAP 서버 URL
+     * LDAP 서버 URL (Legacy - 하위 호환용)
+     * 새 설정: app.ldap.write.url, app.ldap.read.url 사용 권장
      * 예: ldap://localhost:389 또는 ldaps://localhost:636
      */
     private String urls = "ldap://localhost:389";
@@ -56,6 +57,20 @@ public class LdapProperties {
      * LDAP 바인드 비밀번호
      */
     private String password = "";
+
+    // ========== Read/Write 분리 설정 (HAProxy + OpenLDAP MMR) ==========
+
+    /**
+     * LDAP Write 연결 설정
+     * PKD 업로드 시 LDAP 저장용 (OpenLDAP 1 직접 연결)
+     */
+    private WriteConfig write = new WriteConfig();
+
+    /**
+     * LDAP Read 연결 설정
+     * 통계, PA 검증 등 조회용 (HAProxy 로드밸런싱)
+     */
+    private ReadConfig read = new ReadConfig();
 
     /**
      * LDAP 연결 풀 설정
@@ -280,6 +295,82 @@ public class LdapProperties {
     }
 
     /**
+     * LDAP Write 연결 설정 (PKD 업로드용)
+     *
+     * <p>OpenLDAP Master 1에 직접 연결하여 데이터를 저장합니다.</p>
+     * <p>MMR 복제를 통해 다른 노드에 자동으로 동기화됩니다.</p>
+     *
+     * @author SmartCore Inc.
+     * @since 2025-12-26
+     */
+    @Data
+    @NoArgsConstructor
+    public static class WriteConfig {
+
+        /**
+         * Write 분리 활성화 여부
+         * 기본값: false (비활성화 시 기존 urls 설정 사용)
+         */
+        private boolean enabled = false;
+
+        /**
+         * LDAP Write 서버 URL
+         * 예: ldap://localhost:3891 (OpenLDAP 1 직접 연결)
+         */
+        private String url = "ldap://localhost:3891";
+
+        /**
+         * Write 연결 풀 초기 크기
+         * 기본값: 5
+         */
+        private int poolInitialSize = 5;
+
+        /**
+         * Write 연결 풀 최대 크기
+         * 기본값: 20
+         */
+        private int poolMaxSize = 20;
+    }
+
+    /**
+     * LDAP Read 연결 설정 (통계, PA 검증용)
+     *
+     * <p>HAProxy를 통해 로드밸런싱된 연결을 사용합니다.</p>
+     * <p>여러 OpenLDAP 노드에서 읽기 부하를 분산합니다.</p>
+     *
+     * @author SmartCore Inc.
+     * @since 2025-12-26
+     */
+    @Data
+    @NoArgsConstructor
+    public static class ReadConfig {
+
+        /**
+         * Read 분리 활성화 여부
+         * 기본값: false (비활성화 시 기존 urls 설정 사용)
+         */
+        private boolean enabled = false;
+
+        /**
+         * LDAP Read 서버 URL
+         * 예: ldap://localhost:389 (HAProxy 로드밸런싱)
+         */
+        private String url = "ldap://localhost:389";
+
+        /**
+         * Read 연결 풀 초기 크기
+         * 기본값: 3
+         */
+        private int poolInitialSize = 3;
+
+        /**
+         * Read 연결 풀 최대 크기
+         * 기본값: 10
+         */
+        private int poolMaxSize = 10;
+    }
+
+    /**
      * 완성된 LDAP DN 생성 메서드들
      */
 
@@ -309,5 +400,64 @@ public class LdapProperties {
      */
     public String getCrlBaseDn() {
         return crlO;
+    }
+
+    // ========== Read/Write 분리 편의 메서드 ==========
+
+    /**
+     * Write 연결 URL 반환
+     * Write 분리가 활성화되어 있으면 write.url 반환, 아니면 기존 urls 반환
+     *
+     * @return Write 연결 URL
+     */
+    public String getWriteUrl() {
+        return write.isEnabled() ? write.getUrl() : urls;
+    }
+
+    /**
+     * Read 연결 URL 반환
+     * Read 분리가 활성화되어 있으면 read.url 반환, 아니면 기존 urls 반환
+     *
+     * @return Read 연결 URL
+     */
+    public String getReadUrl() {
+        return read.isEnabled() ? read.getUrl() : urls;
+    }
+
+    /**
+     * Write 연결 풀 초기 크기 반환
+     */
+    public int getWritePoolInitialSize() {
+        return write.isEnabled() ? write.getPoolInitialSize() : 5;
+    }
+
+    /**
+     * Write 연결 풀 최대 크기 반환
+     */
+    public int getWritePoolMaxSize() {
+        return write.isEnabled() ? write.getPoolMaxSize() : 20;
+    }
+
+    /**
+     * Read 연결 풀 초기 크기 반환
+     */
+    public int getReadPoolInitialSize() {
+        return read.isEnabled() ? read.getPoolInitialSize() : 3;
+    }
+
+    /**
+     * Read 연결 풀 최대 크기 반환
+     */
+    public int getReadPoolMaxSize() {
+        return read.isEnabled() ? read.getPoolMaxSize() : 10;
+    }
+
+    /**
+     * Read/Write 분리가 활성화되어 있는지 확인
+     *
+     * @return Read 또는 Write 분리가 활성화되어 있으면 true
+     */
+    public boolean isReadWriteSeparationEnabled() {
+        return write.isEnabled() || read.isEnabled();
     }
 }

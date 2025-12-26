@@ -2,11 +2,11 @@ package com.smartcoreinc.localpkd.ldapintegration.infrastructure.adapter;
 
 import com.unboundid.ldap.sdk.*;
 import com.unboundid.ldif.LDIFReader;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.cert.X509CRLHolder;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.ASN1Integer;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
+import com.smartcoreinc.localpkd.ldapintegration.infrastructure.config.LdapProperties;
 
 /**
  * UnboundIdLdapAdapter - UnboundID SDK 기반 LDAP Adapter
@@ -67,19 +68,10 @@ import com.smartcoreinc.localpkd.ldapintegration.domain.port.LdapConnectionPort;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class UnboundIdLdapAdapter implements LdapConnectionPort {
 
-    @Value("${app.ldap.urls}")
-    private String ldapUrl;
-
-    @Value("${app.ldap.base}")
-    private String targetBaseDn;  // dc=ldap,dc=smartcoreinc,dc=com
-
-    @Value("${app.ldap.username}")
-    private String bindDn;
-
-    @Value("${app.ldap.password}")
-    private String bindPassword;
+    private final LdapProperties ldapProperties;
 
     private LDAPConnectionPool connectionPool;
 
@@ -105,27 +97,38 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
     private static final int PARALLEL_UPLOAD_THREADS = 8;
 
     /**
-     * LDAP 연결 수립 (Connection Pool 생성)
+     * LDAP Write 연결 수립 (Connection Pool 생성)
+     *
+     * <p>Read/Write 분리가 활성화된 경우:</p>
+     * <ul>
+     *   <li>Write URL: OpenLDAP 1 직접 연결 (app.ldap.write.url)</li>
+     *   <li>용도: PKD 업로드 시 데이터 저장</li>
+     * </ul>
      */
-    @PostConstruct // Add this annotation
+    @PostConstruct
     public void connect() throws LDAPException {
-        log.info("=== UnboundID LDAP Connection started ===");
-        log.info("LDAP URL: {}", ldapUrl);
+        String writeUrl = ldapProperties.getWriteUrl();
+        String targetBaseDn = ldapProperties.getBase();
+        String bindDn = ldapProperties.getUsername();
+        String bindPassword = ldapProperties.getPassword();
+
+        log.info("=== UnboundID LDAP Write Connection started ===");
+        log.info("Write URL: {} (R/W Separation: {})", writeUrl, ldapProperties.isReadWriteSeparationEnabled());
         log.info("Bind DN: {}", bindDn);
         log.info("Target Base DN: {}", targetBaseDn);
 
         if (targetBaseDn == null || targetBaseDn.isBlank()) {
-            throw new IllegalStateException("LDAP Target Base DN ('spring.ldap.base') is not configured. Please check your application properties.");
+            throw new IllegalStateException("LDAP Target Base DN ('app.ldap.base') is not configured. Please check your application properties.");
         }
 
         if (connectionPool != null && !connectionPool.isClosed()) {
-            log.warn("LDAP Connection Pool is already active. Skipping initialization.");
+            log.warn("LDAP Write Connection Pool is already active. Skipping initialization.");
             return;
         }
 
         try {
             // LDAP URL 파싱 (ldap://192.168.100.10:389)
-            String host = ldapUrl.replace("ldap://", "").replace("ldaps://", "");
+            String host = writeUrl.replace("ldap://", "").replace("ldaps://", "");
             String[] parts = host.split(":");
             String hostname = parts[0];
             int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 389;
@@ -133,20 +136,29 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
             // LDAP 연결 생성
             LDAPConnection connection = new LDAPConnection(hostname, port, bindDn, bindPassword);
 
-            // Connection Pool 생성 (초기 5개, 최대 20개)
-            connectionPool = new LDAPConnectionPool(connection, 5, 20);
+            // Connection Pool 생성 (LdapProperties에서 설정값 가져오기)
+            int initialSize = ldapProperties.getWritePoolInitialSize();
+            int maxSize = ldapProperties.getWritePoolMaxSize();
+            connectionPool = new LDAPConnectionPool(connection, initialSize, maxSize);
 
-            log.info("LDAP Connection Pool created successfully");
-            log.info("Connection Pool: {} connections (initial), {} max", 5, 20);
+            log.info("LDAP Write Connection Pool created successfully");
+            log.info("Connection Pool: {} connections (initial), {} max", initialSize, maxSize);
 
         } catch (LDAPException e) {
-            log.error("LDAP connection failed: {}", e.getMessage(), e);
-            throw e; // LDAPException은 이미 명확하므로 다시 래핑하지 않음
+            log.error("LDAP Write connection failed: {}", e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
-            log.error("Unexpected error during LDAP connection: {}", e.getMessage(), e);
+            log.error("Unexpected error during LDAP Write connection: {}", e.getMessage(), e);
             throw new LDAPException(ResultCode.CONNECT_ERROR,
-                "Failed to connect to LDAP: " + e.getMessage(), e);
+                "Failed to connect to LDAP Write: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Target Base DN 반환 (LdapProperties에서)
+     */
+    private String getTargetBaseDn() {
+        return ldapProperties.getBase();
     }
 
     /**
@@ -444,7 +456,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
             DN parsedDn = new DN(dn);
             DN parent = parsedDn.getParent();
 
-            while (parent != null && !parent.toString().equals(targetBaseDn)) {
+            while (parent != null && !parent.toString().equals(getTargetBaseDn())) {
                 parentDns.add(parent.toString());
                 parent = parent.getParent();
             }
@@ -532,6 +544,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
         }
 
         // 이미 targetBaseDn을 포함하면 그대로 반환
+        String targetBaseDn = getTargetBaseDn();
         if (originalDn.contains(targetBaseDn)) {
             log.debug("DN already has target base DN: {}", originalDn);
             return originalDn;
@@ -610,6 +623,7 @@ public class UnboundIdLdapAdapter implements LdapConnectionPort {
             }
 
             // 부모 DN이 targetBaseDn이면 더 이상 올라가지 않음
+            String targetBaseDn = getTargetBaseDn();
             if (parentDn.toString().equals(targetBaseDn)) {
                 log.debug("Reached target base DN: {}", targetBaseDn);
                 return;

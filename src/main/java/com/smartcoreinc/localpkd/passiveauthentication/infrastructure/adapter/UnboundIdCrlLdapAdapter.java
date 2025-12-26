@@ -1,10 +1,11 @@
 package com.smartcoreinc.localpkd.passiveauthentication.infrastructure.adapter;
 
+import com.smartcoreinc.localpkd.ldapintegration.infrastructure.config.LdapProperties;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.port.CrlLdapPort;
 import com.smartcoreinc.localpkd.shared.exception.InfrastructureException;
 import com.unboundid.ldap.sdk.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -49,19 +50,10 @@ import java.util.Optional;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
 
-    @Value("${app.ldap.urls}")
-    private String ldapUrl;
-
-    @Value("${app.ldap.base}")
-    private String baseDn;
-
-    @Value("${app.ldap.username}")
-    private String bindDn;
-
-    @Value("${app.ldap.password}")
-    private String bindPassword;
+    private final LdapProperties ldapProperties;
 
     private LDAPConnectionPool connectionPool;
 
@@ -71,12 +63,23 @@ public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
     private static final String PKD_BASE_DN = "dc=data,dc=download,dc=pkd";
 
     /**
-     * LDAP 연결 수립 (Connection Pool 생성)
+     * LDAP Read 연결 수립 (Connection Pool 생성)
+     *
+     * <p>Read/Write 분리가 활성화된 경우:</p>
+     * <ul>
+     *   <li>Read URL: HAProxy 로드밸런싱 (app.ldap.read.url)</li>
+     *   <li>용도: PA 검증 시 CRL 조회</li>
+     * </ul>
      */
     @PostConstruct
     public void connect() throws LDAPException {
-        log.info("=== LDAP CRL Repository Connection started ===");
-        log.info("LDAP URL: {}", ldapUrl);
+        String readUrl = ldapProperties.getReadUrl();
+        String baseDn = ldapProperties.getBase();
+        String bindDn = ldapProperties.getUsername();
+        String bindPassword = ldapProperties.getPassword();
+
+        log.info("=== LDAP CRL Repository Read Connection started ===");
+        log.info("Read URL: {} (R/W Separation: {})", readUrl, ldapProperties.isReadWriteSeparationEnabled());
         log.info("Bind DN: {}", bindDn);
         log.info("Base DN: {}", baseDn);
 
@@ -91,7 +94,7 @@ public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
 
         try {
             // LDAP URL 파싱
-            String host = ldapUrl.replace("ldap://", "").replace("ldaps://", "");
+            String host = readUrl.replace("ldap://", "").replace("ldaps://", "");
             String[] parts = host.split(":");
             String hostname = parts[0];
             int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 389;
@@ -99,13 +102,15 @@ public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
             // LDAP 연결 생성
             LDAPConnection connection = new LDAPConnection(hostname, port, bindDn, bindPassword);
 
-            // Connection Pool 생성 (초기 3개, 최대 10개)
-            connectionPool = new LDAPConnectionPool(connection, 3, 10);
+            // Connection Pool 생성 (LdapProperties에서 설정값 가져오기)
+            int initialSize = ldapProperties.getReadPoolInitialSize();
+            int maxSize = ldapProperties.getReadPoolMaxSize();
+            connectionPool = new LDAPConnectionPool(connection, initialSize, maxSize);
 
-            log.info("LDAP CRL Repository Connection Pool created: {} initial, {} max", 3, 10);
+            log.info("LDAP CRL Repository Read Connection Pool created: {} initial, {} max", initialSize, maxSize);
 
         } catch (LDAPException e) {
-            log.error("LDAP connection failed: {}", e.getMessage(), e);
+            log.error("LDAP Read connection failed: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -153,7 +158,7 @@ public class UnboundIdCrlLdapAdapter implements CrlLdapPort {
 
             // Search Base DN 구성: o=crl,c={country}를 Base DN에 포함
             // 이렇게 하면 o=crl 노드 아래에서만 검색하게 됨
-            String searchBaseDn = String.format("o=crl,c=%s,%s,%s", countryCode, PKD_BASE_DN, baseDn);
+            String searchBaseDn = String.format("o=crl,c=%s,%s,%s", countryCode, PKD_BASE_DN, ldapProperties.getBase());
             log.debug("Search base DN: {}", searchBaseDn);
 
             // LDAP 검색

@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 5.5
+**Version**: 5.9
 **Last Updated**: 2025-12-26
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Docker Container ✅ + OpenLDAP MMR + HAProxy ✅ + LDAP R/W Separation ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅
 
 ---
 
@@ -278,6 +278,33 @@ CRL 검증 결과를 외부 클라이언트가 명확하게 이해할 수 있도
 
 ---
 
+## 🕐 Timezone Handling (2025-12-26 추가)
+
+모든 시간 표시는 한국 표준시(KST, Asia/Seoul, UTC+9)를 사용합니다.
+
+### 시간대 설정
+
+| 레이어 | 설정 | 위치 |
+|--------|------|------|
+| PostgreSQL | `TZ: Asia/Seoul`, `PGTZ: Asia/Seoul` | docker-compose.yaml |
+| JVM (Container) | `TZ: Asia/Seoul` | docker-compose.yaml |
+| API Response | `@JsonFormat(timezone = "Asia/Seoul")` | PassiveAuthenticationResponse.java |
+| Frontend | `toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })` | history.html, verify.html, dashboard.html |
+
+### API 응답 형식
+
+```json
+{
+  "verificationTimestamp": "2025-12-26T20:30:45+09:00"
+}
+```
+
+- ISO 8601 형식 + 타임존 오프셋 (`+09:00`)
+- 이전: `yyyy-MM-dd'T'HH:mm:ss'Z'` (UTC로 오해될 수 있음)
+- 현재: `yyyy-MM-dd'T'HH:mm:ssXXX` (명시적 오프셋)
+
+---
+
 ## 💾 Database Schema
 
 ### 주요 테이블
@@ -307,7 +334,7 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 
 ```bash
 # 컨테이너 시작
-./podman-start.sh
+./docker-start.sh --skip-app
 
 # 빌드
 ./mvnw clean compile
@@ -324,7 +351,7 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 
 ```bash
 # 컨테이너 시작 (DB만)
-./podman-start.sh --skip-app
+./docker-start.sh --skip-app
 
 # Native Image 빌드 (5-10분 소요)
 ./scripts/native-build.sh --skip-tests
@@ -339,23 +366,38 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 - 낮은 메모리: ~100MB (JVM: ~500MB)
 - 단일 실행 파일: `target/local-pkd`
 
-### Podman Container Mode (외부 클라이언트 연동)
+### Docker Container Mode (외부 클라이언트 연동)
 
 ```bash
 # Native Image 빌드 (최초 1회)
 ./scripts/native-build.sh --skip-tests
 
 # 전체 서비스 시작 (DB + App)
-./podman-start.sh
+./docker-start.sh
 
 # 이미지 재빌드 시
-./podman-start.sh --build
+./docker-start.sh --build
 ```
 
 **컨테이너 구성**:
 - `icao-local-pkd-postgres`: PostgreSQL 15 (port 5432, timezone: Asia/Seoul)
 - `icao-local-pkd-pgadmin`: pgAdmin (port 5050)
+- `icao-local-pkd-haproxy`: HAProxy LDAP Load Balancer (port 389, 8404)
+- `icao-local-pkd-openldap1`: OpenLDAP Master 1 (port 3891, MMR Node 1)
+- `icao-local-pkd-openldap2`: OpenLDAP Master 2 (port 3892, MMR Node 2)
+- `icao-local-pkd-phpldapadmin`: phpLDAPadmin (port 8080)
 - `icao-local-pkd-app`: Local PKD Native Image (port 8081, host network)
+
+**Docker 스크립트**:
+- `./docker-start.sh` - 컨테이너 시작 (옵션: `--build`, `--skip-app`, `--skip-ldap`)
+- `./docker-stop.sh` - 컨테이너 중지
+- `./docker-restart.sh` - 컨테이너 재시작
+- `./docker-logs.sh [서비스]` - 로그 확인
+- `./docker-health.sh` - 헬스 체크
+- `./docker-backup.sh` - 데이터 백업
+- `./docker-restore.sh <백업폴더>` - 데이터 복구
+- `./docker-clean.sh` - 완전 삭제 (볼륨 포함)
+- `./docker-ldap-init.sh` - LDAP ICAO PKD DIT 구조 초기화
 
 **Windows 클라이언트 접속** (ePassport Reader 연동):
 ```bash
@@ -427,16 +469,99 @@ http://172.24.1.6:8081
 | Thymeleaf Pure Fragment Pattern | ✅ |
 | Build/Run Scripts | ✅ |
 
-### Podman Containerization ✅ PRODUCTION READY
+### Docker Containerization ✅ PRODUCTION READY
 
 | Feature | Status |
 |---------|--------|
 | Dockerfile (Native Image) | ✅ |
-| podman-compose.yaml | ✅ |
+| docker-compose.yaml | ✅ |
 | PostgreSQL Timezone (Asia/Seoul) | ✅ |
 | Host Network Mode | ✅ |
 | Windows Client Access | ✅ |
 | PA API Integration Guide | ✅ |
+| Docker Desktop (Windows 11 Pro) | ✅ |
+
+> **Note**: Podman 스크립트는 `scripts/podman-backup/` 폴더에 백업되어 있습니다.
+
+### OpenLDAP Multi-Master Replication + HAProxy ✅ PRODUCTION READY
+
+| Feature | Status |
+|---------|--------|
+| OpenLDAP MMR (2노드) | ✅ |
+| HAProxy Load Balancer | ✅ |
+| ICAO PKD Custom Schemas | ✅ |
+| phpLDAPadmin | ✅ |
+| DIT 초기화 스크립트 | ✅ |
+
+**ICAO PKD Custom Schemas**:
+- `pkdDownload` - PKD 다운로드 객체
+- `pkdMasterList` - Master List CMS 저장
+- `cscaCertificateObject` - CSCA 인증서 메타데이터
+
+**LDAP 접속 정보**:
+- HAProxy (로드밸런싱): `ldap://localhost:389`
+- HAProxy Stats UI: `http://localhost:8404/stats`
+- OpenLDAP 1 (직접 연결): `ldap://localhost:3891`
+- OpenLDAP 2 (직접 연결): `ldap://localhost:3892`
+
+**MMR 설정**:
+- 양방향 실시간 복제 (refreshAndPersist)
+- HAProxy가 Round-Robin 방식으로 요청 분산
+- Health Check: 5초 간격, 3회 실패 시 제외
+
+### LDAP Read/Write 분리 ✅ PRODUCTION READY
+
+| Feature | Status |
+|---------|--------|
+| Write 전용 연결 (OpenLDAP 1) | ✅ |
+| Read 로드밸런싱 (HAProxy) | ✅ |
+| 연결 풀 분리 | ✅ |
+| 설정 기반 활성화/비활성화 | ✅ |
+
+**Read/Write 분리 아키텍처**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application                               │
+├─────────────────────────────────────────────────────────────┤
+│  PKD Upload (Write)          │  PA/Statistics (Read)        │
+│  ├─ UnboundIdLdapAdapter     │  ├─ UnboundIdLdapCscaAdapter │
+│  └─ → OpenLDAP 1 (:3891)     │  ├─ UnboundIdCrlLdapAdapter  │
+│                               │  └─ → HAProxy (:389)         │
+└─────────────────────────────────────────────────────────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────┐
+                              │    HAProxy      │
+                              │  (Round-Robin)  │
+                              └────────┬────────┘
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                    ▼                                      ▼
+           ┌─────────────┐                        ┌─────────────┐
+           │ OpenLDAP 1  │◄────── MMR Sync ──────►│ OpenLDAP 2  │
+           │   (:3891)   │                        │   (:3892)   │
+           └─────────────┘                        └─────────────┘
+```
+
+**설정 예시** (application-local.properties):
+```properties
+# Write: OpenLDAP 1 직접 연결
+app.ldap.write.enabled=true
+app.ldap.write.url=ldap://localhost:3891
+app.ldap.write.pool-initial-size=5
+app.ldap.write.pool-max-size=20
+
+# Read: HAProxy 로드밸런싱
+app.ldap.read.enabled=true
+app.ldap.read.url=ldap://localhost:389
+app.ldap.read.pool-initial-size=3
+app.ldap.read.pool-max-size=10
+```
+
+**장점**:
+- PKD 업로드 시 Write 연결로 일관된 저장 보장
+- PA 검증/통계 조회 시 Read 로드밸런싱으로 성능 향상
+- 연결 풀 분리로 리소스 효율적 관리
 
 ### Future Enhancements (Optional)
 
@@ -456,7 +581,7 @@ http://172.24.1.6:8081
 lsof -ti:8081 | xargs kill -9
 
 # 컨테이너 재시작
-./podman-restart.sh
+./docker-restart.sh
 ```
 
 ### Value Object JPA 오류

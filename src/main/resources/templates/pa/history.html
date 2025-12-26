@@ -725,7 +725,7 @@
 
           formatTimestamp(timestamp) {
             if (!timestamp) return '';
-            return new Date(timestamp).toLocaleString('ko-KR');
+            return new Date(timestamp).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
           }
         };
       }

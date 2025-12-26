@@ -60,3 +60,4 @@ localpkd.*.*
 
 ### Playwright ###
 .playwright-mcp/
+.docker-data/

@@ -1,0 +1,173 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: icao-local-pkd-postgres
+    environment:
+      POSTGRES_DB: icao_local_pkd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.docker-data/postgres:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin (선택사항 - 데이터베이스 관리 도구)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartcoreinc.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - ./.docker-data/pgadmin:/var/lib/pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # OpenLDAP Master 1 (MMR Node 1) - Custom Image
+  openldap1:
+    build:
+      context: ./openldap
+      dockerfile: Dockerfile
+    image: local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-openldap1
+    hostname: openldap1
+    command: --copy-service
+    environment:
+      LDAP_ORGANISATION: "SmartCore Inc"
+      LDAP_DOMAIN: "ldap.smartcoreinc.com"
+      LDAP_BASE_DN: "dc=ldap,dc=smartcoreinc,dc=com"
+      LDAP_ADMIN_PASSWORD: "core"
+      LDAP_CONFIG_PASSWORD: "core"
+      LDAP_TLS: "false"
+      LDAP_REPLICATION: "false"
+    ports:
+      - "3891:389"
+    volumes:
+      - ./.docker-data/openldap1/data:/var/lib/ldap
+      - ./.docker-data/openldap1/config:/etc/ldap/slapd.d
+      - ./openldap/schemas:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "dc=ldap,dc=smartcoreinc,dc=com", "-D", "cn=admin,dc=ldap,dc=smartcoreinc,dc=com", "-w", "core"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # OpenLDAP Master 2 (MMR Node 2) - Uses same custom image as openldap1
+  openldap2:
+    image: local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-openldap2
+    hostname: openldap2
+    command: --copy-service
+    environment:
+      LDAP_ORGANISATION: "SmartCore Inc"
+      LDAP_DOMAIN: "ldap.smartcoreinc.com"
+      LDAP_BASE_DN: "dc=ldap,dc=smartcoreinc,dc=com"
+      LDAP_ADMIN_PASSWORD: "core"
+      LDAP_CONFIG_PASSWORD: "core"
+      LDAP_TLS: "false"
+      LDAP_REPLICATION: "false"
+    ports:
+      - "3892:389"
+    volumes:
+      - ./.docker-data/openldap2/data:/var/lib/ldap
+      - ./.docker-data/openldap2/config:/etc/ldap/slapd.d
+      - ./openldap/schemas:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    restart: unless-stopped
+    depends_on:
+      openldap1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "dc=ldap,dc=smartcoreinc,dc=com", "-D", "cn=admin,dc=ldap,dc=smartcoreinc,dc=com", "-w", "core"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # HAProxy - LDAP Load Balancer
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: icao-local-pkd-haproxy
+    ports:
+      - "389:389"    # LDAP (로드밸런싱)
+      - "8404:8404"  # HAProxy Stats UI
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    restart: unless-stopped
+    depends_on:
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # phpLDAPadmin (LDAP 관리 도구)
+  phpldapadmin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: icao-local-pkd-phpldapadmin
+    environment:
+      # HAProxy를 통해 연결
+      PHPLDAPADMIN_LDAP_HOSTS: "haproxy"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      haproxy:
+        condition: service_healthy
+
+  # Local PKD Application (Native Image)
+  local-pkd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local-pkd:latest
+    container_name: icao-local-pkd-app
+    network_mode: host
+    environment:
+      # container 프로파일만 활성화 (local 프로파일 제외)
+      SPRING_PROFILES_ACTIVE: container
+      # PostgreSQL 연결 - host 네트워크이므로 localhost 사용
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/icao_local_pkd
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+      # LDAP 연결 (HAProxy를 통해 로드밸런싱)
+      LDAP_IP: 127.0.0.1
+      LDAP_PORT: 389
+      LDAP_USERNAME: "cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
+      LDAP_PASSWORD: core
+      # Timezone 설정
+      TZ: Asia/Seoul
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      haproxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
