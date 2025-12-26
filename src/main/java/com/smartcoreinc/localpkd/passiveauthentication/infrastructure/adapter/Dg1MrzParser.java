@@ -131,6 +131,31 @@ public class Dg1MrzParser {
     }
 
     /**
+     * Parses raw MRZ text (from mrz.txt file) directly.
+     * <p>
+     * This method accepts plain text MRZ without ASN.1 encoding.
+     * Useful when MRZ is provided as a separate text file.
+     * </p>
+     *
+     * @param mrzText Raw MRZ string (TD3 format: 88 characters or 2 lines × 44 characters)
+     * @return Map containing parsed MRZ fields
+     * @throws IllegalArgumentException if MRZ format is invalid
+     */
+    public Map<String, String> parseRawMrzText(String mrzText) {
+        if (mrzText == null || mrzText.isBlank()) {
+            throw new IllegalArgumentException("MRZ text cannot be null or empty");
+        }
+
+        // Trim and normalize line endings
+        String normalizedMrz = mrzText.trim()
+            .replace("\r\n", "\n")
+            .replace("\r", "\n");
+
+        // Parse TD3 MRZ format
+        return parseTd3Mrz(normalizedMrz);
+    }
+
+    /**
      * Verifies MRZ check digits.
      *
      * @param mrz Parsed MRZ map

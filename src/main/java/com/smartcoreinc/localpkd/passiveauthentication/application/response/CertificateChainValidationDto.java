@@ -26,6 +26,15 @@ import java.time.LocalDateTime;
  *   <li>CRL_UNAVAILABLE: LDAP에서 CRL을 찾을 수 없음</li>
  *   <li>CRL_EXPIRED: CRL이 만료됨</li>
  *   <li>CRL_INVALID: CRL 서명 검증 실패</li>
+ *   <li>NOT_CHECKED: CRL 검증이 수행되지 않음</li>
+ * </ul>
+ *
+ * <h3>CRL Status Severity Levels:</h3>
+ * <ul>
+ *   <li>SUCCESS: 정상 검증 완료</li>
+ *   <li>FAILURE: 검증 실패 (신뢰 불가)</li>
+ *   <li>WARNING: 경고 (주의 필요)</li>
+ *   <li>INFO: 정보성 상태</li>
  * </ul>
  *
  * @param valid True if certificate chain is valid
@@ -37,8 +46,11 @@ import java.time.LocalDateTime;
  * @param notAfter DSC validity end date
  * @param crlChecked True if CRL was checked successfully
  * @param revoked True if DSC is revoked
- * @param crlStatus CRL check status (VALID, REVOKED, CRL_UNAVAILABLE, CRL_EXPIRED, CRL_INVALID)
- * @param crlMessage Detailed CRL check message (e.g., reason for unavailability)
+ * @param crlStatus CRL check status code (VALID, REVOKED, CRL_UNAVAILABLE, CRL_EXPIRED, CRL_INVALID, NOT_CHECKED)
+ * @param crlStatusDescription Brief description of CRL status (English)
+ * @param crlStatusDetailedDescription Detailed user-friendly description of CRL status (Korean)
+ * @param crlStatusSeverity Severity level of CRL status (SUCCESS, FAILURE, WARNING, INFO)
+ * @param crlMessage Detailed CRL check message (e.g., specific error details, revocation reason)
  * @param validationErrors Validation error messages (if any)
  */
 public record CertificateChainValidationDto(
@@ -54,6 +66,9 @@ public record CertificateChainValidationDto(
     boolean crlChecked,
     boolean revoked,
     String crlStatus,
+    String crlStatusDescription,
+    String crlStatusDetailedDescription,
+    String crlStatusSeverity,
     String crlMessage,
     String validationErrors
 ) {

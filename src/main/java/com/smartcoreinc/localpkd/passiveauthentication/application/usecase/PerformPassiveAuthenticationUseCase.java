@@ -307,6 +307,9 @@ public class PerformPassiveAuthenticationUseCase {
 
         // CRL 상태 및 상세 메시지 설정
         String crlStatus = crlCheckResult.getStatus().name();
+        String crlStatusDescription = crlCheckResult.getStatusDescription();
+        String crlStatusDetailedDescription = crlCheckResult.getStatusDetailedDescription();
+        String crlStatusSeverity = crlCheckResult.getStatusSeverity();
         String crlMessage = buildCrlMessage(crlCheckResult, cscaSubjectDn, countryCode);
 
         if (crlCheckResult.isCertificateRevoked()) {
@@ -340,6 +343,9 @@ public class PerformPassiveAuthenticationUseCase {
             crlChecked,
             revoked,
             crlStatus,
+            crlStatusDescription,
+            crlStatusDetailedDescription,
+            crlStatusSeverity,
             crlMessage,
             validationErrors.length() > 0 ? validationErrors.toString() : null
         );
@@ -650,6 +656,7 @@ public class PerformPassiveAuthenticationUseCase {
             case CRL_EXPIRED -> "CRL이 만료됨 - nextUpdate 시간이 지남";
             case CRL_INVALID -> String.format("CRL 검증 실패: %s",
                 crlResult.getErrorMessage() != null ? crlResult.getErrorMessage() : "서명 검증 실패");
+            case NOT_CHECKED -> "CRL 검증이 수행되지 않음";
         };
     }
 

@@ -187,6 +187,34 @@ public class CrlCheckResult {
     }
 
     /**
+     * CRL 상태에 대한 간단한 설명을 반환합니다 (영문).
+     *
+     * @return 영문 설명
+     */
+    public String getStatusDescription() {
+        return status != null ? status.getDescription() : "Unknown status";
+    }
+
+    /**
+     * CRL 상태에 대한 상세 설명을 반환합니다 (한글).
+     * 외부 클라이언트가 사용자에게 표시할 수 있는 상세한 설명입니다.
+     *
+     * @return 한글 상세 설명
+     */
+    public String getStatusDetailedDescription() {
+        return status != null ? status.getDetailedDescription() : "알 수 없는 상태입니다.";
+    }
+
+    /**
+     * CRL 상태의 심각도 레벨을 반환합니다.
+     *
+     * @return SUCCESS, FAILURE, WARNING, INFO 중 하나
+     */
+    public String getStatusSeverity() {
+        return status != null ? status.getSeverity() : "INFO";
+    }
+
+    /**
      * RFC 5280 CRL Reason Code를 텍스트로 변환
      *
      * @param reasonCode CRL reason code (0-10)
@@ -214,31 +242,117 @@ public class CrlCheckResult {
 
     /**
      * CRL 검증 상태
+     *
+     * <p>각 상태값에 대한 상세 설명을 제공하여 외부 클라이언트가
+     * CRL 검증 결과를 명확하게 이해할 수 있도록 합니다.</p>
+     *
+     * <h3>상태별 의미:</h3>
+     * <ul>
+     *   <li>VALID: 정상 - 인증서가 유효하며 폐기되지 않음</li>
+     *   <li>REVOKED: 폐기됨 - 인증서가 CRL에 등록되어 신뢰할 수 없음</li>
+     *   <li>CRL_UNAVAILABLE: CRL 없음 - LDAP에서 CRL을 조회할 수 없어 폐기 상태 확인 불가</li>
+     *   <li>CRL_EXPIRED: CRL 만료 - CRL이 최신 상태가 아니어서 신뢰할 수 없음</li>
+     *   <li>CRL_INVALID: CRL 무효 - CRL 서명 검증 실패로 CRL 자체를 신뢰할 수 없음</li>
+     *   <li>NOT_CHECKED: 미검사 - CRL 검증이 수행되지 않음</li>
+     * </ul>
      */
     public enum CrlStatus {
         /**
          * 인증서가 폐기되지 않았으며 CRL이 유효함
          */
-        VALID,
+        VALID("Certificate is valid and not revoked",
+              "인증서가 유효하며 폐기되지 않았습니다. CRL 검증을 통해 인증서의 유효성이 확인되었습니다.",
+              "SUCCESS"),
 
         /**
          * 인증서가 폐기됨
          */
-        REVOKED,
+        REVOKED("Certificate has been revoked",
+                "인증서가 폐기되어 더 이상 신뢰할 수 없습니다. 해당 인증서로 서명된 문서를 신뢰해서는 안 됩니다.",
+                "FAILURE"),
 
         /**
          * CRL을 LDAP에서 찾을 수 없음
          */
-        CRL_UNAVAILABLE,
+        CRL_UNAVAILABLE("CRL not available in LDAP",
+                        "LDAP 서버에서 CRL(인증서 폐기 목록)을 조회할 수 없습니다. 폐기 상태를 확인할 수 없으므로 주의가 필요합니다.",
+                        "WARNING"),
 
         /**
          * CRL의 nextUpdate가 지났음 (만료됨)
          */
-        CRL_EXPIRED,
+        CRL_EXPIRED("CRL has expired (nextUpdate passed)",
+                    "CRL이 만료되어 최신 폐기 정보를 반영하지 않습니다. 최신 CRL을 다운로드하여 다시 검증해야 합니다.",
+                    "WARNING"),
 
         /**
          * CRL 서명 검증 실패 또는 구조 오류
          */
-        CRL_INVALID
+        CRL_INVALID("CRL signature verification failed or structure error",
+                    "CRL 서명 검증에 실패했거나 CRL 형식이 올바르지 않습니다. CRL 자체를 신뢰할 수 없으므로 폐기 상태 확인이 불가능합니다.",
+                    "FAILURE"),
+
+        /**
+         * CRL 검증이 수행되지 않음
+         */
+        NOT_CHECKED("CRL verification was not performed",
+                    "CRL 검증이 수행되지 않았습니다. 설정에 따라 CRL 검증이 비활성화되었거나 검증 단계가 생략되었을 수 있습니다.",
+                    "INFO");
+
+        private final String description;
+        private final String detailedDescription;
+        private final String severity;
+
+        CrlStatus(String description, String detailedDescription, String severity) {
+            this.description = description;
+            this.detailedDescription = detailedDescription;
+            this.severity = severity;
+        }
+
+        /**
+         * 상태에 대한 간단한 설명을 반환합니다 (영문).
+         *
+         * @return 간단한 설명
+         */
+        public String getDescription() {
+            return description;
+        }
+
+        /**
+         * 상태에 대한 상세 설명을 반환합니다 (한글).
+         * 외부 클라이언트가 사용자에게 표시할 수 있는 상세한 설명입니다.
+         *
+         * @return 상세 설명
+         */
+        public String getDetailedDescription() {
+            return detailedDescription;
+        }
+
+        /**
+         * 상태의 심각도 레벨을 반환합니다.
+         *
+         * @return SUCCESS, FAILURE, WARNING, INFO 중 하나
+         */
+        public String getSeverity() {
+            return severity;
+        }
+
+        /**
+         * 해당 상태가 검증 실패를 나타내는지 여부를 반환합니다.
+         *
+         * @return 검증 실패 여부
+         */
+        public boolean isFailure() {
+            return "FAILURE".equals(severity);
+        }
+
+        /**
+         * 해당 상태가 경고를 나타내는지 여부를 반환합니다.
+         *
+         * @return 경고 여부
+         */
+        public boolean isWarning() {
+            return "WARNING".equals(severity);
+        }
     }
 }

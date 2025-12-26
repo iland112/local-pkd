@@ -160,7 +160,11 @@ public class PassiveAuthenticationController {
             // Use placeholder document number if not provided
             String docNumber = request.documentNumber();
             if (docNumber == null || docNumber.isBlank()) {
-                docNumber = "UNKNOWN";
+                // Try to extract document number from DG1 (MRZ)
+                docNumber = extractDocumentNumberFromDg1(dataGroupBytes);
+                if (docNumber == null || docNumber.isBlank()) {
+                    docNumber = "UNKNOWN";
+                }
             }
 
             // Build command using constructor (Record class)
@@ -264,16 +268,60 @@ public class PassiveAuthenticationController {
             .filter(r -> status == null || status.equals(r.status().name()))
             .toList();
 
+        // Apply sorting (default: completedAt DESC for showing most recent first)
+        java.util.List<PassiveAuthenticationResponse> sorted = new java.util.ArrayList<>(filtered);
+        org.springframework.data.domain.Sort sort = pageable.getSort();
+        if (sort.isSorted()) {
+            sort.forEach(order -> {
+                java.util.Comparator<PassiveAuthenticationResponse> comparator;
+                String property = order.getProperty();
+                if ("completedAt".equals(property) || "verifiedAt".equals(property) || "verificationTimestamp".equals(property)) {
+                    comparator = java.util.Comparator.comparing(
+                        PassiveAuthenticationResponse::verificationTimestamp,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())
+                    );
+                } else if ("status".equals(property)) {
+                    comparator = java.util.Comparator.comparing(r -> r.status().name());
+                } else if ("issuingCountry".equals(property)) {
+                    comparator = java.util.Comparator.comparing(
+                        PassiveAuthenticationResponse::issuingCountry,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())
+                    );
+                } else if ("documentNumber".equals(property)) {
+                    comparator = java.util.Comparator.comparing(
+                        PassiveAuthenticationResponse::documentNumber,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())
+                    );
+                } else {
+                    // Default: sort by verificationTimestamp
+                    comparator = java.util.Comparator.comparing(
+                        PassiveAuthenticationResponse::verificationTimestamp,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())
+                    );
+                }
+                if (order.isDescending()) {
+                    comparator = comparator.reversed();
+                }
+                sorted.sort(comparator);
+            });
+        } else {
+            // Default: sort by verificationTimestamp DESC (most recent first)
+            sorted.sort(java.util.Comparator.comparing(
+                PassiveAuthenticationResponse::verificationTimestamp,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())
+            ).reversed());
+        }
+
         // Apply pagination manually
         int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        int end = Math.min(start + pageable.getPageSize(), sorted.size());
 
-        java.util.List<PassiveAuthenticationResponse> pageContent = start < filtered.size()
-            ? filtered.subList(start, end)
+        java.util.List<PassiveAuthenticationResponse> pageContent = start < sorted.size()
+            ? sorted.subList(start, end)
             : java.util.Collections.emptyList();
 
         org.springframework.data.domain.Page<PassiveAuthenticationResponse> page =
-            new org.springframework.data.domain.PageImpl<>(pageContent, pageable, filtered.size());
+            new org.springframework.data.domain.PageImpl<>(pageContent, pageable, sorted.size());
 
         log.info("Retrieved {} verification records (page {} of {})",
             pageContent.size(), pageable.getPageNumber(), page.getTotalPages());
@@ -359,6 +407,36 @@ public class PassiveAuthenticationController {
     }
 
     /**
+     * Extracts document number from DG1 (MRZ) data.
+     * <p>
+     * Attempts to parse the DG1 binary data and extract the document number.
+     * Returns null if DG1 is not present or parsing fails.
+     *
+     * @param dataGroupBytes Map of Data Group numbers to byte arrays
+     * @return Document number from MRZ, or null if not available
+     */
+    private String extractDocumentNumberFromDg1(Map<DataGroupNumber, byte[]> dataGroupBytes) {
+        byte[] dg1Bytes = dataGroupBytes.get(DataGroupNumber.DG1);
+        if (dg1Bytes == null || dg1Bytes.length == 0) {
+            log.debug("DG1 not present in request, cannot extract document number");
+            return null;
+        }
+
+        try {
+            Map<String, String> mrzData = dg1MrzParser.parse(dg1Bytes);
+            String documentNumber = mrzData.get("documentNumber");
+            if (documentNumber != null && !documentNumber.isBlank()) {
+                log.info("Extracted document number from DG1 MRZ: {}", documentNumber);
+                return documentNumber;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse DG1 for document number extraction: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
      * Extracts client IP address from HTTP request.
      * <p>
      * Checks X-Forwarded-For header first (for proxied requests),
@@ -389,7 +467,7 @@ public class PassiveAuthenticationController {
     @ApiResponse(responseCode = "200", description = "DG1 파싱 성공")
     @ApiResponse(responseCode = "400", description = "잘못된 DG1 데이터")
     @PostMapping("/parse-dg1")
-    public ResponseEntity<Map<String, String>> parseDg1(@RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, Object>> parseDg1(@RequestBody Map<String, String> request) {
         try {
             String dg1Base64 = request.get("dg1Base64");
             if (dg1Base64 == null || dg1Base64.isBlank()) {
@@ -400,10 +478,47 @@ public class PassiveAuthenticationController {
             Map<String, String> mrzData = dg1MrzParser.parse(dg1Bytes);
 
             log.info("DG1 parsed successfully: {} fields extracted", mrzData.size());
-            return ResponseEntity.ok(mrzData);
+            return ResponseEntity.ok(new HashMap<>(mrzData));
         } catch (Exception e) {
             log.error("DG1 parsing failed", e);
             return ResponseEntity.badRequest().body(Map.of("error", "DG1 parsing failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Parses raw MRZ text (from mrz.txt file).
+     * <p>
+     * This endpoint accepts plain text MRZ string (88 characters or 2 lines × 44 characters)
+     * and parses it to extract passport holder information.
+     * </p>
+     *
+     * @param request Request containing mrzText field
+     * @return Parsed MRZ information
+     */
+    @Operation(
+        summary = "MRZ 텍스트 파싱",
+        description = "Plain text MRZ 문자열(mrz.txt 파일)을 파싱하여 여권 정보 추출. TD3 포맷 (88 문자 또는 2줄×44 문자) 지원."
+    )
+    @ApiResponse(responseCode = "200", description = "MRZ 파싱 성공")
+    @ApiResponse(responseCode = "400", description = "잘못된 MRZ 데이터")
+    @PostMapping("/parse-mrz-text")
+    public ResponseEntity<Map<String, Object>> parseMrzText(@RequestBody Map<String, String> request) {
+        try {
+            String mrzText = request.get("mrzText");
+            if (mrzText == null || mrzText.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "MRZ text is required"));
+            }
+
+            Map<String, String> mrzData = dg1MrzParser.parseRawMrzText(mrzText);
+
+            log.info("MRZ text parsed successfully: {} fields extracted", mrzData.size());
+            return ResponseEntity.ok(new HashMap<>(mrzData));
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid MRZ format: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid MRZ format: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("MRZ text parsing failed", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "MRZ parsing failed: " + e.getMessage()));
         }
     }
 

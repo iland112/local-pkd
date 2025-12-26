@@ -2,11 +2,14 @@ package com.smartcoreinc.localpkd.passiveauthentication.application.usecase;
 
 import com.smartcoreinc.localpkd.passiveauthentication.application.exception.PassiveAuthenticationApplicationException;
 import com.smartcoreinc.localpkd.passiveauthentication.application.response.PassiveAuthenticationResponse;
+import com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroup;
+import com.smartcoreinc.localpkd.passiveauthentication.domain.model.DataGroupNumber;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassiveAuthenticationError;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassiveAuthenticationStatus;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassportData;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.model.PassportDataId;
 import com.smartcoreinc.localpkd.passiveauthentication.domain.repository.PassportDataRepository;
+import com.smartcoreinc.localpkd.passiveauthentication.infrastructure.adapter.Dg1MrzParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -60,6 +64,7 @@ import java.util.stream.Collectors;
 public class GetPassiveAuthenticationHistoryUseCase {
 
     private final PassportDataRepository passportDataRepository;
+    private final Dg1MrzParser dg1MrzParser;
 
     /**
      * Retrieves a specific verification by ID.
@@ -214,9 +219,15 @@ public class GetPassiveAuthenticationHistoryUseCase {
         String issuingCountry = passportData.getIssuingCountry() != null
             ? passportData.getIssuingCountry()
             : "UNKNOWN";
-        String documentNumber = passportData.getDocumentNumber() != null
-            ? passportData.getDocumentNumber()
-            : "UNKNOWN";
+        String documentNumber = passportData.getDocumentNumber();
+
+        // If document number is UNKNOWN or null, try to extract from DG1
+        if (documentNumber == null || documentNumber.isBlank() || "UNKNOWN".equals(documentNumber)) {
+            documentNumber = extractDocumentNumberFromDg1(passportData);
+            if (documentNumber == null || documentNumber.isBlank()) {
+                documentNumber = "UNKNOWN";
+            }
+        }
 
         // Get errors from result if available
         List<PassiveAuthenticationError> errors = passportData.getResult() != null
@@ -263,5 +274,42 @@ public class GetPassiveAuthenticationHistoryUseCase {
         // - CertificateChainValidationDto (DSC/CSCA info, CRL check)
         // - SodSignatureValidationDto (signature algorithms, validation status)
         // - DataGroupValidationDto (per-DG hash validation results)
+    }
+
+    /**
+     * Extracts document number from DG1 (MRZ) data stored in PassportData.
+     * <p>
+     * This method is used to recover document number from legacy records
+     * where the document number was not extracted at verification time.
+     * </p>
+     *
+     * @param passportData PassportData containing DG1 data
+     * @return Document number from MRZ, or null if not available
+     */
+    private String extractDocumentNumberFromDg1(PassportData passportData) {
+        if (passportData.getDataGroups() == null || passportData.getDataGroups().isEmpty()) {
+            log.debug("No data groups found in PassportData {}", passportData.getId());
+            return null;
+        }
+
+        // Find DG1 in data groups
+        for (DataGroup dg : passportData.getDataGroups()) {
+            if (dg.getNumber() == DataGroupNumber.DG1 && dg.getContent() != null && dg.getContent().length > 0) {
+                try {
+                    Map<String, String> mrzData = dg1MrzParser.parse(dg.getContent());
+                    String docNumber = mrzData.get("documentNumber");
+                    if (docNumber != null && !docNumber.isBlank()) {
+                        log.debug("Extracted document number {} from DG1 for PassportData {}",
+                            docNumber, passportData.getId());
+                        return docNumber;
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse DG1 for document number extraction in PassportData {}: {}",
+                        passportData.getId(), e.getMessage());
+                }
+            }
+        }
+
+        return null;
     }
 }

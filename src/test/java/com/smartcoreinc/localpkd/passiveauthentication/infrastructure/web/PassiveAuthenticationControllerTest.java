@@ -352,7 +352,8 @@ class PassiveAuthenticationControllerTest {
                 "DG1", Base64.getEncoder().encodeToString(tamperedDg1),
                 "DG2", Base64.getEncoder().encodeToString(dg2Bytes)
             ),
-            "api-test-client"
+            "api-test-client",
+            null  // mrzText
         );
 
         // When: POST /api/pa/verify
@@ -483,7 +484,8 @@ class PassiveAuthenticationControllerTest {
             "M12345678",
             Base64.getEncoder().encodeToString(sodBytes),
             Map.of("DG1", Base64.getEncoder().encodeToString(dg1Bytes)),
-            null
+            null,  // requestedBy
+            null   // mrzText
         );
 
         // When: POST /api/pa/verify
@@ -630,7 +632,8 @@ class PassiveAuthenticationControllerTest {
             "M12345678",
             "This is not valid Base64!@#$",
             Map.of("DG1", "Also not Base64!"),
-            null
+            null,  // requestedBy
+            null   // mrzText
         );
 
         // When: POST /api/pa/verify
@@ -749,7 +752,8 @@ class PassiveAuthenticationControllerTest {
                 "DG2", Base64.getEncoder().encodeToString(dg2Bytes),
                 "DG14", Base64.getEncoder().encodeToString(dg14Bytes)
             ),
-            "api-test-client"
+            "api-test-client",
+            null  // mrzText
         );
     }
 

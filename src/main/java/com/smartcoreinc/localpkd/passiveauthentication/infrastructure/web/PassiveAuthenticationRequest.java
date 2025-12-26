@@ -67,7 +67,12 @@ public record PassiveAuthenticationRequest(
     Map<String, String> dataGroups,
 
     @Schema(description = "요청자 식별자 (선택사항, 감사 추적용)", example = "api-client-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    String requestedBy
+    String requestedBy,
+
+    @Schema(description = "MRZ 텍스트 (선택사항, mrz.txt 파일에서 읽은 원본 MRZ 문자열)",
+            example = "P<KORHONG<<GILDONG<<<<<<<<<<<<<<<<<<<<<<<<\nM12345678KOR8001019M2501012<<<<<<<<<<<<<<00",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String mrzText
 
 ) {
 
