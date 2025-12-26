@@ -57,3 +57,6 @@ localpkd.*.*
 *.ml
 !src/main/resources/data/test-*.ldif
 !src/test/resources/**/*.ldif
+
+### Playwright ###
+.playwright-mcp/

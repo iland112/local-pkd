@@ -98,295 +98,300 @@
           </div>
         </div>
 
-        <!-- 시스템 연결 상태 (Preline Style) -->
-        <div class="mb-8">
-          <h2 class="text-xs font-semibold uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-500 dark:text-neutral-500">
-            <!-- Heroicon: signal -->
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-            </svg>
-            시스템 연결 상태
-          </h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <!-- PostgreSQL 데이터베이스 상태 (Preline Stats Card) -->
-            <div class="flex flex-col bg-white border border-gray-200 shadow-sm rounded-xl dark:bg-neutral-900 dark:border-neutral-800">
-              <div class="p-4 md:p-5 flex gap-x-4">
-                <!-- Soft Icon -->
-                <div class="shrink-0 flex justify-center items-center size-12 rounded-lg transition-colors"
-                     :class="dbConnected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'">
-                  <!-- Heroicon: circle-stack -->
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="shrink-0 size-6" :class="dbConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+        <!-- 시스템 연결 상태 카드 -->
+        <div class="mb-8 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl"
+             :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-xl shadow-gray-200/60'">
+          <!-- 헤더 -->
+          <div class="px-6 py-4 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-100'">
+            <h3 class="text-lg font-bold flex items-center gap-3" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+              <div class="p-2 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-500">
+                <!-- Heroicon: signal -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-white">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                </svg>
+              </div>
+              시스템 연결 상태
+            </h3>
+          </div>
+          <!-- 콘텐츠 -->
+          <div class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- PostgreSQL 데이터베이스 상태 -->
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
+                   :class="$store.theme.darkMode
+                     ? 'bg-base-200/50 border-gray-700' + (dbConnected ? ' hover:border-blue-500/50' : ' hover:border-red-500/50')
+                     : 'bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border-blue-100' + (dbConnected ? ' hover:border-blue-300' : ' hover:border-red-300')">
+                <!-- 배경 장식 아이콘 -->
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-blue-500">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                   </svg>
                 </div>
-                <!-- Content -->
-                <div class="grow">
-                  <div class="flex items-center gap-x-2">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 dark:text-neutral-500">
-                      RDBMS Server
-                    </p>
-                  </div>
-                  <div class="mt-1 flex items-center gap-x-2">
-                    <h3 class="text-xl sm:text-2xl font-medium text-gray-800 dark:text-neutral-200" x-text="dbConnected ? '연결됨' : '연결 안됨'"></h3>
-                    <!-- Status Badge -->
-                    <span class="inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium"
-                          :class="dbConnected ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-500' : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-500'">
-                      <span class="relative flex size-1.5">
-                        <span class="absolute inline-flex size-full rounded-full opacity-75 animate-ping" :class="dbConnected ? 'bg-green-400' : 'bg-red-400'"></span>
-                        <span class="relative inline-flex rounded-full size-1.5" :class="dbConnected ? 'bg-green-500' : 'bg-red-500'"></span>
+                <!-- 콘텐츠 -->
+                <div class="relative z-10 flex items-start gap-4">
+                  <span class="shrink-0 p-2.5 rounded-lg transition-colors"
+                        :class="dbConnected
+                          ? ($store.theme.darkMode ? 'bg-green-900/50' : 'bg-green-100')
+                          : ($store.theme.darkMode ? 'bg-red-900/50' : 'bg-red-100')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+                         class="w-6 h-6"
+                         :class="dbConnected ? 'text-green-500' : 'text-red-500'">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                    </svg>
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h4 class="font-semibold" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-800'">PostgreSQL</h4>
+                      <span class="inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium"
+                            :class="dbConnected ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'">
+                        <span class="relative flex size-1.5">
+                          <span class="absolute inline-flex size-full rounded-full opacity-75 animate-ping" :class="dbConnected ? 'bg-green-400' : 'bg-red-400'"></span>
+                          <span class="relative inline-flex rounded-full size-1.5" :class="dbConnected ? 'bg-green-500' : 'bg-red-500'"></span>
+                        </span>
+                        <span x-text="dbConnected ? 'Active' : 'Inactive'"></span>
                       </span>
-                      <span x-text="dbConnected ? 'Active' : 'Inactive'"></span>
-                    </span>
+                    </div>
+                    <p class="text-sm mb-3" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'" x-text="dbMessage"></p>
+                    <button
+                      @click="testDatabaseConnection()"
+                      :disabled="dbTesting"
+                      class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap"
+                      :class="$store.theme.darkMode
+                        ? 'border-blue-600 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+                        : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'">
+                      <template x-if="dbTesting">
+                        <svg class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </template>
+                      <template x-if="!dbTesting">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                        </svg>
+                      </template>
+                      <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
+                    </button>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-neutral-500" x-text="dbMessage"></p>
                 </div>
               </div>
-              <!-- Action Button -->
-              <div class="px-4 pb-4 md:px-5 md:pb-5">
-                <button
-                  @click="testDatabaseConnection()"
-                  :disabled="dbTesting"
-                  class="w-full py-2 px-3 inline-flex justify-center items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none transition"
-                >
-                  <template x-if="dbTesting">
-                    <svg class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  </template>
-                  <template x-if="!dbTesting">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-                    </svg>
-                  </template>
-                  <span x-text="dbTesting ? '테스트 중...' : '연결 테스트'"></span>
-                </button>
-              </div>
-            </div>
 
-            <!-- OpenLDAP 상태 (Preline Stats Card) -->
-            <div class="flex flex-col bg-white border border-gray-200 shadow-sm rounded-xl dark:bg-neutral-900 dark:border-neutral-800">
-              <div class="p-4 md:p-5 flex gap-x-4">
-                <!-- Soft Icon -->
-                <div class="shrink-0 flex justify-center items-center size-12 rounded-lg transition-colors"
-                     :class="$store.app.ldapStatus.connected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'">
-                  <!-- Heroicon: server-stack -->
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="shrink-0 size-6" :class="$store.app.ldapStatus.connected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+              <!-- OpenLDAP 상태 -->
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
+                   :class="$store.theme.darkMode
+                     ? 'bg-base-200/50 border-gray-700' + ($store.app.ldapStatus.connected ? ' hover:border-orange-500/50' : ' hover:border-red-500/50')
+                     : 'bg-gradient-to-br from-orange-50/50 to-amber-50/50 border-orange-100' + ($store.app.ldapStatus.connected ? ' hover:border-orange-300' : ' hover:border-red-300')">
+                <!-- 배경 장식 아이콘 -->
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-orange-500">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z" />
                   </svg>
                 </div>
-                <!-- Content -->
-                <div class="grow">
-                  <div class="flex items-center gap-x-2">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 dark:text-neutral-500">
-                      LDAP Server
-                    </p>
-                  </div>
-                  <div class="mt-1 flex items-center gap-x-2">
-                    <h3 class="text-xl sm:text-2xl font-medium text-gray-800 dark:text-neutral-200" x-text="$store.app.ldapStatus.connected ? '연결됨' : '연결 안됨'"></h3>
-                    <!-- Status Badge -->
-                    <span class="inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium"
-                          :class="$store.app.ldapStatus.connected ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-500' : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-500'">
-                      <span class="relative flex size-1.5">
-                        <span class="absolute inline-flex size-full rounded-full opacity-75 animate-ping" :class="$store.app.ldapStatus.connected ? 'bg-green-400' : 'bg-red-400'"></span>
-                        <span class="relative inline-flex rounded-full size-1.5" :class="$store.app.ldapStatus.connected ? 'bg-green-500' : 'bg-red-500'"></span>
+                <!-- 콘텐츠 -->
+                <div class="relative z-10 flex items-start gap-4">
+                  <span class="shrink-0 p-2.5 rounded-lg transition-colors"
+                        :class="$store.app.ldapStatus.connected
+                          ? ($store.theme.darkMode ? 'bg-green-900/50' : 'bg-green-100')
+                          : ($store.theme.darkMode ? 'bg-red-900/50' : 'bg-red-100')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+                         class="w-6 h-6"
+                         :class="$store.app.ldapStatus.connected ? 'text-green-500' : 'text-red-500'">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z" />
+                    </svg>
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h4 class="font-semibold" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-800'">OpenLDAP</h4>
+                      <span class="inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium"
+                            :class="$store.app.ldapStatus.connected ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'">
+                        <span class="relative flex size-1.5">
+                          <span class="absolute inline-flex size-full rounded-full opacity-75 animate-ping" :class="$store.app.ldapStatus.connected ? 'bg-green-400' : 'bg-red-400'"></span>
+                          <span class="relative inline-flex rounded-full size-1.5" :class="$store.app.ldapStatus.connected ? 'bg-green-500' : 'bg-red-500'"></span>
+                        </span>
+                        <span x-text="$store.app.ldapStatus.connected ? 'Active' : 'Inactive'"></span>
                       </span>
-                      <span x-text="$store.app.ldapStatus.connected ? 'Active' : 'Inactive'"></span>
-                    </span>
+                    </div>
+                    <p class="text-sm mb-3" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'" x-text="$store.app.ldapStatus.message"></p>
+                    <button
+                      @click="$store.app.testLdapConnection()"
+                      :disabled="$store.app.ldapTesting"
+                      class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap"
+                      :class="$store.theme.darkMode
+                        ? 'border-orange-600 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30'
+                        : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'">
+                      <template x-if="$store.app.ldapTesting">
+                        <svg class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </template>
+                      <template x-if="!$store.app.ldapTesting">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                        </svg>
+                      </template>
+                      <span x-text="$store.app.ldapTesting ? '테스트 중...' : '연결 테스트'"></span>
+                    </button>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-neutral-500" x-text="$store.app.ldapStatus.message"></p>
                 </div>
-              </div>
-              <!-- Action Button -->
-              <div class="px-4 pb-4 md:px-5 md:pb-5">
-                <button
-                  @click="$store.app.testLdapConnection()"
-                  :disabled="$store.app.ldapTesting"
-                  class="w-full py-2 px-3 inline-flex justify-center items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus:bg-orange-600 disabled:opacity-50 disabled:pointer-events-none transition"
-                >
-                  <template x-if="$store.app.ldapTesting">
-                    <svg class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  </template>
-                  <template x-if="!$store.app.ldapTesting">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-                    </svg>
-                  </template>
-                  <span x-text="$store.app.ldapTesting ? '테스트 중...' : '연결 테스트'"></span>
-                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 기능별 카드 섹션 (Preline Style) -->
-        <div class="mb-8">
-          <h2 class="text-xs font-semibold uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-500 dark:text-neutral-500">
-            <!-- Heroicon: squares-2x2 -->
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
-            </svg>
-            주요 기능
-          </h2>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <!-- 주요 기능 카드 -->
+        <div class="mb-8 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl"
+             :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-xl shadow-gray-200/60'">
+          <!-- 헤더 -->
+          <div class="px-6 py-4 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-100'">
+            <h3 class="text-lg font-bold flex items-center gap-3" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
+              <div class="p-2 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500">
+                <!-- Heroicon: squares-2x2 -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-white">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                </svg>
+              </div>
+              주요 기능
+            </h3>
+          </div>
+          <!-- 콘텐츠 -->
+          <div class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- PKD Upload 카드 -->
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
+                   :class="$store.theme.darkMode ? 'bg-base-200/50 border-gray-700 hover:border-violet-500/50' : 'bg-gradient-to-br from-violet-50/50 to-purple-50/50 border-violet-100 hover:border-violet-300'">
+                <!-- 배경 장식 아이콘 -->
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-violet-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                  </svg>
+                </div>
+                <!-- 콘텐츠 -->
+                <div class="relative z-10">
+                  <h4 class="font-semibold mb-2 flex items-center gap-2" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-800'">
+                    <span class="shrink-0 p-2 rounded-lg" :class="$store.theme.darkMode ? 'bg-violet-900/50' : 'bg-violet-100'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-violet-500">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                      </svg>
+                    </span>
+                    PKD Upload
+                  </h4>
+                  <p class="text-sm mb-4" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                    ICAO PKD에서 다운로드한 LDIF, Master List 파일을 업로드하고, CSCA/DSC/CRL 인증서를 파싱하여 검증 후 LDAP 서버에 저장합니다.
+                  </p>
+                  <!-- Feature List -->
+                  <ul class="text-sm space-y-2 mb-4" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      LDIF / Master List 파일 파싱
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      인증서 Trust Chain 검증
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      LDAP 자동 등록 + 실시간 진행 상황 (SSE)
+                    </li>
+                  </ul>
+                  <!-- Action Buttons -->
+                  <div class="flex flex-wrap gap-2">
+                    <a href="/file/upload" class="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 hover:shadow-md hover:shadow-violet-500/25 transition-all duration-200 whitespace-nowrap">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
+                      파일 업로드
+                    </a>
+                    <a href="/upload-history" class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition whitespace-nowrap"
+                       :class="$store.theme.darkMode ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:bg-gray-600/50' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                      업로드 이력
+                    </a>
+                    <a href="/file/dashboard" class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition whitespace-nowrap"
+                       :class="$store.theme.darkMode ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:bg-gray-600/50' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                      </svg>
+                      통계
+                    </a>
+                  </div>
+                </div>
+              </div>
 
-            <!-- PKD Upload 카드 (Preline Style) -->
-            <div class="group flex flex-col bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition dark:bg-neutral-900 dark:border-neutral-800">
-              <!-- 상단 컬러 바 -->
-              <div class="h-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-t-xl"></div>
-              <div class="p-4 md:p-5">
-                <div class="flex gap-x-4">
-                  <!-- Soft Icon -->
-                  <div class="shrink-0 flex justify-center items-center size-12 bg-violet-100 rounded-lg dark:bg-violet-900/30">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="shrink-0 size-6 text-violet-600 dark:text-violet-400">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-                    </svg>
-                  </div>
-                  <!-- Title & Description -->
-                  <div class="grow">
-                    <h3 class="font-semibold text-gray-800 dark:text-neutral-200">
-                      PKD Upload
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-neutral-500">
-                      인증서 파일 업로드 및 관리
-                    </p>
-                  </div>
+              <!-- Passive Authentication 카드 -->
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
+                   :class="$store.theme.darkMode ? 'bg-base-200/50 border-gray-700 hover:border-teal-500/50' : 'bg-gradient-to-br from-teal-50/50 to-cyan-50/50 border-teal-100 hover:border-teal-300'">
+                <!-- 배경 장식 아이콘 -->
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-teal-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
+                  </svg>
                 </div>
-              </div>
-              <!-- Content -->
-              <div class="px-4 pb-4 md:px-5 md:pb-5">
-                <p class="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-                  ICAO PKD에서 다운로드한 LDIF, Master List 파일을 업로드하고, CSCA/DSC/CRL 인증서를 파싱하여 검증 후 LDAP 서버에 저장합니다.
-                </p>
-                <!-- Feature List -->
-                <ul class="space-y-2 mb-5">
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    LDIF / Master List 파일 파싱
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    인증서 Trust Chain 검증
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    LDAP 자동 등록
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-violet-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    실시간 처리 진행 상황 (SSE)
-                  </li>
-                </ul>
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap gap-2">
-                  <a href="/file/upload" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:bg-violet-700 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                    </svg>
-                    파일 업로드
-                  </a>
-                  <a href="/upload-history" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    업로드 이력
-                  </a>
-                  <a href="/file/dashboard" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-                    </svg>
-                    통계
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <!-- Passive Authentication 카드 (Preline Style) -->
-            <div class="group flex flex-col bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition dark:bg-neutral-900 dark:border-neutral-800">
-              <!-- 상단 컬러 바 -->
-              <div class="h-2 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-t-xl"></div>
-              <div class="p-4 md:p-5">
-                <div class="flex gap-x-4">
-                  <!-- Soft Icon -->
-                  <div class="shrink-0 flex justify-center items-center size-12 bg-teal-100 rounded-lg dark:bg-teal-900/30">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="shrink-0 size-6 text-teal-600 dark:text-teal-400">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
-                    </svg>
+                <!-- 콘텐츠 -->
+                <div class="relative z-10">
+                  <h4 class="font-semibold mb-2 flex items-center gap-2" :class="$store.theme.darkMode ? 'text-gray-200' : 'text-gray-800'">
+                    <span class="shrink-0 p-2 rounded-lg" :class="$store.theme.darkMode ? 'bg-teal-900/50' : 'bg-teal-100'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-teal-500">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
+                      </svg>
+                    </span>
+                    Passive Authentication
+                  </h4>
+                  <p class="text-sm mb-4" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                    ePassport의 SOD(Security Object Document)와 Data Groups를 검증하여 여권 데이터의 무결성과 발급국 서명을 확인합니다.
+                  </p>
+                  <!-- Feature List -->
+                  <ul class="text-sm space-y-2 mb-4" :class="$store.theme.darkMode ? 'text-gray-400' : 'text-gray-600'">
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      ICAO 9303 Part 11 표준 준수
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      DSC/CSCA Trust Chain + Data Group Hash 검증
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                      DG1 (MRZ) / DG2 (Face) 파싱
+                    </li>
+                  </ul>
+                  <!-- Action Buttons -->
+                  <div class="flex flex-wrap gap-2">
+                    <a href="/pa/verify" class="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-700 hover:to-cyan-700 hover:shadow-md hover:shadow-teal-500/25 transition-all duration-200 whitespace-nowrap">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                      </svg>
+                      PA 검증
+                    </a>
+                    <a href="/pa/history" class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition whitespace-nowrap"
+                       :class="$store.theme.darkMode ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:bg-gray-600/50' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                      검증 이력
+                    </a>
+                    <a href="/pa/dashboard" class="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition whitespace-nowrap"
+                       :class="$store.theme.darkMode ? 'border-gray-600 bg-gray-700/50 text-gray-300 hover:bg-gray-600/50' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+                      </svg>
+                      통계
+                    </a>
                   </div>
-                  <!-- Title & Description -->
-                  <div class="grow">
-                    <h3 class="font-semibold text-gray-800 dark:text-neutral-200">
-                      Passive Authentication
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-neutral-500">
-                      ePassport 위.변조 검증
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <!-- Content -->
-              <div class="px-4 pb-4 md:px-5 md:pb-5">
-                <p class="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-                  ePassport의 SOD(Security Object Document)와 Data Groups를 검증하여 여권 데이터의 무결성과 발급국 서명을 확인합니다.
-                </p>
-                <!-- Feature List -->
-                <ul class="space-y-2 mb-5">
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    ICAO 9303 Part 11 표준 준수
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    DSC/CSCA Trust Chain 검증
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    Data Group Hash 검증
-                  </li>
-                  <li class="flex items-center gap-x-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <svg class="shrink-0 size-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    DG1 (MRZ) / DG2 (Face) 파싱
-                  </li>
-                </ul>
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap gap-2">
-                  <a href="/pa/verify" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-teal-600 text-white hover:bg-teal-700 focus:outline-none focus:bg-teal-700 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-                    </svg>
-                    PA 검증
-                  </a>
-                  <a href="/pa/history" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    검증 이력
-                  </a>
-                  <a href="/pa/dashboard" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
-                    </svg>
-                    통계
-                  </a>
                 </div>
               </div>
             </div>
@@ -394,8 +399,8 @@
         </div>
 
         <!-- 빠른 시작 가이드 -->
-        <div class="rounded-2xl overflow-hidden transition-all duration-300"
-             :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-lg shadow-gray-200/50'">
+        <div class="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl"
+             :class="$store.theme.darkMode ? 'bg-base-100 shadow-lg shadow-black/20' : 'bg-white shadow-xl shadow-gray-200/60'">
           <!-- 헤더 -->
           <div class="px-6 py-4 border-b" :class="$store.theme.darkMode ? 'border-gray-700' : 'border-gray-100'">
             <h3 class="text-lg font-bold flex items-center gap-3" :class="$store.theme.darkMode ? 'text-gray-100' : 'text-gray-900'">
@@ -412,9 +417,9 @@
           <div class="p-6">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <!-- PKD Upload 가이드 -->
-              <div class="relative p-5 rounded-xl border transition-all duration-200 hover:shadow-md"
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
                    :class="$store.theme.darkMode ? 'bg-base-200/50 border-gray-700 hover:border-indigo-500/50' : 'bg-gradient-to-br from-indigo-50/50 to-purple-50/50 border-indigo-100 hover:border-indigo-300'">
-                <div class="absolute top-0 right-0 w-24 h-24 opacity-10">
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-indigo-500">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                   </svg>
@@ -444,9 +449,9 @@
                 </ol>
               </div>
               <!-- PA 검증 가이드 -->
-              <div class="relative p-5 rounded-xl border transition-all duration-200 hover:shadow-md"
+              <div class="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
                    :class="$store.theme.darkMode ? 'bg-base-200/50 border-gray-700 hover:border-teal-500/50' : 'bg-gradient-to-br from-teal-50/50 to-cyan-50/50 border-teal-100 hover:border-teal-300'">
-                <div class="absolute top-0 right-0 w-24 h-24 opacity-10">
+                <div class="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="0.5" stroke="currentColor" class="w-full h-full text-teal-500">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
                   </svg>
