@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 5.4
-**Last Updated**: 2025-12-25
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅ + RFC 5280 LDAP Update ✅
+**Version**: 5.5
+**Last Updated**: 2025-12-26
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Podman Container ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅
 
 ---
 
@@ -30,8 +30,9 @@ ePassport 검증을 위한 Passive Authentication (PA) 기능입니다.
 - ✅ SOD 파싱 (Tag 0x77 unwrapping, DSC 추출)
 - ✅ Trust Chain 검증 (CSCA → DSC)
 - ✅ Data Group 해시 검증
-- ✅ CRL 검증 (Two-Tier Caching)
+- ✅ CRL 검증 (Two-Tier Caching, 상세 상태 설명)
 - ✅ DG1/DG2 파싱 (MRZ, 얼굴 이미지)
+- ✅ MRZ 텍스트 파일 업로드 지원
 - ✅ PA 검증 UI (실시간 검증, 결과 시각화)
 - ✅ PA 이력 페이지 (필터링, 상세 조회)
 - ✅ PA 통계 대시보드
@@ -240,8 +241,40 @@ M12345678KOR8001019M2501012<<<<<<<<<<<<<<
 Face images are wrapped in ISO/IEC 19794-5 containers with JPEG data.
 
 **REST API Endpoints**:
-- POST `/api/pa/parse-dg1` - MRZ 파싱
+- POST `/api/pa/parse-dg1` - DG1 바이너리 MRZ 파싱
+- POST `/api/pa/parse-mrz-text` - MRZ 텍스트 파싱 (mrz.txt 파일 지원)
 - POST `/api/pa/parse-dg2` - 얼굴 이미지 파싱
+
+---
+
+## 🔐 CRL Validation Status (2025-12-26 추가)
+
+CRL 검증 결과를 외부 클라이언트가 명확하게 이해할 수 있도록 상세 설명을 제공합니다.
+
+### CRL Status Values
+
+| Status | Description (EN) | Severity |
+|--------|------------------|----------|
+| VALID | Certificate is valid and not revoked | SUCCESS |
+| REVOKED | Certificate has been revoked | FAILURE |
+| CRL_UNAVAILABLE | CRL not available in LDAP | WARNING |
+| CRL_EXPIRED | CRL has expired (nextUpdate passed) | WARNING |
+| CRL_INVALID | CRL signature verification failed | FAILURE |
+| NOT_CHECKED | CRL verification was not performed | INFO |
+
+### API Response Fields
+
+```json
+{
+  "certificateChainValidation": {
+    "crlStatus": "VALID",
+    "crlStatusDescription": "Certificate is valid and not revoked",
+    "crlStatusDetailedDescription": "인증서가 유효하며 폐기되지 않았습니다...",
+    "crlStatusSeverity": "SUCCESS",
+    "crlMessage": "CRL 검증 완료"
+  }
+}
+```
 
 ---
 
@@ -320,7 +353,7 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 ```
 
 **컨테이너 구성**:
-- `icao-local-pkd-postgres`: PostgreSQL 15 (port 5432)
+- `icao-local-pkd-postgres`: PostgreSQL 15 (port 5432, timezone: Asia/Seoul)
 - `icao-local-pkd-pgadmin`: pgAdmin (port 5050)
 - `icao-local-pkd-app`: Local PKD Native Image (port 8081, host network)
 
@@ -361,7 +394,9 @@ http://172.24.1.6:8081
 | Trust Chain Verification | ✅ |
 | Data Group Hash Verification | ✅ |
 | CRL Checking | ✅ |
+| CRL Status Enhancement | ✅ |
 | DG1/DG2 Parsing | ✅ |
+| MRZ Text File Upload | ✅ |
 | PA Verification UI | ✅ |
 | PA History UI | ✅ |
 | PA Dashboard | ✅ |
@@ -398,6 +433,7 @@ http://172.24.1.6:8081
 |---------|--------|
 | Dockerfile (Native Image) | ✅ |
 | podman-compose.yaml | ✅ |
+| PostgreSQL Timezone (Asia/Seoul) | ✅ |
 | Host Network Mode | ✅ |
 | Windows Client Access | ✅ |
 | PA API Integration Guide | ✅ |
