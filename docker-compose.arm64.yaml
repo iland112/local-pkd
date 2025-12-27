@@ -1,0 +1,93 @@
+# ============================================================================
+# ARM64 Docker Compose for Luckfox Omni3576
+# ============================================================================
+# LDAP Infrastructure: Uses external HAProxy/OpenLDAP on local system
+#   - HAProxy (Read LB): 192.168.100.10:10389
+#   - OpenLDAP1 (Write): 192.168.100.10:389
+#   - OpenLDAP2 (Slave): 192.168.100.101:389
+# ============================================================================
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: icao-local-pkd-postgres
+    environment:
+      POSTGRES_DB: icao_local_pkd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin (Optional - Database Management Tool)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartcoreinc.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Local PKD Application (ARM64 Native Image)
+  local-pkd:
+    image: local-pkd:arm64-latest
+    container_name: icao-local-pkd-app
+    environment:
+      # ARM64 프로파일 활성화
+      SPRING_PROFILES_ACTIVE: arm64
+      # PostgreSQL 연결
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/icao_local_pkd
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+      # LDAP Write 연결 (OpenLDAP1 - Master)
+      APP_LDAP_WRITE_ENABLED: "true"
+      APP_LDAP_WRITE_URL: ldap://192.168.100.10:389
+      APP_LDAP_WRITE_BASE_DN: dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_WRITE_USERNAME: cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_WRITE_PASSWORD: core
+      # LDAP Read 연결 (HAProxy - Load Balanced)
+      APP_LDAP_READ_ENABLED: "true"
+      APP_LDAP_READ_URL: ldap://192.168.100.10:10389
+      APP_LDAP_READ_BASE_DN: dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_READ_USERNAME: cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_READ_PASSWORD: core
+      # Timezone 설정
+      TZ: Asia/Seoul
+    ports:
+      - "8081:8081"
+    volumes:
+      - app_data:/app/data
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  app_data:

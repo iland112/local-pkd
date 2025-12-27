@@ -1,6 +1,6 @@
 # ARM64 Native Image Deployment Guide
 
-**Version**: 1.0
+**Version**: 1.1
 **Last Updated**: 2025-12-27
 **Target Device**: Luckfox Omni3576 (ARM64)
 
@@ -9,6 +9,16 @@
 ## Overview
 
 이 가이드는 Local PKD 애플리케이션을 ARM64 기반 Luckfox Omni3576 디바이스에 Docker 컨테이너로 배포하는 방법을 설명합니다.
+
+### LDAP Infrastructure (External)
+
+Luckfox 시스템에는 기존 OpenLDAP/HAProxy 인프라가 운영 중이므로, Docker 컨테이너에서는 이를 사용합니다.
+
+| 서비스 | 호스트 | 포트 | 용도 |
+|--------|--------|------|------|
+| **HAProxy** | 192.168.100.10 | 10389 | Read Load Balancer |
+| **OpenLDAP1** | 192.168.100.10 | 389 | Write Master |
+| **OpenLDAP2** | 192.168.100.101 | 389 | Read Slave |
 
 ### Target Device Specifications
 
@@ -107,63 +117,109 @@ docker run -d --name local-pkd -p 8081:8081 yourusername/local-pkd:arm64
 
 ## Docker Compose (Production)
 
-Create `docker-compose.arm64.yaml` on the Luckfox device:
+Luckfox 시스템에는 `docker-compose.arm64.yaml`이 포함되어 있습니다. 이 파일은 외부 LDAP 인프라를 사용하도록 구성되어 있습니다.
 
 ```yaml
-version: '3.8'
-
 services:
-  local-pkd:
-    image: local-pkd:arm64
-    container_name: local-pkd
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      - SPRING_PROFILES_ACTIVE=container
-      - SERVER_ADDRESS=0.0.0.0
-      - SERVER_PORT=8081
-      # Database settings
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/localpkd
-      - SPRING_DATASOURCE_USERNAME=pkduser
-      - SPRING_DATASOURCE_PASSWORD=pkdpass
-      # LDAP settings
-      - APP_LDAP_READ_URL=ldap://ldap-host:389
-      - APP_LDAP_WRITE_URL=ldap://ldap-host:389
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    depends_on:
-      - postgres
-
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: local-pkd-postgres
-    restart: unless-stopped
+    container_name: icao-local-pkd-postgres
     environment:
-      - POSTGRES_DB=localpkd
-      - POSTGRES_USER=pkduser
-      - POSTGRES_PASSWORD=pkdpass
-      - TZ=Asia/Seoul
+      POSTGRES_DB: icao_local_pkd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pkduser -d localpkd"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    restart: unless-stopped
+
+  # pgAdmin (Optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@smartcoreinc.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    restart: unless-stopped
+
+  # Local PKD Application (ARM64 Native Image)
+  local-pkd:
+    image: local-pkd:arm64-latest
+    container_name: icao-local-pkd-app
+    environment:
+      SPRING_PROFILES_ACTIVE: arm64
+      # PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/icao_local_pkd
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+      # LDAP Write (OpenLDAP1 - Master)
+      APP_LDAP_WRITE_ENABLED: "true"
+      APP_LDAP_WRITE_URL: ldap://192.168.100.10:389
+      APP_LDAP_WRITE_BASE_DN: dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_WRITE_USERNAME: cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_WRITE_PASSWORD: core
+      # LDAP Read (HAProxy - Load Balanced)
+      APP_LDAP_READ_ENABLED: "true"
+      APP_LDAP_READ_URL: ldap://192.168.100.10:10389
+      APP_LDAP_READ_BASE_DN: dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_READ_USERNAME: cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      APP_LDAP_READ_PASSWORD: core
+      TZ: Asia/Seoul
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  pgadmin_data:
+  app_data:
 ```
 
 Run with:
 
 ```bash
 docker-compose -f docker-compose.arm64.yaml up -d
+```
+
+### LDAP Connection Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 Local PKD Container (ARM64)                      │
+│                                                                  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              application-arm64.properties                │   │
+│   │                                                          │   │
+│   │   Write Connection        Read Connection                │   │
+│   │   ────────────────        ───────────────                │   │
+│   │   192.168.100.10:389      192.168.100.10:10389          │   │
+│   │   (OpenLDAP1 Master)      (HAProxy LB)                   │   │
+│   └───────────┬────────────────────────┬─────────────────────┘   │
+└───────────────┼────────────────────────┼─────────────────────────┘
+                │                        │
+    ┌───────────┴───────────┐   ┌────────┴────────┐
+    ▼                       │   ▼                 │
+┌───────────────┐           │  ┌──────────────┐   │
+│  OpenLDAP1    │           │  │   HAProxy    │   │
+│  Master       │◄──MMR────►│  │   (LB)       │   │
+│  192.168.100.10:389       │  │  :10389      │   │
+└───────────────┘           │  └──────┬───────┘   │
+                            │         │           │
+                            │  ┌──────┴───────┐   │
+                            │  ▼              ▼   │
+                            │ ┌────────┐ ┌────────┐
+                            └─│LDAP1   │ │LDAP2   │
+                              │(Read)  │ │(Read)  │
+                              └────────┘ └────────┘
 ```
 
 ---
@@ -253,7 +309,9 @@ docker logs local-pkd
 | File | Description |
 |------|-------------|
 | `Dockerfile.arm64` | ARM64 multi-stage Dockerfile |
+| `docker-compose.arm64.yaml` | ARM64 Docker Compose (External LDAP) |
 | `scripts/build-arm64.sh` | Build script with options |
+| `src/main/resources/application-arm64.properties` | ARM64 profile configuration |
 | `docs/ARM64_DEPLOYMENT_GUIDE.md` | This guide |
 
 ---
