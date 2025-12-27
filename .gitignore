@@ -61,3 +61,7 @@ localpkd.*.*
 ### Playwright ###
 .playwright-mcp/
 .docker-data/
+
+### Docker Build Artifacts ###
+*.tar
+local-pkd-arm64.tar
