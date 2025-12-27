@@ -1,0 +1,79 @@
+# ============================================================================
+# ARM64 Native Image Multi-Stage Dockerfile for Luckfox Omni3576
+# ============================================================================
+# Build: docker buildx build --platform linux/arm64 -f Dockerfile.arm64 -t local-pkd:arm64 .
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Stage 1: Build Native Image with GraalVM ARM64
+# ----------------------------------------------------------------------------
+ARG TARGETPLATFORM=linux/arm64
+FROM --platform=$TARGETPLATFORM ghcr.io/graalvm/native-image-community:21 AS builder
+
+WORKDIR /build
+
+# Install required tools
+RUN microdnf install -y findutils tar gzip
+
+# Copy Maven wrapper and pom.xml first (for layer caching)
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+
+# Download dependencies (cached layer)
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src/ src/
+
+# Build Native Image
+# Note: ARM64 QEMU emulation is slow, this may take 30-60 minutes
+RUN ./mvnw -Pnative native:compile -DskipTests \
+    -Dspring.profiles.active=native \
+    && chmod +x target/local-pkd
+
+# ----------------------------------------------------------------------------
+# Stage 2: Runtime Image (Minimal)
+# ----------------------------------------------------------------------------
+ARG TARGETPLATFORM=linux/arm64
+FROM --platform=$TARGETPLATFORM debian:bookworm-slim
+
+# Install required libraries for native image and healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfreetype6 \
+    fontconfig \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd -r pkd && useradd -r -g pkd pkd
+
+# Create app directory
+WORKDIR /app
+
+# Copy native image from builder
+COPY --from=builder /build/target/local-pkd /app/local-pkd
+
+# Copy static resources (Thymeleaf templates, static files)
+COPY src/main/resources/templates /app/templates
+COPY src/main/resources/static /app/static
+
+# Set ownership
+RUN chown -R pkd:pkd /app
+
+# Switch to non-root user
+USER pkd
+
+# Expose port
+EXPOSE 8081
+
+# Environment variables (can be overridden)
+ENV SPRING_PROFILES_ACTIVE=container
+ENV SERVER_ADDRESS=0.0.0.0
+ENV SERVER_PORT=8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8081/actuator/health || exit 1
+
+# Run native image
+ENTRYPOINT ["/app/local-pkd"]
