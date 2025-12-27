@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 6.1
-**Last Updated**: 2025-12-27
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Docker Container ✅ + OpenLDAP MMR + HAProxy ✅ + LDAP R/W Separation ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅ + Multi-Profile Support ✅
+**Version**: 6.2
+**Last Updated**: 2025-12-28
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Docker Container ✅ + OpenLDAP MMR + HAProxy ✅ + LDAP R/W Separation ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅ + Multi-Profile Support ✅ + **ARM64 Native Image ✅**
 
 ---
 
@@ -442,6 +442,7 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 | `local` | 로컬 Docker 개발 | localhost (Write: 3891, Read: 389) | `./scripts/run-local.sh` |
 | `remote` | 원격 LDAP 서버 | 192.168.100.10 (Write: 389, Read: 10389) | `./scripts/run-remote.sh` |
 | `container` | Docker 컨테이너 배포 | Docker 네트워크 | `./scripts/run-container.sh` |
+| `arm64` | Luckfox ARM64 배포 | 192.168.100.10 (Write: 389, Read: 10389) | Docker Compose |
 
 상세 문서: `docs/PROFILE_EXECUTION_GUIDE.md`
 
@@ -483,6 +484,30 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 - 빠른 시작: ~0.1초 (JVM: ~5초)
 - 낮은 메모리: ~100MB (JVM: ~500MB)
 - 단일 실행 파일: `target/local-pkd`
+
+### ARM64 Native Image Mode (Luckfox 배포용) (2025-12-28 추가)
+
+```bash
+# ARM64 Native Image 빌드 (Docker Buildx + QEMU, 약 4-5시간 소요)
+./scripts/arm64-build.sh
+
+# 빌드 결과물
+# - local-pkd-arm64.tar (231MB Docker 이미지)
+
+# Luckfox 장비로 전송 및 배포
+scp local-pkd-arm64.tar luckfox@192.168.100.11:/home/luckfox/
+ssh luckfox@192.168.100.11 'sudo docker load -i /home/luckfox/local-pkd-arm64.tar'
+ssh luckfox@192.168.100.11 'sudo docker compose -f docker-compose.arm64.yaml up -d'
+```
+
+**ARM64 빌드 상세**:
+- 빌드 도구: Docker Buildx + QEMU user-mode emulation
+- 타겟 플랫폼: `linux/arm64` (aarch64)
+- GraalVM: GraalVM CE 21.0.2 (ARM64)
+- Native Image 크기: 306MB
+- Docker 이미지: 231MB (tar)
+
+상세 문서: `docs/ARM64_DEPLOYMENT_GUIDE.md`, `docs/LUCKFOX_SYSTEM_ANALYSIS.md`
 
 ### Docker Container Mode (외부 클라이언트 연동)
 
@@ -600,6 +625,28 @@ http://172.24.1.6:8081
 | Docker Desktop (Windows 11 Pro) | ✅ |
 
 > **Note**: Podman 스크립트는 `scripts/podman-backup/` 폴더에 백업되어 있습니다.
+
+### ARM64 Native Image ✅ PRODUCTION READY (2025-12-28 추가)
+
+| Feature | Status |
+|---------|--------|
+| Dockerfile.arm64 (Cross-compile) | ✅ |
+| docker-compose.arm64.yaml | ✅ |
+| application-arm64.properties | ✅ |
+| GraalVM Watchdog 비활성화 | ✅ |
+| Luckfox 시스템 분석 | ✅ |
+
+**Luckfox Omni3576 Target System**:
+- CPU: 4×Cortex-A72 + 4×Cortex-A53 (8코어)
+- RAM: 3.8GB
+- OS: Debian 12 (bookworm)
+- Storage: 29GB eMMC
+
+**배포 대상 노드**:
+| 노드 | IP | 역할 |
+|------|-----|------|
+| Master | 192.168.100.10 | OpenLDAP Master + HAProxy LB |
+| Slave | 192.168.100.11 | OpenLDAP Slave + Docker (App 배포) |
 
 ### OpenLDAP Multi-Master Replication + HAProxy ✅ PRODUCTION READY
 
@@ -741,6 +788,8 @@ http://<WSL-IP>:8081
 | NATIVE_IMAGE_GUIDE | Native Image 빌드/실행 | docs/NATIVE_IMAGE_GUIDE.md |
 | PA_API_INTEGRATION_GUIDE | 외부 클라이언트 PA API 연동 | docs/PA_API_INTEGRATION_GUIDE.md |
 | RFC5280_LDAP_UPDATE_GUIDE | RFC 5280 준수 LDAP 업데이트 | docs/RFC5280_LDAP_UPDATE_GUIDE.md |
+| ARM64_DEPLOYMENT_GUIDE | ARM64 빌드/배포 가이드 | docs/ARM64_DEPLOYMENT_GUIDE.md |
+| LUCKFOX_SYSTEM_ANALYSIS | Luckfox 시스템 환경 분석 | docs/LUCKFOX_SYSTEM_ANALYSIS.md |
 
 **세션 문서**: `docs/SESSION_*.md` (개발 이력)
 **아카이브**: `docs/archive/phases/` (Phase 1-19 문서)
