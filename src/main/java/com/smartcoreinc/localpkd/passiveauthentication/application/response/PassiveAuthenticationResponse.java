@@ -62,7 +62,7 @@ import java.util.UUID;
 public record PassiveAuthenticationResponse(
     PassiveAuthenticationStatus status,
     UUID verificationId,
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ssXXX", timezone = "Asia/Seoul")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Asia/Seoul")
     LocalDateTime verificationTimestamp,
     String issuingCountry,
     String documentNumber,

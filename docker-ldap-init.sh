@@ -25,6 +25,32 @@ echo ""
 echo "⏳ OpenLDAP 시작 대기 중..."
 sleep 5
 
+# ===== ICAO PKD Custom Schema 로드 =====
+echo ""
+echo "📋 ICAO PKD Custom Schema 로드 중..."
+
+# OpenLDAP1 스키마 로드
+echo "   - OpenLDAP1 스키마 로드..."
+docker exec icao-local-pkd-openldap1 ldapadd -x \
+    -H ldap://localhost \
+    -D "cn=admin,cn=config" \
+    -w core \
+    -f /container/service/slapd/assets/config/bootstrap/ldif/custom/icao-pkd.ldif 2>/dev/null \
+    && echo "   ✓ OpenLDAP1 스키마 로드 완료" \
+    || echo "   (OpenLDAP1 스키마 이미 로드됨)"
+
+# OpenLDAP2 스키마 로드
+echo "   - OpenLDAP2 스키마 로드..."
+docker exec icao-local-pkd-openldap2 ldapadd -x \
+    -H ldap://localhost \
+    -D "cn=admin,cn=config" \
+    -w core \
+    -f /container/service/slapd/assets/config/bootstrap/ldif/custom/icao-pkd.ldif 2>/dev/null \
+    && echo "   ✓ OpenLDAP2 스키마 로드 완료" \
+    || echo "   (OpenLDAP2 스키마 이미 로드됨)"
+
+echo "✅ ICAO PKD Schema 로드 완료!"
+
 # ===== MMR (Multi-Master Replication) 설정 =====
 echo ""
 echo "🔄 MMR (Multi-Master Replication) 설정 중..."

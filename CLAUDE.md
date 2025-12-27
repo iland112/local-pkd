@@ -1,8 +1,8 @@
 # Local PKD Evaluation Project - Development Guide
 
-**Version**: 6.0
+**Version**: 6.1
 **Last Updated**: 2025-12-27
-**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Docker Container ✅ + OpenLDAP MMR + HAProxy ✅ + LDAP R/W Separation ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅
+**Status**: Production Ready - PKD Upload Module ✅ + Passive Authentication Module ✅ + Native Image ✅ + Docker Container ✅ + OpenLDAP MMR + HAProxy ✅ + LDAP R/W Separation ✅ + RFC 5280 LDAP Update ✅ + CRL Status Enhancement ✅ + Multi-Profile Support ✅
 
 ---
 
@@ -400,13 +400,13 @@ CRL 검증 결과를 외부 클라이언트가 명확하게 이해할 수 있도
 
 ```json
 {
-  "verificationTimestamp": "2025-12-26T20:30:45+09:00"
+  "verificationTimestamp": "2025-12-27T11:30:29"
 }
 ```
 
-- ISO 8601 형식 + 타임존 오프셋 (`+09:00`)
-- 이전: `yyyy-MM-dd'T'HH:mm:ss'Z'` (UTC로 오해될 수 있음)
-- 현재: `yyyy-MM-dd'T'HH:mm:ssXXX` (명시적 오프셋)
+- ISO 8601 형식 (타임존은 서버 설정에 따라 KST)
+- 패턴: `yyyy-MM-dd'T'HH:mm:ss`
+- `LocalDateTime` 사용 (타임존 오프셋 제외)
 
 ---
 
@@ -435,6 +435,16 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 
 ## 🚀 Build & Run
 
+### 프로파일별 실행 (2025-12-27 추가)
+
+| 프로파일 | 용도 | LDAP 연결 | 실행 스크립트 |
+|---------|------|----------|--------------|
+| `local` | 로컬 Docker 개발 | localhost (Write: 3891, Read: 389) | `./scripts/run-local.sh` |
+| `remote` | 원격 LDAP 서버 | 192.168.100.10 (Write: 389, Read: 10389) | `./scripts/run-remote.sh` |
+| `container` | Docker 컨테이너 배포 | Docker 네트워크 | `./scripts/run-container.sh` |
+
+상세 문서: `docs/PROFILE_EXECUTION_GUIDE.md`
+
 ### JVM Mode (개발용)
 
 ```bash
@@ -447,7 +457,10 @@ passive_authentication_audit_log (id, verification_id, timestamp, ...)
 # 테스트
 ./mvnw test
 
-# 실행
+# Local 프로파일 실행 (권장)
+./scripts/run-local.sh
+
+# 또는 수동 실행
 ./mvnw spring-boot:run
 # http://localhost:8081
 ```
@@ -598,10 +611,14 @@ http://172.24.1.6:8081
 | phpLDAPadmin | ✅ |
 | DIT 초기화 스크립트 | ✅ |
 
-**ICAO PKD Custom Schemas**:
-- `pkdDownload` - PKD 다운로드 객체
+**ICAO PKD Custom Schemas** (`openldap/schemas/icao-pkd.ldif`):
+- `pkdDownload` - PKD 다운로드 객체 (CSCA, DSC, DSC_NC)
+  - `pkdVersion` - 버전 정보
+  - `pkdConformanceText` - DSC_NC 적합성 텍스트
+  - `pkdConformanceCode` - DSC_NC 적합성 코드
+  - `pkdConformancePolicy` - DSC_NC 적합성 정책 OID
 - `pkdMasterList` - Master List CMS 저장
-- `cscaCertificateObject` - CSCA 인증서 메타데이터
+  - `pkdMasterListContent` - CMS SignedData 바이너리
 
 **LDAP 접속 정보**:
 - HAProxy (로드밸런싱): `ldap://localhost:389`
@@ -717,6 +734,7 @@ http://<WSL-IP>:8081
 | 문서 | 용도 | 위치 |
 |------|--------|------|
 | DOCKER_CONFIGURATION_MANUAL | Docker 구성 및 운영 가이드 | docs/DOCKER_CONFIGURATION_MANUAL.md |
+| PROFILE_EXECUTION_GUIDE | 프로파일별 실행 가이드 | docs/PROFILE_EXECUTION_GUIDE.md |
 | ICAO_9303_PA_CRL_STANDARD | PA + CRL 표준 절차 | docs/ICAO_9303_PA_CRL_STANDARD.md |
 | DG1_DG2_PARSING_GUIDE | DG 파싱 가이드 | docs/DG1_DG2_PARSING_GUIDE.md |
 | LDAP_BASE_DN_RECOVERY | LDAP 복구 가이드 | docs/LDAP_BASE_DN_RECOVERY.md |

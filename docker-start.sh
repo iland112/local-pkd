@@ -75,6 +75,14 @@ docker compose ps
 
 echo ""
 echo "✅ 컨테이너 시작 완료!"
+
+# 5. LDAP 초기화 (스키마 + MMR + DIT)
+if [ -z "$SKIP_LDAP" ]; then
+    echo ""
+    echo "🔧 LDAP 초기화 중..."
+    ./docker-ldap-init.sh
+fi
+
 echo ""
 echo "📌 접속 정보:"
 echo "   - PostgreSQL:    localhost:5432 (postgres/secret)"
@@ -101,5 +109,5 @@ echo "   --skip-app   Local PKD 앱 제외"
 echo "   --skip-ldap  OpenLDAP 제외"
 echo ""
 if [ -z "$SKIP_LDAP" ]; then
-    echo "📝 LDAP 초기화가 필요하면: ./docker-ldap-init.sh"
+    echo "📝 LDAP 재초기화가 필요하면: ./docker-ldap-init.sh"
 fi
